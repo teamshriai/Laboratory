@@ -1,0 +1,240 @@
+import {
+  BadgeCheckIcon,
+  ChevronDownIcon,
+  FileTextIcon,
+  PencilLineIcon,
+  PlusIcon,
+  SyringeIcon,
+  TestTubeIcon,
+} from 'lucide-react'
+import type { ReactNode } from 'react'
+import { Link, useNavigate } from 'react-router'
+import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/components/ui/menu'
+import { PageHeader } from '@/app/layout/page-header'
+import { istHour } from '@/domain/time'
+import { useNow } from '@/hooks/use-now'
+import { useT } from '@/i18n/context'
+import { useFormat } from '@/i18n/format'
+import type { DashboardView } from '@/services/lab-api'
+import { useDashboard } from '@/services/queries'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
+import { ErrorState } from '@/components/ui/states'
+import { HourlyChart } from './hourly-chart'
+import { PipelineFlow } from './pipeline-flow'
+import {
+  AnalyzersPanel,
+  CriticalSection,
+  KpiRow,
+  MixPanel,
+  OverTatSection,
+  RecentActivity,
+  Snapshot,
+  StockPanel,
+  TatPanel,
+  WorkloadPanel,
+} from './sections'
+
+/*
+ * The bento grid (design system 9.1): auto-placement only, so source order is
+ * visual order is tab order at every width. The skeleton renders from the
+ * same cells, so nothing jumps when the data arrives.
+ */
+const GRID =
+  'grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 md:grid-cols-4 xl:grid-cols-6'
+
+const FULL = 'sm:col-span-2 md:col-span-4 xl:col-span-6'
+
+const CELLS: {
+  key: string
+  span: string
+  skeleton: string
+  render: (data: DashboardView) => ReactNode
+}[] = [
+  {
+    key: 'snapshot',
+    span: 'sm:col-span-2 md:col-span-4 xl:col-span-2 xl:row-span-2',
+    skeleton: 'h-72',
+    render: (d) => <Snapshot data={d} />,
+  },
+  {
+    key: 'criticals',
+    span: 'sm:col-span-2 md:col-span-4 xl:col-span-4',
+    skeleton: 'h-56',
+    render: (d) => <CriticalSection criticals={d.criticals} />,
+  },
+  {
+    key: 'over-tat',
+    span: 'sm:col-span-2 md:col-span-4 xl:col-span-4',
+    skeleton: 'h-56',
+    render: (d) => <OverTatSection tat={d.tat} />,
+  },
+  {
+    key: 'kpis',
+    span: FULL,
+    skeleton: 'h-40',
+    render: (d) => <KpiRow data={d} />,
+  },
+  {
+    key: 'pipeline',
+    span: FULL,
+    skeleton: 'h-44',
+    render: (d) => <PipelineFlow pipeline={d.pipeline} />,
+  },
+  {
+    key: 'hourly',
+    span: 'sm:col-span-2 md:col-span-4 xl:col-span-4',
+    skeleton: 'h-80',
+    render: (d) => <HourlyChart hourly={d.hourly} />,
+  },
+  {
+    key: 'tat',
+    span: 'sm:col-span-2 md:col-span-4 xl:col-span-2',
+    skeleton: 'h-80',
+    render: (d) => <TatPanel tat={d.tat} byDepartment={d.tatByDepartment} />,
+  },
+  {
+    key: 'workload',
+    span: 'sm:col-span-2 md:col-span-4 xl:col-span-4',
+    skeleton: 'h-80',
+    render: (d) => <WorkloadPanel workload={d.workload} />,
+  },
+  {
+    key: 'mix',
+    span: 'sm:col-span-2 md:col-span-4 xl:col-span-2',
+    skeleton: 'h-80',
+    render: (d) => <MixPanel data={d} />,
+  },
+  {
+    key: 'analyzers',
+    span: 'sm:col-span-2 md:col-span-2 xl:col-span-3',
+    skeleton: 'h-80',
+    render: (d) => <AnalyzersPanel data={d} />,
+  },
+  {
+    key: 'stock',
+    span: 'sm:col-span-2 md:col-span-2 xl:col-span-3',
+    skeleton: 'h-80',
+    render: (d) => <StockPanel alerts={d.stockAlerts} />,
+  },
+  {
+    key: 'activity',
+    span: FULL,
+    skeleton: 'h-72',
+    render: (d) => <RecentActivity activity={d.activity} />,
+  },
+]
+
+/** The day's routine jumps, without taking space on the dashboard. */
+function QuickActions() {
+  const t = useT('dashboard')
+  const navigate = useNavigate()
+  const actions = [
+    {
+      to: '/laboratory/collection',
+      label: t('actionCollect'),
+      icon: <SyringeIcon />,
+    },
+    {
+      to: '/laboratory/samples?status=collected',
+      label: t('actionReceive'),
+      icon: <TestTubeIcon />,
+    },
+    {
+      to: '/laboratory/results',
+      label: t('actionEnter'),
+      icon: <PencilLineIcon />,
+    },
+    {
+      to: '/laboratory/validation',
+      label: t('actionValidate'),
+      icon: <BadgeCheckIcon />,
+    },
+    {
+      to: '/laboratory/reports?status=validated',
+      label: t('actionRelease'),
+      icon: <FileTextIcon />,
+    },
+  ]
+  return (
+    <Menu>
+      <MenuTrigger asChild>
+        <Button>
+          {t('quickActions')}
+          <ChevronDownIcon aria-hidden />
+        </Button>
+      </MenuTrigger>
+      <MenuContent align="end">
+        {actions.map((a) => (
+          <MenuItem
+            key={a.to}
+            icon={a.icon}
+            onSelect={() => void navigate(a.to)}
+          >
+            {a.label}
+          </MenuItem>
+        ))}
+      </MenuContent>
+    </Menu>
+  )
+}
+
+export function Component() {
+  const t = useT('dashboard')
+  const f = useFormat()
+  const now = useNow()
+  const { data, isPending, isError, refetch, dataUpdatedAt } = useDashboard()
+  const hour = istHour(now)
+  const shift =
+    hour >= 7 && hour < 14
+      ? t('shiftMorning')
+      : hour >= 14 && hour < 21
+        ? t('shiftEvening')
+        : t('shiftNight')
+
+  return (
+    <>
+      <PageHeader
+        title={t('title')}
+        meta={
+          <>
+            <span>{f.date(now)}</span>
+            <span>{shift}</span>
+            {dataUpdatedAt ? (
+              <span>{t('updated', { time: f.time(dataUpdatedAt) })}</span>
+            ) : null}
+          </>
+        }
+        actions={
+          <>
+            <QuickActions />
+            <Button asChild variant="primary">
+              <Link to="/laboratory/orders/new">
+                <PlusIcon strokeWidth={2.5} aria-hidden />
+                {t('actionNewOrder')}
+              </Link>
+            </Button>
+          </>
+        }
+      />
+      {isError ? (
+        <Card>
+          <ErrorState onRetry={() => void refetch()} />
+        </Card>
+      ) : (
+        <div className={GRID} aria-busy={isPending || undefined}>
+          {CELLS.map((c) => (
+            <div key={c.key} className={`min-w-0 ${c.span}`}>
+              {isPending || !data ? (
+                <Skeleton className={`w-full rounded-xl ${c.skeleton}`} />
+              ) : (
+                c.render(data)
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  )
+}

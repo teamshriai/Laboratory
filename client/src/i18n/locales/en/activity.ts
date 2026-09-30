@@ -1,0 +1,32 @@
+export default {
+  'order-created': '{patient}: order {orderNo} with {tests} test(s)',
+  'order-cancelled': '{patient}: order {orderNo} cancelled',
+  'priority-changed': 'Order {orderNo} marked {priority}',
+  'sample-collected': '{patient}: sample {accession} collected',
+  'sample-received': '{patient}: sample {accession} received',
+  'sample-rejected': '{patient}: sample {accession} rejected',
+  'sample-rejected-recollect':
+    '{patient}: sample {accession} rejected, recollection requested',
+  'results-entered': '{patient}: results entered for {accession}',
+  'results-reviewed': '{count} test(s) technically reviewed',
+  'results-validated': '{count} test(s) authorised',
+  'critical-escalated':
+    'Critical value escalated: {patient}, {analyte} to {to}',
+  'critical-detected': 'Critical value: {patient}, {analyte} {value}',
+  'critical-notified': 'Critical value communicated: {patient}, {analyte}',
+  'critical-acknowledged': 'Critical value acknowledged: {patient}, {analyte}',
+  'report-released': '{patient}: report {report} released',
+  'report-corrected': '{patient}: report {report} corrected',
+  'report-correction-requested':
+    'Correction requested for report {report} (version {version})',
+  'report-shared': 'Report {report} shared',
+  'patient-registered': 'New patient {patient} ({uhid})',
+  'stock-received': 'Stock received: {item} ({quantity})',
+  'equipment-logged': '{equipment}: log updated',
+  'qc-recorded': 'QC recorded on {equipment}: {analyte}',
+  'test-created': 'Test added to catalog: {test}',
+  'test-updated': 'Test updated: {test}',
+  'test-activated': 'Test activated: {test}',
+  'test-deactivated': 'Test deactivated: {test}',
+  'ranges-updated': 'Reference ranges updated: {analyte}',
+} as const

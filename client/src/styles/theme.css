@@ -1,0 +1,446 @@
+/*
+ * Design tokens for the LIMS client, taken from DESIGN_SYSTEM.md (the SHRI
+ * HEALTH portal design system). That file is the source of truth: values here
+ * are copied from it, and where the LIS needs more (five chart series, tube
+ * colours) the additions follow its rules.
+ *
+ * Token names predate the design system and are kept so call sites stay
+ * stable: canvas = bg, surface = surface-1, line = border-soft,
+ * line-strong = border-strong, fg* = ink*, accent* = primary-600/700/50,
+ * danger-soft/-text = critical-bg/-fg. Solid `danger` is reserved for
+ * critical lab values, the lab's emergency. The design-system names
+ * (primary-*, ink*, border, tile-*, accent-sky…) exist too for new code.
+ *
+ * Radius (design system 5.1): sm 4px, md 8px (small badges), lg 12px
+ * (buttons, inputs, nav and menu items), xl 16px (cards, tiles, menus,
+ * modals), 2xl 20px (sheets), full for avatars, pills and toggles.
+ */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-*: initial;
+  --shadow-*: initial;
+  --font-sans:
+    'Plus Jakarta Sans Variable', 'Noto Sans Kannada Variable',
+    'Noto Sans Devanagari Variable', 'Noto Sans Tamil Variable',
+    'Noto Sans Malayalam Variable', system-ui, -apple-system, 'Segoe UI',
+    sans-serif;
+  --font-mono:
+    ui-monospace, 'SFMono-Regular', 'Cascadia Mono', 'Roboto Mono', monospace;
+
+  /* Type scale (design system 3.3). 14px is the reading floor. */
+  --text-2xs: 0.75rem;
+  --text-2xs--line-height: 1rem;
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.125rem;
+  --text-meta: 0.8125rem;
+  --text-meta--line-height: 1.25rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.375rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-section: 0.875rem;
+  --text-section--line-height: 1.375rem;
+  --text-title: 1.25rem;
+  --text-title--line-height: 1.75rem;
+  --text-title--letter-spacing: -0.02em;
+  --text-figure: 1.5rem;
+  --text-figure--line-height: 1;
+  --text-figure--letter-spacing: -0.02em;
+  --text-figure-sm: 1.125rem;
+  --text-figure-sm--line-height: 1.5rem;
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+  --radius-3xl: 1.5rem;
+
+  --ease-premium: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --breakpoint-3xl: 1760px;
+}
+
+:root {
+  color-scheme: light;
+
+  /* Ground, surfaces, ink, borders (design system 4.1). */
+  --canvas: #e8edf4;
+  --surface: #ffffff;
+  --surface-2: #f4f7fa;
+  --surface-3: #e4eaf2;
+  --line: #d9e1ea;
+  --border: #c2cedb;
+  --line-strong: #7c8ba0;
+
+  --fg: #0f172a;
+  --fg-muted: #3f4e63;
+  --fg-subtle: #57677c;
+  --fg-inverse: #ffffff;
+
+  /* Primary blue (4.2). */
+  --primary-50: #eff6ff;
+  --primary-100: #dbeafe;
+  --primary-200: #bfdbfe;
+  --primary-300: #93c5fd;
+  --primary-400: #60a5fa;
+  --primary-500: #3b82f6;
+  --primary-600: #2563eb;
+  --primary-700: #1d4ed8;
+  --primary-800: #1e40af;
+  --primary-900: #1e3a8a;
+
+  --accent: var(--primary-600);
+  --accent-hover: var(--primary-700);
+  --on-accent: #ffffff;
+  --accent-soft: var(--primary-50);
+  --accent-text: var(--primary-700);
+
+  /* Status pairs (4.3). Solids are for bars, dots and meters. */
+  --success: #2f8f7a;
+  --on-success: #ffffff;
+  --success-soft: #e6f0ee;
+  --success-text: #2f6b5e;
+
+  --warning: #c98a2e;
+  --on-warning: #ffffff;
+  --warning-soft: #fbf0e2;
+  --warning-text: #8a5a1b;
+
+  --danger: #dc2626;
+  --on-danger: #ffffff;
+  --danger-soft: #fbeae7;
+  --danger-text: #a33a28;
+  --danger-strong: #b91c1c;
+
+  --info: #3b73b0;
+  --on-info: #ffffff;
+  --info-soft: #e8eff6;
+  --info-text: #33608a;
+
+  --therapy-soft: #edeaf4;
+  --therapy-text: #574b7d;
+
+  --neutral-soft: #f4f7fa;
+  --neutral-text: #57677c;
+
+  --ai: #4f46e5;
+  --ai-soft: #eef0fd;
+
+  /* Pastel category accents (4.4 tier 1). */
+  --pastel-sky: #e8eff6;
+  --pastel-sky-text: #3a6288;
+  --pastel-teal: #e6f0ee;
+  --pastel-teal-text: #3c6b63;
+  --pastel-sand: #f4ede0;
+  --pastel-sand-text: #7e6128;
+  --pastel-clay: #f6e9e4;
+  --pastel-clay-text: #8b5544;
+  --pastel-sage: #e9f0e6;
+  --pastel-sage-text: #4c6b46;
+
+  --focus: #2563eb;
+  --ring: #2563eb;
+  --overlay: rgba(15, 23, 42, 0.45);
+
+  /* Categorical chart order (validated with the dataviz checker against
+     #FFFFFF): blue, orange (both from the design system), teal, violet,
+     amber. chart-6 is the neutral comparison series. */
+  --chart-1: #2563eb;
+  --chart-2: #eb6834;
+  --chart-3: #1a9e8c;
+  --chart-4: #9b59d0;
+  --chart-5: #b07d12;
+  --chart-6: #94a3b8;
+  --chart-grid: #e4eaf2;
+
+  --tube-edta: oklch(0.62 0.13 305);
+  --tube-sst: oklch(0.8 0.15 88);
+  --tube-plain: oklch(0.56 0.19 27);
+  --tube-citrate: oklch(0.72 0.1 232);
+  --tube-fluoride: oklch(0.62 0.01 250);
+  --tube-heparin: oklch(0.6 0.13 150);
+  --tube-sterile: oklch(0.86 0.02 230);
+  --tube-culture: oklch(0.55 0.11 255);
+  --tube-formalin: oklch(0.78 0.04 100);
+  --tube-slide: oklch(0.82 0.03 200);
+
+  /* Elevation (5.2): three shallow tiers. */
+  /* Shadow on a pinned table column while rows scroll beneath it. */
+  --edge-shade: rgba(15, 23, 42, 0.22);
+  --elev-card:
+    0 1px 2px 0 rgba(15, 23, 42, 0.04), 0 1px 3px 0 rgba(15, 23, 42, 0.06);
+  --elev-raised:
+    0 2px 8px 0 rgba(15, 23, 42, 0.06), 0 1px 3px 0 rgba(15, 23, 42, 0.04);
+  --elev-overlay:
+    0 4px 16px 0 rgba(15, 23, 42, 0.08), 0 2px 6px 0 rgba(15, 23, 42, 0.04);
+  --elev-modal: 0 20px 60px 0 rgba(15, 23, 42, 0.18);
+  --elev-glow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  --elev-primary: 0 1px 3px 0 rgba(37, 99, 235, 0.3);
+  --elev-primary-hover: 0 4px 16px 0 rgba(37, 99, 235, 0.35);
+  --elev-danger: 0 1px 3px 0 rgba(220, 38, 38, 0.3);
+}
+
+/* Destination hues (TONE_HEX) and solid tiles do not change with the theme. */
+:root {
+  --ic-teal: #30b0c7;
+  --ic-blue: #0a84ff;
+  --ic-indigo: #5856d6;
+  --ic-violet: #af52de;
+  --ic-rose: #ff2d55;
+  --ic-red: #ff3b30;
+  --ic-orange: #ff6b2c;
+  --ic-amber: #ff9f0a;
+  --ic-green: #34c759;
+  --ic-sky: #32ade6;
+  --ic-slate: #8e8e93;
+
+  --tile-blue: #2f5aa8;
+  --tile-teal: #22685f;
+  --tile-violet: #6a4e9e;
+  --tile-amber: #8f5f32;
+  --tile-red: #b42318;
+  --on-tile: #ffffff;
+}
+
+:root.dark {
+  color-scheme: dark;
+
+  --canvas: #14181f;
+  --surface: #1d232d;
+  --surface-2: #262e39;
+  --surface-3: #303945;
+  --line: #2b333e;
+  --border: #3a4450;
+  --line-strong: #6e7a8c;
+
+  --fg: #e7ecf3;
+  --fg-muted: #b3becd;
+  --fg-subtle: #8d9bad;
+  --fg-inverse: #14181f;
+
+  --primary-50: #1e2a3d;
+  --primary-100: #24344b;
+  --primary-500: #7fa9f0;
+  --primary-600: #2f5fbf;
+  --primary-700: #3a6acc;
+
+  --accent-text: var(--primary-500);
+  --on-accent: #f2f6ff;
+
+  --success: #5fb3a2;
+  --on-success: #14181f;
+  --success-soft: #1a2b29;
+  --success-text: #93c6bc;
+
+  --warning: #d7a95a;
+  --on-warning: #14181f;
+  --warning-soft: #2a2519;
+  --warning-text: #d7be86;
+
+  --danger: #c0322d;
+  --on-danger: #ffffff;
+  --danger-soft: #33201c;
+  --danger-text: #f0a99a;
+  --danger-strong: #ff9a8f;
+
+  --info: #6fa3da;
+  --on-info: #14181f;
+  --info-soft: #1e2a38;
+  --info-text: #9cc0e8;
+
+  --therapy-soft: #262238;
+  --therapy-text: #bcb0e0;
+
+  --neutral-soft: #262e39;
+  --neutral-text: #b3becd;
+
+  --ai: #a5a0f5;
+  --ai-soft: #22203a;
+
+  --pastel-sky: #1e2a38;
+  --pastel-sky-text: #9cc0e8;
+  --pastel-teal: #1a2b29;
+  --pastel-teal-text: #93c6bc;
+  --pastel-sand: #2a2519;
+  --pastel-sand-text: #d7be86;
+  --pastel-clay: #2e211c;
+  --pastel-clay-text: #dba895;
+  --pastel-sage: #1f2a1d;
+  --pastel-sage-text: #a9c79f;
+
+  --focus: #7fa9f0;
+  --ring: #7fa9f0;
+  --overlay: rgba(0, 0, 0, 0.66);
+
+  /* Validated against the dark card #1D232D. */
+  --chart-1: #5b8fe8;
+  --chart-2: #d95926;
+  --chart-3: #2a9a88;
+  --chart-4: #9670d6;
+  --chart-5: #b08a26;
+  --chart-6: #5e6b7d;
+  --chart-grid: #2b333e;
+
+  --tube-edta: oklch(0.68 0.13 305);
+  --tube-sst: oklch(0.8 0.14 88);
+  --tube-plain: oklch(0.64 0.17 27);
+  --tube-citrate: oklch(0.74 0.1 232);
+  --tube-fluoride: oklch(0.66 0.01 250);
+  --tube-heparin: oklch(0.68 0.13 150);
+  --tube-sterile: oklch(0.8 0.02 230);
+  --tube-culture: oklch(0.66 0.11 255);
+  --tube-formalin: oklch(0.76 0.04 100);
+  --tube-slide: oklch(0.78 0.03 200);
+
+  --edge-shade: rgba(0, 0, 0, 0.6);
+  --elev-card: 0 1px 2px 0 rgba(0, 0, 0, 0.4), 0 1px 3px 0 rgba(0, 0, 0, 0.3);
+  --elev-raised:
+    0 2px 8px 0 rgba(0, 0, 0, 0.45), 0 1px 3px 0 rgba(0, 0, 0, 0.3);
+  --elev-overlay:
+    0 4px 16px 0 rgba(0, 0, 0, 0.5), 0 2px 6px 0 rgba(0, 0, 0, 0.35);
+  --elev-modal: 0 20px 60px 0 rgba(0, 0, 0, 0.55);
+  --elev-glow: 0 0 0 3px rgba(127, 169, 240, 0.22);
+  --elev-primary: 0 1px 3px 0 rgba(0, 0, 0, 0.4);
+  --elev-primary-hover: 0 4px 16px 0 rgba(0, 0, 0, 0.45);
+  --elev-danger: 0 1px 3px 0 rgba(0, 0, 0, 0.4);
+}
+
+@theme inline {
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-on-accent: var(--on-accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-text: var(--accent-text);
+
+  --color-success: var(--success);
+  --color-on-success: var(--on-success);
+  --color-success-soft: var(--success-soft);
+  --color-success-text: var(--success-text);
+
+  --color-warning: var(--warning);
+  --color-on-warning: var(--on-warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-text: var(--warning-text);
+
+  --color-danger: var(--danger);
+  --color-on-danger: var(--on-danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-text: var(--danger-text);
+
+  --color-info: var(--info);
+  --color-on-info: var(--on-info);
+  --color-info-soft: var(--info-soft);
+  --color-info-text: var(--info-text);
+
+  --color-neutral-soft: var(--neutral-soft);
+  --color-neutral-text: var(--neutral-text);
+
+  --color-ring: var(--ring);
+  --color-overlay: var(--overlay);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-chart-grid: var(--chart-grid);
+
+  --color-tube-edta: var(--tube-edta);
+  --color-tube-sst: var(--tube-sst);
+  --color-tube-plain: var(--tube-plain);
+  --color-tube-citrate: var(--tube-citrate);
+  --color-tube-fluoride: var(--tube-fluoride);
+  --color-tube-heparin: var(--tube-heparin);
+  --color-tube-sterile: var(--tube-sterile);
+  --color-tube-culture: var(--tube-culture);
+  --color-tube-formalin: var(--tube-formalin);
+  --color-tube-slide: var(--tube-slide);
+
+  --color-ic-teal: var(--ic-teal);
+  --color-ic-blue: var(--ic-blue);
+  --color-ic-indigo: var(--ic-indigo);
+  --color-ic-violet: var(--ic-violet);
+  --color-ic-rose: var(--ic-rose);
+  --color-ic-orange: var(--ic-orange);
+  --color-ic-amber: var(--ic-amber);
+  --color-ic-green: var(--ic-green);
+  --color-ic-sky: var(--ic-sky);
+  --color-ic-slate: var(--ic-slate);
+
+  --color-bg: var(--canvas);
+  --color-surface-1: var(--surface);
+  --color-border: var(--border);
+  --color-ink: var(--fg);
+  --color-ink-muted: var(--fg-muted);
+  --color-ink-subtle: var(--fg-subtle);
+  --color-fg-inverse: var(--fg-inverse);
+  --color-primary-50: var(--primary-50);
+  --color-primary-100: var(--primary-100);
+  --color-primary-200: var(--primary-200);
+  --color-primary-300: var(--primary-300);
+  --color-primary-400: var(--primary-400);
+  --color-primary-500: var(--primary-500);
+  --color-primary-600: var(--primary-600);
+  --color-primary-700: var(--primary-700);
+  --color-primary-800: var(--primary-800);
+  --color-primary-900: var(--primary-900);
+  --color-danger-strong: var(--danger-strong);
+  --color-therapy-soft: var(--therapy-soft);
+  --color-therapy-text: var(--therapy-text);
+  --color-ai: var(--ai);
+  --color-ai-soft: var(--ai-soft);
+  --color-pastel-sky: var(--pastel-sky);
+  --color-pastel-sky-text: var(--pastel-sky-text);
+  --color-pastel-teal: var(--pastel-teal);
+  --color-pastel-teal-text: var(--pastel-teal-text);
+  --color-pastel-sand: var(--pastel-sand);
+  --color-pastel-sand-text: var(--pastel-sand-text);
+  --color-pastel-clay: var(--pastel-clay);
+  --color-pastel-clay-text: var(--pastel-clay-text);
+  --color-pastel-sage: var(--pastel-sage);
+  --color-pastel-sage-text: var(--pastel-sage-text);
+  --color-focus: var(--focus);
+  --color-scrim: var(--overlay);
+  --color-ic-red: var(--ic-red);
+  --color-tile-blue: var(--tile-blue);
+  --color-tile-teal: var(--tile-teal);
+  --color-tile-violet: var(--tile-violet);
+  --color-tile-amber: var(--tile-amber);
+  --color-tile-red: var(--tile-red);
+  --color-on-tile: var(--on-tile);
+  --color-white: #ffffff;
+
+  --shadow-card: var(--elev-card);
+  --shadow-card-md: var(--elev-raised);
+  --shadow-card-lg: var(--elev-overlay);
+  --shadow-raised: var(--elev-raised);
+  --shadow-overlay: var(--elev-overlay);
+  --shadow-modal: var(--elev-modal);
+  --shadow-glow: var(--elev-glow);
+  --shadow-primary: var(--elev-primary);
+  --shadow-primary-hover: var(--elev-primary-hover);
+  --shadow-danger: var(--elev-danger);
+}

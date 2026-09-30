@@ -1,0 +1,75 @@
+/*
+ * Printing: reports and sample labels render into #print-root through
+ * PrintProvider. Everything else is hidden, and light tokens are forced so a
+ * dark-theme session never prints dark pages.
+ */
+
+#print-root {
+  display: none;
+}
+
+@page {
+  size: A4;
+  margin: 12mm 12mm 14mm;
+  /* Page numbers on every printed page; browsers without margin boxes
+     simply leave them out. */
+  @bottom-right {
+    content: 'Page ' counter(page) ' of ' counter(pages);
+    font-size: 7.5pt;
+    color: #5b6670;
+  }
+}
+
+@page label {
+  size: 50mm 25mm;
+  margin: 0;
+}
+
+@media print {
+  :root,
+  :root.dark {
+    color-scheme: light;
+    --canvas: oklch(1 0 0);
+    --surface: oklch(1 0 0);
+    --surface-2: oklch(0.975 0.004 210);
+    --surface-3: oklch(0.95 0.006 210);
+    --line: oklch(0.85 0.008 215);
+    --line-strong: oklch(0.75 0.01 215);
+    --fg: oklch(0.18 0.015 225);
+    --fg-muted: oklch(0.4 0.015 225);
+    --fg-subtle: oklch(0.52 0.012 225);
+    --accent: #1d4ed8;
+    --accent-text: #1d4ed8;
+    --danger-text: oklch(0.45 0.17 25);
+    --warning-text: oklch(0.45 0.11 60);
+    --success-text: oklch(0.4 0.1 152);
+    --danger-soft: oklch(0.955 0.028 20);
+    --warning-soft: oklch(0.962 0.045 85);
+  }
+
+  html,
+  body {
+    background: white !important;
+  }
+
+  #root,
+  [data-sonner-toaster],
+  .tsqd-parent-container {
+    display: none !important;
+  }
+
+  #print-root {
+    display: block;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .print-label {
+    page: label;
+    break-after: page;
+  }
+
+  .print-avoid-break {
+    break-inside: avoid;
+  }
+}

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#E8EDF4" />
+    <meta name="color-scheme" content="light dark" />
+    <title>SHRI HEALTH</title>
+    <script>
+      // Apply the saved theme and language before first paint (no flash).
+      ;(function () {
+        try {
+          var read = function (key, fallback) {
+            var raw = localStorage.getItem('shri-lims.' + key)
+            return raw ? JSON.parse(raw) : fallback
+          }
+          var theme = read('theme', 'system')
+          var dark =
+            theme === 'dark' ||
+            (theme === 'system' &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches)
+          var root = document.documentElement
+          root.classList.toggle('dark', dark)
+          var meta = document.querySelector('meta[name="theme-color"]')
+          if (meta) meta.setAttribute('content', dark ? '#14181F' : '#E8EDF4')
+          root.lang = read('language', 'en')
+        } catch (e) {}
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <div id="print-root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,434 @@
+@layer base {
+  /*
+   * A grid with no explicit columns gets one shrinkable column, so wide
+   * tables and scrolling tab rows scroll inside it instead of stretching the
+   * page. Any grid-cols-* utility (utilities layer) still wins.
+   */
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Inside a table cell the column must size to its content, so a cell's
+     grid keeps its intrinsic width (a minmax(0) track would let the table
+     squeeze the column and the content spill into the next one). */
+  :where(td, th) .grid {
+    grid-template-columns: auto;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+    min-width: 320px;
+    /* A modal's scroll lock must not shift the page sideways. */
+    scrollbar-gutter: stable;
+  }
+
+  /* Indic scripts have taller glyphs; give their text more room. */
+  html:is([lang='hi'], [lang='kn'], [lang='ta'], [lang='ml']) {
+    --text-2xs--line-height: 1.15rem;
+    --text-xs--line-height: 1.3rem;
+    --text-meta--line-height: 1.4rem;
+    --text-sm--line-height: 1.5rem;
+    --text-base--line-height: 1.7rem;
+  }
+
+  body {
+    @apply bg-canvas text-sm text-fg antialiased;
+    min-width: 320px;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow-x: clip;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    font-synthesis: none;
+    /* The theme flip cross-fades; reduced motion clamps it below. */
+    transition:
+      background-color 0.2s var(--ease-smooth),
+      color 0.2s var(--ease-smooth);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  button,
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  @media (max-width: 767px) {
+    /* 16px stops iOS zooming on focus; 44px is a finger. */
+    input:not([type='checkbox']):not([type='radio']),
+    select,
+    textarea {
+      font-size: max(16px, 1em);
+      min-height: 44px;
+    }
+  }
+
+  ::selection {
+    background-color: var(--accent-soft);
+    color: var(--fg);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+  }
+
+  [data-radix-popper-content-wrapper] {
+    z-index: 60 !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* A table row that needs attention (open critical, failed QC). The tint
+     is also laid over the pinned columns, which need an opaque base. */
+  .row-alert {
+    --row-tint: color-mix(in oklab, var(--danger-soft) 25%, transparent);
+    background-color: var(--row-tint);
+  }
+  /* Test chips in a table cell stay on one line, except at 1280-1535px
+     where long names wrap so the table fits the content area (narrower
+     screens scroll the table). Elsewhere they wrap freely. */
+  @media (width >= 48rem) {
+    :where(td) [data-test-chips] {
+      width: max-content;
+      flex-wrap: nowrap;
+    }
+  }
+  @media (width >= 80rem) and (width < 96rem) {
+    :where(td) [data-test-chips] {
+      width: auto;
+      max-width: 13rem;
+      flex-wrap: wrap;
+    }
+  }
+  .pinned-cell {
+    background-image: linear-gradient(
+      var(--row-tint, transparent),
+      var(--row-tint, transparent)
+    );
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+
+  .numeric {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* A visible ring plus a real outline (the outline survives forced colours). */
+  .focus-ring:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--focus) 22%, transparent);
+  }
+
+  /* 44px touch target floor (WCAG 2.5.8). */
+  .tap-target {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* A 44px hit area around a visually small control. */
+  .tap-reach {
+    position: relative;
+  }
+  .tap-reach::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 2.75rem;
+    height: 2.75rem;
+    transform: translate(-50%, -50%);
+  }
+
+  /* Density changes row height only, never touch targets. */
+  :root,
+  [data-density='comfortable'] {
+    --row-h: 2.5rem;
+  }
+  [data-density='compact'] {
+    --row-h: 2rem;
+  }
+  .clinical-row {
+    min-height: var(--row-h);
+  }
+
+  .card-hover {
+    transition:
+      transform 0.25s var(--ease-premium),
+      box-shadow 0.25s var(--ease-premium),
+      border-color 0.25s var(--ease-premium);
+  }
+  .card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--elev-overlay);
+  }
+
+  /* Identity hue carriers. Set --tone to an --ic-* hue (toneStyle()). */
+  .icon-hue {
+    color: var(--tone);
+  }
+
+  /*
+   * The app's icon style: a transparent duotone glyph with no container.
+   * The stroke is the destination hue softened toward ink (so it is colourful
+   * without shouting) and closed shapes carry a faint fill of the same hue.
+   */
+  .duo-icon {
+    color: color-mix(in oklab, var(--tone) 80%, #1e293b);
+  }
+  .duo-icon svg {
+    fill: color-mix(in oklab, var(--tone) 16%, transparent);
+  }
+  .duo-icon.duo-strong svg {
+    fill: color-mix(in oklab, var(--tone) 26%, transparent);
+  }
+  :root.dark .duo-icon {
+    color: color-mix(in oklab, var(--tone) 82%, #ffffff);
+  }
+  :root.dark .duo-icon svg {
+    fill: color-mix(in oklab, var(--tone) 22%, transparent);
+  }
+
+  /* The same duotone for a glyph on a solid tile: white, with a white wash. */
+  .duo-on-fill svg {
+    fill: rgb(255 255 255 / 0.2);
+  }
+
+  /* A surface washed in a hue, layered over its own background. */
+  .tinted-surface {
+    background-image: linear-gradient(
+      color-mix(in oklab, var(--tone) 4.5%, transparent),
+      color-mix(in oklab, var(--tone) 4.5%, transparent)
+    );
+    border-color: color-mix(in oklab, var(--tone) 16%, transparent);
+  }
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes overlay-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 16px)) scale(0.95);
+  }
+}
+
+@keyframes dialog-out {
+  to {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.98);
+  }
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes drawer-out {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes drawer-left-in {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes drawer-left-out {
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+
+@keyframes pop-out {
+  to {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@utility animate-overlay {
+  &[data-state='open'] {
+    animation: overlay-in 150ms ease-out;
+  }
+  &[data-state='closed'] {
+    animation: overlay-out 120ms ease-in;
+  }
+}
+
+@utility animate-dialog {
+  &[data-state='open'] {
+    animation: dialog-in 250ms var(--ease-premium);
+  }
+  &[data-state='closed'] {
+    animation: dialog-out 120ms ease-in;
+  }
+}
+
+@utility animate-drawer {
+  &[data-state='open'] {
+    animation: drawer-in 200ms var(--ease-premium);
+  }
+  &[data-state='closed'] {
+    animation: drawer-out 160ms ease-in;
+  }
+}
+
+@utility animate-drawer-left {
+  &[data-state='open'] {
+    animation: drawer-left-in 200ms var(--ease-premium);
+  }
+  &[data-state='closed'] {
+    animation: drawer-left-out 160ms ease-in;
+  }
+}
+
+@utility animate-pop {
+  &[data-state='open'],
+  &[data-state='delayed-open'],
+  &[data-state='instant-open'] {
+    animation: pop-in 140ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  &[data-state='closed'] {
+    animation: pop-out 100ms ease-in;
+  }
+}
+
+@utility skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 25%,
+    var(--surface-3) 50%,
+    var(--surface-2) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@utility animate-page {
+  animation: page-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* A progress ring drawing in from empty (design system 11.2). */
+@keyframes ring-draw {
+  from {
+    stroke-dashoffset: var(--ring-c);
+  }
+}
+
+/*
+ * Inside a table cell, a min-w-0 flex child would report no minimum width, so
+ * the table squeezes the column and nowrap content spills into the next one.
+ * Columns size to their content here instead (the table scrolls in its own
+ * wrapper when it runs out of room). Unlayered so it beats the utility.
+ */
+:where(td, th) .min-w-0 {
+  min-width: auto;
+}
+
+/* Accessibility preferences from Settings (in addition to the OS setting). */
+html[data-reduce-motion] *,
+html[data-reduce-motion] *::before,
+html[data-reduce-motion] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* Higher contrast: darker text and borders (design system 4.6). */
+html[data-high-contrast] {
+  --fg: #000000;
+  --fg-muted: #1e293b;
+  --fg-subtle: #1e293b;
+  --line: #475569;
+  --border: #475569;
+  --line-strong: #334155;
+}
+html[data-high-contrast].dark {
+  --fg: #ffffff;
+  --fg-muted: #e2e8f0;
+  --fg-subtle: #cbd5e1;
+  --line: #8d9bad;
+  --border: #8d9bad;
+  --line-strong: #b3becd;
+}
