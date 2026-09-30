@@ -1,0 +1,1 @@
+import{m as e}from"./router-mA4Gsvos.js";function t(){let[,t]=e();return e=>t(t=>{let n=new URLSearchParams(t);return n.set(`sample`,e),n})}export{t};

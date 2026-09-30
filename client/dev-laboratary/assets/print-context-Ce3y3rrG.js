@@ -1,0 +1,1 @@
+import{r as e}from"./rolldown-runtime-hePW80VL.js";import{i as t}from"./react-CR5VJ85Q.js";var n=e(t(),1),r=(0,n.createContext)({print:()=>{},setPrintable:()=>{}}),i=()=>(0,n.useContext)(r);function a(e,t){let{setPrintable:r}=i();(0,n.useEffect)(()=>(r({node:e,...t?{onPrint:t}:{}}),()=>r(null)))}export{i as n,a as r,r as t};
