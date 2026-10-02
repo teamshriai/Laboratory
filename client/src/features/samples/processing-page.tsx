@@ -6,7 +6,7 @@ import {
   TestTubeIcon,
   CircleAlertIcon,
 } from 'lucide-react'
-import { useDeferredValue, useRef, useState } from 'react'
+import { useDeferredValue, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import {
   PRIORITIES,
@@ -16,8 +16,7 @@ import {
 } from '@/domain/types'
 import { usePreferences } from '@/app/preferences/context'
 import { useNow } from '@/hooks/use-now'
-import { oneOf } from '@/lib/storage'
-import { usePersistentState } from '@/hooks/use-persistent-state'
+import { useSearchParam } from '@/hooks/use-search-param'
 import { useEnum, useLanguage, useT } from '@/i18n/context'
 import { useFormat } from '@/i18n/format'
 import { cn } from '@/lib/cn'
@@ -26,6 +25,7 @@ import { errorMessage, useLabMutation } from '@/services/mutations'
 import { useProcessing } from '@/services/queries'
 import { PageHeader } from '@/app/layout/page-header'
 import { FilterBar } from '@/components/lab/filter-bar'
+import { RecordLink } from '@/components/lab/record-link'
 import { PatientCell } from '@/components/lab/patient'
 import { ContainerChip } from '@/components/lab/sample'
 import { SampleStatusBadge, PriorityMark } from '@/components/lab/status'
@@ -49,8 +49,8 @@ import { FilterTabs } from '@/components/ui/toggles'
 import { useSampleActions } from './sample-actions'
 
 type Tab = SampleStatus | 'all'
-const isTab = oneOf<Tab>(['all', ...SAMPLE_STATUSES])
-const isPriority = oneOf<Priority | 'all'>(['all', ...PRIORITIES])
+const TABS: readonly Tab[] = ['all', ...SAMPLE_STATUSES]
+const PRIORITY_FILTERS: readonly (Priority | 'all')[] = ['all', ...PRIORITIES]
 
 function RowActions({
   sample,
@@ -85,6 +85,8 @@ function RowActions({
               icon={a.icon}
               onSelect={a.onSelect}
               danger={a.danger}
+              disabled={a.disabled}
+              hint={a.hint}
             >
               {a.label}
             </MenuItem>
@@ -106,6 +108,12 @@ function ReceiveCard() {
     { id: string; ok: boolean; text: string; at: number }[]
   >([])
   const input = useRef<HTMLInputElement>(null)
+  // Ready for the barcode scanner on arrival (not on touch screens, where
+  // focusing would open the on-screen keyboard).
+  useEffect(() => {
+    if (window.matchMedia('(pointer: fine)').matches)
+      input.current?.focus({ preventScroll: true })
+  }, [])
   const receive = useLabMutation((ref: string) => labApi.samples.receive(ref), {
     success: (r) => t('receivedToast', { accession: r.accessionNo ?? '' }),
     onSuccess: (r) => {
@@ -209,20 +217,15 @@ export function Component() {
   const f = useFormat()
   const { department } = usePreferences()
   const [params, setParams] = useSearchParams()
-  const [tab, setTab] = usePersistentState<Tab>(
-    'filters.processing.tab',
-    'received',
-    isTab,
-  )
-  const [priority, setPriority] = usePersistentState<Priority | 'all'>(
-    'filters.processing.priority',
+  // Filters live in the URL so a view can be linked and survives reloads.
+  const [status, setStatus] = useSearchParam<Tab>('status', 'received', TABS)
+  const [priority, setPriority] = useSearchParam<Priority | 'all'>(
+    'priority',
     'all',
-    isPriority,
+    PRIORITY_FILTERS,
   )
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useSearchParam<string>('q', '')
   const q = useDeferredValue(query)
-  const urlStatus = params.get('status') as Tab | null
-  const status = urlStatus ?? tab
   const { data, isPending, isError, refetch } = useProcessing({
     status,
     q,
@@ -230,14 +233,7 @@ export function Component() {
     ...(priority !== 'all' ? { priority } : {}),
   })
 
-  const changeTab = (v: Tab) => {
-    setTab(v)
-    if (urlStatus) {
-      const next = new URLSearchParams(params)
-      next.delete('status')
-      setParams(next, { replace: true })
-    }
-  }
+  const changeTab = (v: Tab) => setStatus(v)
   const view = (id: string) => {
     const next = new URLSearchParams(params)
     next.set('sample', id)
@@ -251,9 +247,13 @@ export function Component() {
       sortValue: (r) => r.accessionNo ?? '',
       cell: (r) => (
         <div className="grid gap-1">
-          <span className="font-mono text-meta font-semibold whitespace-nowrap text-fg">
+          <RecordLink
+            kind="specimen"
+            id={r.id}
+            className="text-meta font-semibold whitespace-nowrap text-fg"
+          >
             {r.accessionNo}
-          </span>
+          </RecordLink>
           <ContainerChip
             container={r.container}
             className="text-xs text-fg-muted"

@@ -1,1 +1,0 @@
-function e(e){let t=(e??document).querySelector(`[aria-invalid="true"]`);t&&(t.focus({preventScroll:!0}),t.scrollIntoView({block:`center`,behavior:`smooth`}))}export{e as t};

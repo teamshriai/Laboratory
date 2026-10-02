@@ -57,7 +57,7 @@ export function RouteError() {
             {tc('retry')}
           </button>
           <Link
-            to="/laboratory"
+            to="/dashboard"
             className={buttonVariants({ variant: 'primary' })}
           >
             {t('backToOverview')}
@@ -82,7 +82,7 @@ export function NotFoundPage() {
         <h1 className="text-base font-semibold text-fg">{t('pageNotFound')}</h1>
         <p className="mt-1 text-meta text-fg-muted">{t('pageNotFoundBody')}</p>
         <Link
-          to="/laboratory"
+          to="/dashboard"
           className={buttonVariants({ variant: 'primary', className: 'mt-5' })}
         >
           {t('backToOverview')}

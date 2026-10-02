@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { MinusIcon, PlusIcon } from 'lucide-react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
-import { z } from 'zod'
+import { z } from '@/features/shared/zod'
 import { ADJUST_REASONS, type AdjustReason } from '@/domain/types'
 import { useEnum, useLanguage, useT } from '@/i18n/context'
 import { useFormat } from '@/i18n/format'
@@ -15,6 +15,9 @@ import { Input, Textarea } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Segmented } from '@/components/ui/toggles'
 import { roundQty, useSignedQty } from './stock'
+import { FormErrorSummary } from '@/components/ui/form-errors'
+import { focusFirstInvalid } from '@/lib/focus'
+import { countFieldErrors, focusInvalid } from '@/lib/form-errors'
 
 const schema = z
   .object({
@@ -125,6 +128,7 @@ export function AdjustStockDialog({
     <Dialog
       open
       onOpenChange={(o) => !o && onClose()}
+      dirty={formState.isDirty && !formState.isSubmitSuccessful}
       title={t('adjustTitle')}
       description={target.name}
       footer={
@@ -135,7 +139,7 @@ export function AdjustStockDialog({
           <Button
             variant="primary"
             loading={mutation.isPending}
-            onClick={() => void handleSubmit(submit)()}
+            onClick={() => void handleSubmit(submit, focusInvalid)()}
           >
             {t('adjustConfirm')}
           </Button>
@@ -144,9 +148,13 @@ export function AdjustStockDialog({
     >
       <form
         className="grid gap-4"
-        onSubmit={(ev) => void handleSubmit(submit)(ev)}
+        onSubmit={(ev) => void handleSubmit(submit, focusInvalid)(ev)}
         noValidate
       >
+        <FormErrorSummary
+          count={formState.submitCount ? countFieldErrors(formState.errors) : 0}
+          onFocusFirst={() => focusFirstInvalid()}
+        />
         <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-line bg-line">
           <div className="bg-surface-2/60 px-4 py-3">
             <p className="text-xs text-fg-muted">{t('currentQuantity')}</p>

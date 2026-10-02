@@ -17,13 +17,14 @@ import {
   type OrderStatus,
   type Priority,
 } from '@/domain/types'
-import { usePersistentState } from '@/hooks/use-persistent-state'
+import { useUrlFilters } from '@/hooks/use-search-param'
 import { useEnum, useT } from '@/i18n/context'
 import { useFormat } from '@/i18n/format'
 import { useNow } from '@/hooks/use-now'
 import type { DatePreset, OrderRow } from '@/services/lab-api'
 import { useOrderableTests, useOrders, useReference } from '@/services/queries'
 import { PageHeader } from '@/app/layout/page-header'
+import { ExportButton } from '@/components/lab/export-button'
 import { FilterBar } from '@/components/lab/filter-bar'
 import { PatientCell } from '@/components/lab/patient'
 import { OrderStatusBadge, PriorityMark } from '@/components/lab/status'
@@ -51,6 +52,8 @@ interface Filters {
   testId: string
 }
 
+const DATES = ['today', 'yesterday', '7d', '30d', 'all'] as const
+
 const DEFAULTS: Filters = {
   status: 'all',
   date: 'today',
@@ -69,14 +72,25 @@ export function Component() {
   const now = useNow()
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
-  const [filters, setFilters] = usePersistentState<Filters>(
-    'filters.orders',
-    DEFAULTS,
+  // Filters live in the URL (linkable, survive reloads); unknown values in a
+  // hand-edited link fall back to the defaults.
+  const url = useUrlFilters(
+    { ...DEFAULTS, q: '' },
+    {
+      status: ['all', ...ORDER_STATUSES],
+      date: DATES,
+      department: ['all', ...DEPARTMENTS],
+      priority: ['all', ...PRIORITIES],
+      encounter: ['all', ...ENCOUNTER_TYPES],
+    },
   )
-  const [query, setQuery] = usePersistentState('filters.orders.q', '')
+  const filters = url.values as Filters & { q: string }
+  const setFilters = (next: Filters) => url.set(next)
+  const query = filters.q
+  const setQuery = (q: string) => url.set({ q })
   const q = useDeferredValue(query)
   const set = <K extends keyof Filters>(key: K, value: Filters[K]) =>
-    setFilters((prev) => ({ ...prev, [key]: value }))
+    url.set({ [key]: value })
 
   const { data, isPending, isError, refetch } = useOrders({
     status: filters.status,
@@ -94,7 +108,7 @@ export function Component() {
 
   const openOrder = (row: OrderRow) => {
     if (row.status === 'draft') {
-      void navigate(`/laboratory/orders/new?draft=${row.id}`)
+      void navigate(`/orders/new?draft=${row.id}`)
       return
     }
     const next = new URLSearchParams(params)
@@ -239,21 +253,56 @@ export function Component() {
     Boolean(filters.testId),
   ].filter(Boolean).length
   const dirty =
-    JSON.stringify({ ...filters, status: 'all' }) !==
-      JSON.stringify(DEFAULTS) || query !== ''
+    url.activeCount([
+      'date',
+      'department',
+      'priority',
+      'encounter',
+      'doctorId',
+      'testId',
+      'q',
+    ]) > 0
 
   return (
     <>
       <PageHeader
         title={t('title')}
         actions={
-          <Link
-            to="/laboratory/orders/new"
-            className={buttonVariants({ variant: 'primary' })}
-          >
-            <PlusIcon strokeWidth={2.5} />
-            {t('newOrder')}
-          </Link>
+          <>
+            <ExportButton
+              filename={t('exportFile')}
+              disabled={!data?.rows.length}
+              rows={() => [
+                [
+                  t('colOrder'),
+                  tc('orderedAt'),
+                  t('colPatient'),
+                  tc('uhid'),
+                  t('colDoctor'),
+                  t('colPriority'),
+                  t('colStatus'),
+                  t('colTests'),
+                ],
+                ...(data?.rows ?? []).map((r) => [
+                  r.orderNo,
+                  r.orderedAt ? f.dateTime(r.orderedAt) : '',
+                  r.patient.name,
+                  r.patient.uhid,
+                  r.doctor.name,
+                  e('priority', r.priority),
+                  e('orderStatus', r.status),
+                  r.tests.map((x) => x.shortName).join('; '),
+                ]),
+              ]}
+            />
+            <Link
+              to="/orders/new"
+              className={buttonVariants({ variant: 'primary' })}
+            >
+              <PlusIcon strokeWidth={2.5} />
+              {t('newOrder')}
+            </Link>
+          </>
         }
       />
       <Card className="overflow-hidden">
@@ -284,9 +333,10 @@ export function Component() {
             aria-label={t('filterDate')}
             value={filters.date}
             onValueChange={(v) => set('date', v)}
-            options={(['today', 'yesterday', '7d', '30d', 'all'] as const).map(
-              (d) => ({ value: d, label: e('datePreset', d) }),
-            )}
+            options={DATES.map((d) => ({
+              value: d,
+              label: e('datePreset', d),
+            }))}
             className="w-36"
           />
           <Select
@@ -412,7 +462,7 @@ export function Component() {
                     </button>
                   ) : (
                     <Link
-                      to="/laboratory/orders/new"
+                      to="/orders/new"
                       className={buttonVariants({ variant: 'primary' })}
                     >
                       <PlusIcon strokeWidth={2.5} />

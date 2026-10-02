@@ -28,11 +28,11 @@ export default {
   reportFooter: 'Report footer',
   tatWarn: 'Approaching TAT at',
   tatWarnHint:
-    'Percent of the target at which a sample is flagged as approaching.',
+    'Percent of the target at which a specimen is flagged as approaching.',
   tatCritical: 'Critical delay at',
   tatCriticalHint: 'Percent of the target at which a delay is critical.',
-  samplePrefix: 'Sample ID prefix',
-  samplePrefixHint: 'Next sample: {example}',
+  samplePrefix: 'Accession No. prefix',
+  samplePrefixHint: 'Next specimen: {example}',
   defaultDepartment: 'Default working department',
   allDepartments: 'All departments',
   defaultLanguage: 'Default report language',
@@ -46,9 +46,9 @@ export default {
   'alert.critical.hint':
     'New critical results and values still to be communicated',
   'alert.tat': 'TAT alerts',
-  'alert.tat.hint': 'Samples approaching or past their TAT target',
-  'alert.rejection': 'Sample rejection alerts',
-  'alert.rejection.hint': 'Rejected samples and recollections',
+  'alert.tat.hint': 'Specimens approaching or past their TAT target',
+  'alert.rejection': 'Specimen rejection alerts',
+  'alert.rejection.hint': 'Rejected specimens and recollections',
   'alert.inventory': 'Inventory alerts',
   'alert.inventory.hint': 'Quarantined and expiring reagent lots',
   'alert.qc': 'QC alerts',
@@ -75,7 +75,7 @@ export default {
   unmodified: 'Not changed yet',
   resetTitle: 'Reset demo data',
   resetBody:
-    'Deletes every order, sample, result, report, stock movement and setting change made in this browser, and generates a fresh laboratory day.',
+    'Deletes every order, specimen, result, report, stock movement and setting change made in this browser, and generates a fresh laboratory day.',
   resetConfirmHint: 'Type RESET to confirm.',
   resetButton: 'Reset demo data',
   resetDone: 'Demo data reset',
@@ -108,4 +108,19 @@ export default {
   criticalNotifyHint:
     'Alerts not communicated within this time show as overdue.',
   minutesValue: '{value} minutes',
+  demoLimitsTitle: 'What this demo is, and is not',
+  demoLimitStorage:
+    'Every record lives in this browser only. Nothing is shared with other people or devices, and clearing the browser deletes it.',
+  demoLimitRoles:
+    'Roles are simulated: "Acting as" switches who you are, and the app enforces each role, but there is no login. Real access control needs a server that authenticates every user.',
+  demoLimitAudit:
+    'The audit log records every change in this browser. A tamper-proof, shared audit trail needs a server.',
+  demoLimitClinical:
+    'Patients, results and reports are generated demo data. Do not use this system for patient care.',
+  holdRelease: 'Hold release until critical values are communicated',
+  holdReleaseHint:
+    'On: a report with an uncommunicated critical value cannot be released. Off: release and the call can happen in either order, and the open call stays on the dashboard.',
+  transitAlert: 'Flag specimens in transit after',
+  transitAlertHint:
+    'Collected specimens not received within this time appear as delayed on the dashboard.',
 } as const

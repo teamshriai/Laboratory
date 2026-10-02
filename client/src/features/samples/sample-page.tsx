@@ -4,7 +4,8 @@ import { useEnum, useT } from '@/i18n/context'
 import { isLabApiError } from '@/services/lab-api'
 import { useSample } from '@/services/queries'
 import { PageHeader } from '@/app/layout/page-header'
-import { PatientCell } from '@/components/lab/patient'
+import { PatientBanner } from '@/components/lab/patient-banner'
+import { RecordLink } from '@/components/lab/record-link'
 import { SamplePipeline } from '@/components/lab/sample'
 import { PriorityBadge, SampleStatusBadge } from '@/components/lab/status'
 import { buttonVariants } from '@/components/ui/button'
@@ -24,6 +25,7 @@ import { Button } from '@/components/ui/button'
 export function Component() {
   const { sampleId } = useParams()
   const t = useT('processing')
+  const tc = useT('common')
   const e = useEnum()
   const {
     data: sample,
@@ -55,7 +57,7 @@ export function Component() {
             description={t('notFoundBody')}
             action={
               <Link
-                to="/laboratory/samples"
+                to="/reception"
                 className={buttonVariants({ variant: 'primary' })}
               >
                 <ArrowLeftIcon />
@@ -72,7 +74,7 @@ export function Component() {
   return (
     <>
       <PageHeader
-        back={{ to: '/laboratory/samples', label: t('title') }}
+        back={{ to: '/reception', label: t('title') }}
         title={
           <span className="font-mono">
             {sample.accessionNo ?? t('pendingAccession')}
@@ -103,6 +105,21 @@ export function Component() {
           </>
         }
       />
+      <PatientBanner
+        patient={sample.patient}
+        extra={
+          <span className="flex items-baseline gap-1.5">
+            <span className="text-fg-muted">{tc('orderNo')}</span>
+            <RecordLink
+              kind="order"
+              id={sample.orderId}
+              className="font-semibold text-fg"
+            >
+              {sample.orderNo}
+            </RecordLink>
+          </span>
+        }
+      />
       <div className="grid gap-5">
         <SampleAlerts sample={sample} />
         <Card className="px-5 py-5">
@@ -127,12 +144,6 @@ export function Component() {
             </Card>
           </div>
           <div className="grid content-start gap-5">
-            <Card>
-              <CardHeader title={t('sectionPatient')} />
-              <CardBody>
-                <PatientCell patient={sample.patient} />
-              </CardBody>
-            </Card>
             <Card>
               <CardHeader title={t('sectionSample')} />
               <CardBody>

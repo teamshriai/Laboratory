@@ -28,18 +28,18 @@ import type {
 } from '@/domain/types'
 
 /** Bump whenever the shape changes; stored data with another version is reseeded. */
-export const SCHEMA_VERSION = 3
+export const SCHEMA_VERSION = 4
 
 export const MAX_FEED_ENTRIES = 500
 /** The audit log is kept longer than the feeds; entries are compact. */
-export const MAX_AUDIT_ENTRIES = 2000
+export const MAX_AUDIT_ENTRIES = 5000
 
 export const DEFAULT_SETTINGS: LabSettings = {
   labName: 'SHRI HEALTH Central Laboratory',
   reportHeader:
     'Open 24 hours, 7 days a week · Home sample collection available',
   reportFooter:
-    'Results relate only to the sample received. Please correlate clinically.',
+    'Results relate only to the specimen received. Please correlate clinically.',
   tatWarnPct: 75,
   tatCriticalPct: 150,
   samplePrefix: 'LAB',
@@ -50,6 +50,8 @@ export const DEFAULT_SETTINGS: LabSettings = {
   labAccreditation: 'NABL MC-4721',
   requireIndependentReview: true,
   criticalNotifyMin: 30,
+  holdReleaseForCriticals: true,
+  transitAlertMin: 60,
 }
 
 export type Table<T> = Record<string, T>

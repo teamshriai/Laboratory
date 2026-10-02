@@ -19,6 +19,7 @@ import { samplesApi } from './samples'
 import { analyticsReportApi } from './analytics'
 import { workQueueListApi } from './work-queue'
 import { referenceApi, systemApi } from './system'
+import { adminApi } from './admin'
 
 export const labApi = {
   dashboard: dashboardApi,
@@ -41,6 +42,7 @@ export const labApi = {
   notifications: notificationsApi,
   reference: referenceApi,
   system: systemApi,
+  admin: adminApi,
 }
 
 export type LabApi = typeof labApi

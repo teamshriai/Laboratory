@@ -44,7 +44,7 @@ export function Component() {
     return (
       <>
         <PageHeader
-          back={{ to: '/laboratory/departments', label: t('title') }}
+          back={{ to: '/departments', label: t('title') }}
           title={t('notFoundTitle')}
         />
         <Card>
@@ -54,7 +54,7 @@ export function Component() {
             description={t('notFoundBody')}
             action={
               <Link
-                to="/laboratory/departments"
+                to="/departments"
                 className={buttonVariants({ variant: 'primary' })}
               >
                 {t('backToDepartments')}
@@ -90,7 +90,7 @@ export function Component() {
   return (
     <>
       <PageHeader
-        back={{ to: '/laboratory/departments', label: t('title') }}
+        back={{ to: '/departments', label: t('title') }}
         title={name}
         titleExtra={
           isWorking ? (
@@ -115,14 +115,14 @@ export function Component() {
               {isWorking ? t('clearWorking') : t('setWorking')}
             </Button>
             <Link
-              to="/laboratory/results"
+              to="/worklists"
               className={buttonVariants({ variant: 'secondary' })}
             >
               <PencilLineIcon />
               {t('openResultEntry')}
             </Link>
             <Link
-              to="/laboratory/validation"
+              to="/verification"
               className={buttonVariants({ variant: 'primary' })}
             >
               <BadgeCheckIcon />
@@ -158,39 +158,39 @@ export function Component() {
                 key: 'pending',
                 label: t('kpiPending'),
                 value: data.pending,
-                href: '/laboratory/samples',
+                href: '/reception',
               },
               {
                 key: 'lab',
                 label: t('kpiInLab'),
                 value: data.processing,
-                href: '/laboratory/results',
+                href: '/worklists',
               },
               {
                 key: 'awaiting',
                 label: t('kpiAwaiting'),
                 value: data.awaitingValidation,
-                href: '/laboratory/validation',
+                href: '/verification',
               },
               {
                 key: 'done',
                 label: t('kpiCompleted'),
                 value: data.completed,
-                href: '/laboratory/reports',
+                href: '/reports',
               },
               {
                 key: 'delayed',
                 label: t('kpiDelayed'),
                 value: data.delayed,
                 alert: data.delayed > 0,
-                href: '/laboratory/tat',
+                href: '/tat',
               },
               {
                 key: 'critical',
                 label: t('kpiCriticals'),
                 value: data.criticalsOpen,
                 alert: data.criticalsOpen > 0,
-                href: '/laboratory/critical-values?status=pending',
+                href: '/critical-results?status=pending',
               },
             ]}
           />

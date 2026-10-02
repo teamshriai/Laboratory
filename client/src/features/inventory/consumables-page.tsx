@@ -17,6 +17,7 @@ import type { ConsumableRow } from '@/services/lab-api'
 import { useConsumables } from '@/services/queries'
 import { StockBadge } from '@/components/lab/status'
 import { Button } from '@/components/ui/button'
+import { GuardedButton } from '@/components/lab/guarded-button'
 import { Card } from '@/components/ui/card'
 import { SearchInput } from '@/components/ui/input'
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/components/ui/menu'
@@ -29,6 +30,7 @@ import { ReceiveConsumableDialog } from './receive-consumable-dialog'
 import { coverUrgency } from './stock'
 import { ExpiryText, LevelBar } from './stock-widgets'
 import { TransferDialog } from './transfer-dialog'
+import { focusWhenScrollable } from '@/lib/scroll-focus'
 
 type Dialog =
   | { kind: 'receive' | 'adjust' | 'transfer'; item: ConsumableRow }
@@ -87,13 +89,14 @@ export function Component() {
         }
         actions={
           <>
-            <Button
+            <GuardedButton
+              permission="inventory.manage"
               variant="primary"
               onClick={() => setDialog({ kind: 'receive-any' })}
             >
               <PackageIcon />
               {t('receive')}
-            </Button>
+            </GuardedButton>
           </>
         }
       />
@@ -138,7 +141,10 @@ export function Component() {
         </Card>
       ) : (
         <Card className="overflow-hidden">
-          <div className="relative scrollbar-thin overflow-x-auto">
+          <div
+            ref={focusWhenScrollable}
+            className="focus-ring relative scrollbar-thin overflow-x-auto"
+          >
             <table className="w-full min-w-[900px] text-meta">
               <thead>
                 <tr className="bg-surface-2 text-left text-xs text-fg-muted">

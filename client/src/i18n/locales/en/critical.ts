@@ -1,6 +1,6 @@
 export default {
   minutesShort: 'min',
-  title: 'Critical values',
+  title: 'Critical results',
   policy:
     'Communicate within {minutes} minutes of detection. Record every call.',
   kpiPending: 'Awaiting action',
@@ -9,7 +9,7 @@ export default {
   tabEscalated: 'Escalated',
   kpiToday: 'Detected today',
   kpiMedian: 'Median time to notify',
-  tabPending: 'Pending',
+  tabPending: 'To communicate',
   tabNotified: 'Awaiting acknowledgement',
   tabAcknowledged: 'Acknowledged',
   tabAll: 'All',
@@ -51,7 +51,7 @@ export default {
   voidTitle: 'Close this alert',
   voidBody:
     'Only when the value is not a true critical, such as a confirmed analytical error. The reason is kept in the audit trail.',
-  voidReasonPlaceholder: 'For example: haemolysed sample, repeat pending',
+  voidReasonPlaceholder: 'For example: haemolysed specimen, repeat pending',
   voidedToast: 'Alert closed',
   reasonLabel: 'Reason',
   outcome: 'Outcome',
@@ -77,5 +77,17 @@ export default {
   acknowledged: 'Acknowledgement recorded',
   doctorPhone: 'Ordering doctor: {name}, {phone}',
   patientLocation: 'Location: {location}',
-  openSample: 'Open sample',
+  openSample: 'Open specimen',
+  dialogCritical:
+    'CRITICAL: {analyte} {value} for {patient}. Notify the clinician and log the call.',
+  fullNameRequired:
+    'Write the full name of the person you reached, for example Dr. Asha Kiran. A first name alone is not enough.',
+  exportFile: 'critical-values',
+  exportDetected: 'Detected',
+  exportAnalyte: 'Parameter',
+  exportValue: 'Value',
+  exportNotifiedTo: 'Notified to',
+  exportNotifiedAt: 'Notified at',
+  exportMinutes: 'Minutes to notify',
+  exportReadBack: 'Read back',
 } as const

@@ -2120,9 +2120,66 @@ export const TESTS: LabTest[] = [
   }),
 ]
 
+/**
+ * Physiologically possible limits [low, high], used to refuse entry errors
+ * (a misplaced decimal, a wrong unit). They are deliberately wide.
+ */
+const PLAUSIBLE: Record<string, [number, number]> = {
+  hb: [0, 25],
+  rbc: [0, 12],
+  pcv: [0, 80],
+  mcv: [40, 160],
+  mch: [10, 60],
+  mchc: [20, 45],
+  rdw: [5, 40],
+  wbc: [0, 500000],
+  neut: [0, 100],
+  lymph: [0, 100],
+  mono: [0, 100],
+  eos: [0, 100],
+  baso: [0, 100],
+  plt: [0, 30],
+  mpv: [3, 20],
+  esr: [0, 200],
+  retic: [0, 40],
+  pt: [5, 150],
+  inr: [0.5, 15],
+  aptt: [10, 200],
+  glu_f: [0, 2000],
+  glu_pp: [0, 2000],
+  glu_r: [0, 2000],
+  hba1c: [2, 25],
+  tbil: [0, 50],
+  dbil: [0, 40],
+  ast: [0, 20000],
+  alt: [0, 20000],
+  alp: [0, 5000],
+  ggt: [0, 5000],
+  tp: [0, 15],
+  alb: [0, 8],
+  urea: [0, 600],
+  creat: [0, 30],
+  uric: [0, 30],
+  na: [80, 200],
+  k: [1, 15],
+  cl: [50, 160],
+  ca: [2, 20],
+  tc: [0, 1500],
+  tg: [0, 10000],
+  hdl: [0, 200],
+  ldl: [0, 1000],
+  trop: [0, 100000],
+  tsh: [0, 500],
+  crp: [0, 500],
+  psa: [0, 10000],
+  ferritin: [0, 100000],
+}
+
 export const ANALYTES: Analyte[] = ANALYTE_DEFS.map((def) => {
   const analyte: AnalyteDef = { ...def }
   delete analyte.ranges
+  const limits = PLAUSIBLE[def.id]
+  if (limits) [analyte.plausibleLow, analyte.plausibleHigh] = limits
   return analyte
 })
 

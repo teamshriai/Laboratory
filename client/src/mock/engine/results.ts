@@ -1,4 +1,10 @@
-import { computeFlag, isAbnormal, isCriticalFlag } from '@/domain/flags'
+import {
+  computeFlag,
+  isAbnormal,
+  isCriticalFlag,
+  parseNumeric,
+} from '@/domain/flags'
+import { canAuthoriseDepartment } from '@/domain/permissions'
 import { uid } from '@/domain/ids'
 import { pickRange, rangeSnapshot } from '@/domain/reference-ranges'
 import type { Analyte, OrderItem, Result } from '@/domain/types'
@@ -14,9 +20,11 @@ import {
   notify,
   patientAge,
   rangesOfAnalyte,
+  requirePermission,
   resultsOfItem,
   type EngineCtx,
 } from './core'
+import { qcHoldFor } from './qc-gate'
 
 export interface ResultValueInput {
   value: string | null
@@ -26,6 +34,8 @@ export interface ResultValueInput {
 export interface ItemResultsInput {
   itemId: string
   values: Record<string, ResultValueInput>
+  /** Why a submitted value is being changed; required when one is. */
+  changeReason?: string
 }
 
 const EDITABLE: OrderItem['status'][] = [
@@ -34,10 +44,32 @@ const EDITABLE: OrderItem['status'][] = [
   'returned',
   'entered',
 ]
-/** Clinical authorisation. */
+/** Signatories, who may verify and authorise in one action. */
 const VALIDATORS = ['pathologist', 'microbiologist']
-/** Technical review (the second check in the lab). */
-const REVIEWERS = ['technician', 'lab-manager', ...VALIDATORS]
+
+/**
+ * Refuses a value the analyte cannot have: text where a number is needed, or
+ * a number outside the physiologically possible limits (a typing or unit
+ * error). Values like "<0.5" and ">1000" are accepted.
+ */
+function checkPlausible(analyte: Analyte, value: string | null) {
+  if (value === null || analyte.resultType !== 'numeric') return
+  const parsed = parseNumeric(value)
+  if (!parsed) throw new LabApiError('not-numeric', { analyte: analyte.name })
+  const low = analyte.plausibleLow
+  const high = analyte.plausibleHigh
+  if (
+    (low !== undefined && parsed.value < low) ||
+    (high !== undefined && parsed.value > high)
+  )
+    throw new LabApiError('implausible-value', {
+      analyte: analyte.name,
+      value,
+      unit: analyte.unit,
+      low: low ?? '',
+      high: high ?? '',
+    })
+}
 
 /** Whether an analyte needs a value, given the other values in the same test. */
 export function isAnalyteRequired(
@@ -58,16 +90,20 @@ function upsertResult(
   analyte: Analyte,
   input: ResultValueInput,
   ctx: EngineCtx,
+  changeReason?: string,
 ): Result {
   const existing = resultsOfItem(db, item.id).find(
     (r) => r.analyteId === analyte.id,
   )
+  const sample = item.sampleId ? db.samples[item.sampleId] : undefined
+  const source = sample?.equipmentId ?? 'manual'
   const patient = must(
     db.patients,
     db.orders[item.orderId]!.patientId,
     'patient',
   )
   const value = input.value?.trim() ? input.value.trim() : null
+  checkPlausible(analyte, value)
   const range =
     existing?.range ??
     rangeSnapshot(
@@ -86,12 +122,14 @@ function upsertResult(
         flag: existing.flag,
         at: existing.updatedAt,
         by: existing.updatedBy,
+        ...(changeReason ? { reason: changeReason } : {}),
       })
     }
     existing.value = value
     existing.flag = flag
     existing.updatedAt = ctx.now
     existing.updatedBy = ctx.by
+    existing.source = source
     if (input.remarks?.trim()) existing.remarks = input.remarks.trim()
     else delete existing.remarks
     return existing
@@ -106,6 +144,7 @@ function upsertResult(
     range,
     updatedAt: ctx.now,
     updatedBy: ctx.by,
+    source,
     revisions: [],
   }
   if (input.remarks?.trim()) result.remarks = input.remarks.trim()
@@ -177,14 +216,14 @@ export function syncCriticalAlert(
     'critical-detected',
     'danger',
     params,
-    `/laboratory/critical-values?alert=${alert.id}`,
+    `/critical-results?alert=${alert.id}`,
   )
   logActivity(
     db,
     ctx,
     'critical-detected',
     params,
-    `/laboratory/critical-values?alert=${alert.id}`,
+    `/critical-results?alert=${alert.id}`,
   )
 }
 
@@ -195,16 +234,25 @@ export function saveResults(
   submit: boolean,
   ctx: EngineCtx,
 ) {
+  requirePermission(db, ctx, 'result.enter')
   const sample = must(db.samples, sampleId, 'sample')
+  // Results need a specimen in the lab: never collected, rejected,
+  // discarded or on-hold specimens are refused (audit D2, D8).
   if (!['received', 'processing'].includes(sample.status))
     throw new LabApiError('sample-not-in-lab', {
       accession: sample.accessionNo ?? '',
     })
   if (sample.status === 'received') {
+    // Entering results for a received specimen starts manual processing.
     sample.status = 'processing'
     sample.processingStartedAt = ctx.now
     sample.processingBy = ctx.by
     sample.history.push(history(ctx, 'processing-started'))
+    audit(db, ctx, 'sample', sample.id, 'processing-started', {
+      from: 'received',
+      to: 'processing',
+      detail: { accession: sample.accessionNo ?? '', equipment: 'manual' },
+    })
   }
 
   const touched: OrderItem[] = []
@@ -218,6 +266,18 @@ export function saveResults(
     const values: Record<string, string | null> = {}
     for (const analyteId of item.analyteIds)
       values[analyteId] = entry.values[analyteId]?.value ?? null
+
+    // A submitted value is a result on record: changing it needs a reason.
+    const changeReason = entry.changeReason?.trim()
+    if (item.status === 'entered' && !changeReason) {
+      const changed = resultsOfItem(db, item.id).some(
+        (r) =>
+          r.value !== null &&
+          entry.values[r.analyteId] !== undefined &&
+          (entry.values[r.analyteId]!.value?.trim() || null) !== r.value,
+      )
+      if (changed) throw new LabApiError('reason-required')
+    }
 
     if (submit) {
       const missing = item.analyteIds.filter((id) => {
@@ -239,15 +299,32 @@ export function saveResults(
       const analyte = must(db.analytes, analyteId, 'analyte')
       const input = entry.values[analyteId]
       if (!input) continue
-      const result = upsertResult(db, item, analyte, input, ctx)
+      const before = resultsOfItem(db, item.id).find(
+        (r) => r.analyteId === analyteId,
+      )?.value
+      const result = upsertResult(db, item, analyte, input, ctx, changeReason)
+      if (item.status === 'entered' && before && before !== result.value)
+        audit(db, ctx, 'result', item.id, 'value-changed', {
+          from: before,
+          to: result.value ?? '',
+          ...(changeReason ? { reason: changeReason } : {}),
+          detail: { test: item.testName, analyte: analyte.name },
+        })
       if (submit) syncCriticalAlert(db, result, item, ctx)
     }
 
     if (submit) {
+      const from = item.status
       item.status = 'entered'
       item.enteredAt = ctx.now
       item.enteredBy = ctx.by
       delete item.returnedReason
+      if (from !== 'entered')
+        audit(db, ctx, 'result', item.id, 'resulted', {
+          from,
+          to: 'entered',
+          detail: { test: item.testName },
+        })
     } else if (item.status === 'pending' || item.status === 'returned') {
       item.status = 'draft'
     }
@@ -270,22 +347,22 @@ export function saveResults(
         patient: patient?.name ?? '',
         tests: touched.length,
       },
-      `/laboratory/validation`,
+      `/verification`,
     )
   }
   return touched
 }
 
-function staffWithRole(
-  db: LabDb,
-  ctx: EngineCtx,
-  roles: string[],
-  code: 'not-authorized-validator' | 'not-authorized-reviewer',
-) {
-  const staff = db.staff[ctx.by]
-  if (!staff || !roles.includes(staff.role))
-    throw new LabApiError(code, { name: staff?.name ?? ctx.by })
-  return staff
+/** Results measured on an analyzer with an open QC failure stay unreleased. */
+function ensureQcPassed(db: LabDb, item: OrderItem) {
+  const sample = item.sampleId ? db.samples[item.sampleId] : undefined
+  if (!sample?.equipmentId) return
+  const failed = qcHoldFor(db, sample.id, sample.equipmentId)
+  if (failed)
+    throw new LabApiError('qc-hold', {
+      name: db.equipment[sample.equipmentId]?.name ?? '',
+      test: failed,
+    })
 }
 
 function ensureNotOnHold(db: LabDb, item: OrderItem) {
@@ -321,7 +398,7 @@ export { completeSampleIfDone }
  * flags and QC before a pathologist authorises them.
  */
 export function reviewItems(db: LabDb, itemIds: string[], ctx: EngineCtx) {
-  const staff = staffWithRole(db, ctx, REVIEWERS, 'not-authorized-reviewer')
+  const staff = requirePermission(db, ctx, 'result.verify')
   const reviewed: OrderItem[] = []
   for (const id of itemIds) {
     const item = must(db.items, id, 'item')
@@ -347,6 +424,8 @@ export function reviewItems(db: LabDb, itemIds: string[], ctx: EngineCtx) {
     reviewed.push(item)
     sample?.history.push(history(ctx, 'reviewed', { test: item.testName }))
     audit(db, ctx, 'result', item.id, 'reviewed', {
+      from: 'entered',
+      to: 'reviewed',
       detail: { test: item.testName },
     })
   }
@@ -356,7 +435,7 @@ export function reviewItems(db: LabDb, itemIds: string[], ctx: EngineCtx) {
       ctx,
       'results-reviewed',
       { count: reviewed.length },
-      '/laboratory/validation?stage=authorise',
+      '/verification?stage=authorise',
     )
   return reviewed
 }
@@ -367,7 +446,7 @@ export function reviewItems(db: LabDb, itemIds: string[], ctx: EngineCtx) {
  * recorded as both.
  */
 export function validateItems(db: LabDb, itemIds: string[], ctx: EngineCtx) {
-  staffWithRole(db, ctx, VALIDATORS, 'not-authorized-validator')
+  const staff = requirePermission(db, ctx, 'result.authorise')
   const validated: OrderItem[] = []
   for (const id of itemIds) {
     const item = must(db.items, id, 'item')
@@ -379,7 +458,15 @@ export function validateItems(db: LabDb, itemIds: string[], ctx: EngineCtx) {
         from: item.status,
         to: 'validated',
       })
+    if (!canAuthoriseDepartment(staff, item.department))
+      throw new LabApiError('outside-discipline', {
+        name: staff.name,
+        department: `enum:department.${staff.department ?? 'microbiology'}`,
+        test: item.testName,
+      })
     const sample = ensureNotOnHold(db, item)
+    ensureQcPassed(db, item)
+    const from = item.status
     if (item.status !== 'reviewed') {
       if (db.settings.requireIndependentReview && item.enteredBy === ctx.by)
         throw new LabApiError('not-reviewed', { test: item.testName })
@@ -394,6 +481,8 @@ export function validateItems(db: LabDb, itemIds: string[], ctx: EngineCtx) {
     validated.push(item)
     sample?.history.push(history(ctx, 'validated', { test: item.testName }))
     audit(db, ctx, 'result', item.id, 'validated', {
+      from,
+      to: 'validated',
       detail: { test: item.testName },
     })
   }
@@ -404,7 +493,7 @@ export function validateItems(db: LabDb, itemIds: string[], ctx: EngineCtx) {
       ctx,
       'results-validated',
       { count: validated.length },
-      '/laboratory/reports',
+      '/reports',
     )
   return validated
 }
@@ -415,9 +504,10 @@ export function returnItem(
   reason: string,
   ctx: EngineCtx,
 ) {
-  staffWithRole(db, ctx, REVIEWERS, 'not-authorized-reviewer')
+  requirePermission(db, ctx, 'result.verify')
   const item = must(db.items, itemId, 'item')
   if (!reason.trim()) throw new LabApiError('reason-required')
+  const fromStatus = item.status
   if (
     !isItemLive(item) ||
     !['entered', 'held', 'reviewed'].includes(item.status)
@@ -437,6 +527,8 @@ export function returnItem(
   )
   audit(db, ctx, 'result', item.id, 'returned', {
     reason,
+    from: fromStatus,
+    to: 'returned',
     detail: { test: item.testName },
   })
   const patient = db.patients[db.orders[item.orderId]?.patientId ?? '']
@@ -446,7 +538,7 @@ export function returnItem(
     'result-returned',
     'warning',
     { test: item.testName, patient: patient?.name ?? '', reason },
-    sample ? `/laboratory/results/${sample.id}` : '/laboratory/results',
+    sample ? `/results/${sample.id}` : '/worklists',
   )
   return item
 }
@@ -457,9 +549,10 @@ export function holdItem(
   reason: string,
   ctx: EngineCtx,
 ) {
-  staffWithRole(db, ctx, REVIEWERS, 'not-authorized-reviewer')
+  requirePermission(db, ctx, 'result.verify')
   const item = must(db.items, itemId, 'item')
   if (!reason.trim()) throw new LabApiError('reason-required')
+  const fromStatus = item.status
   if (!isItemLive(item) || !['entered', 'reviewed'].includes(item.status))
     throw new LabApiError('invalid-transition', {
       from: item.status,
@@ -475,6 +568,8 @@ export function holdItem(
   )
   audit(db, ctx, 'result', item.id, 'held', {
     reason,
+    from: fromStatus,
+    to: 'held',
     detail: { test: item.testName },
   })
   return item
@@ -486,6 +581,7 @@ export function addItemComment(
   input: { text: string; visibility: 'internal' | 'report' },
   ctx: EngineCtx,
 ) {
+  requirePermission(db, ctx, 'result.comment')
   const item = must(db.items, itemId, 'item')
   const text = input.text.trim()
   if (!text) throw new LabApiError('validation-failed', { field: 'text' })
@@ -495,6 +591,74 @@ export function addItemComment(
     by: ctx.by,
     text,
     visibility: input.visibility,
+  })
+  return item
+}
+
+/**
+ * Reruns a test on the same specimen (repeat, or after dilution). The first
+ * values stay on record, marked as replaced by the rerun, and the test goes
+ * back to result entry. Verification then shows both.
+ */
+export function requestRerun(
+  db: LabDb,
+  itemId: string,
+  input: { reason: string; dilution?: number },
+  ctx: EngineCtx,
+) {
+  requirePermission(db, ctx, 'result.rerun')
+  const item = must(db.items, itemId, 'item')
+  const reason = input.reason.trim()
+  if (!reason) throw new LabApiError('reason-required')
+  if (
+    !isItemLive(item) ||
+    !['entered', 'reviewed', 'held', 'returned'].includes(item.status)
+  )
+    throw new LabApiError('invalid-transition', {
+      from: item.status,
+      to: 'rerun',
+    })
+  const { dilution } = input
+  if (
+    dilution !== undefined &&
+    !(Number.isFinite(dilution) && dilution > 1 && dilution <= 1000)
+  )
+    throw new LabApiError('validation-failed', { field: 'dilution' })
+  const sample = ensureNotOnHold(db, item)
+  const from = item.status
+  for (const result of resultsOfItem(db, item.id)) {
+    if (result.value === null) continue
+    result.revisions.push({
+      value: result.value,
+      flag: result.flag,
+      at: result.updatedAt,
+      by: result.updatedBy,
+      reason,
+      rerun: true,
+      ...(result.dilution ? { dilution: result.dilution } : {}),
+    })
+    result.value = null
+    result.flag = null
+    if (dilution) result.dilution = dilution
+    else delete result.dilution
+  }
+  item.status = 'draft'
+  item.rerunCount = (item.rerunCount ?? 0) + 1
+  delete item.reviewedAt
+  delete item.reviewedBy
+  delete item.returnedReason
+  delete item.heldReason
+  sample?.history.push(
+    history(ctx, 'rerun-requested', { test: item.testName, reason }),
+  )
+  audit(db, ctx, 'result', item.id, 'rerun-requested', {
+    reason,
+    from,
+    to: 'draft',
+    detail: {
+      test: item.testName,
+      ...(dilution ? { dilution: `1:${dilution}` } : {}),
+    },
   })
   return item
 }

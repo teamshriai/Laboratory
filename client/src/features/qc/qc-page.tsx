@@ -16,7 +16,7 @@ import type {} from '@/lib/icon-tones'
 import type { QcRow } from '@/services/lab-api'
 import { useQc } from '@/services/queries'
 import { QcBadge } from '@/components/lab/status'
-import { Button } from '@/components/ui/button'
+import { GuardedButton } from '@/components/lab/guarded-button'
 import { Card, CardHeader } from '@/components/ui/card'
 import { DataTable, type Column } from '@/components/ui/data-table'
 import { MetricStrip } from '@/components/ui/metric-strip'
@@ -233,10 +233,14 @@ export function Component() {
         }
         actions={
           <>
-            <Button variant="primary" onClick={() => setRecording('new')}>
+            <GuardedButton
+              permission="qc.record"
+              variant="primary"
+              onClick={() => setRecording('new')}
+            >
               <PlusIcon strokeWidth={2.5} />
               {t('recordRun')}
-            </Button>
+            </GuardedButton>
           </>
         }
       />
@@ -254,20 +258,20 @@ export function Component() {
               key: 'pass',
               label: t('passed'),
               value: data.summary.passed,
-              href: '/laboratory/quality-control?result=pass',
+              href: '/quality-control?result=pass',
             },
             {
               key: 'warn',
               label: t('warnings'),
               value: data.summary.warnings,
-              href: '/laboratory/quality-control?result=warning',
+              href: '/quality-control?result=warning',
             },
             {
               key: 'fail',
               label: t('failed'),
               value: data.summary.failures,
               alert: data.summary.failures > 0,
-              href: '/laboratory/quality-control?result=fail',
+              href: '/quality-control?result=fail',
             },
             {
               key: 'rate',

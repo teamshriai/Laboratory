@@ -18,6 +18,9 @@ import {
   type NotifyRole,
 } from '@/domain/types'
 import { useSearchParam } from '@/hooks/use-search-param'
+import { ExportButton } from '@/components/lab/export-button'
+import { RecordLink } from '@/components/lab/record-link'
+import { isFullName } from '@/domain/critical'
 import { useNow } from '@/hooks/use-now'
 import { useEnum, useT } from '@/i18n/context'
 import { useFormat } from '@/i18n/format'
@@ -32,6 +35,7 @@ import { CriticalStateBadge } from '@/components/lab/status'
 import { MetricStrip } from '@/components/ui/metric-strip'
 import { PageHeader } from '@/app/layout/page-header'
 import { Button } from '@/components/ui/button'
+import { GuardedButton } from '@/components/lab/guarded-button'
 import { Card } from '@/components/ui/card'
 import { Dialog } from '@/components/ui/dialog'
 import { Field } from '@/components/ui/field'
@@ -154,6 +158,12 @@ function DocumentDialog({
   const reached = ackOnly || outcome === 'reached'
   const acknowledging = ackOnly || (reached && ack)
   const readBackMissing = acknowledging && !readBack
+  // CAP COM.30000: the person reached is recorded by full name.
+  const nameError = !name.trim()
+    ? 'forms.required'
+    : reached && !isFullName(name)
+      ? 'critical.fullNameRequired'
+      : undefined
   const save = useLabMutation(
     () =>
       ackOnly
@@ -184,7 +194,7 @@ function DocumentDialog({
   )
   const submit = () => {
     setTried(true)
-    if ((!ackOnly && !name.trim()) || readBackMissing) return
+    if ((!ackOnly && nameError) || readBackMissing) return
     save.mutate()
   }
   return (
@@ -192,7 +202,11 @@ function DocumentDialog({
       open
       onOpenChange={(o) => !o && onClose()}
       title={ackOnly ? t('dialogAckTitle') : t('dialogTitle')}
-      description={`${row.patient.name} · ${row.analyteName} ${row.value} ${row.unit}`}
+      description={t('dialogCritical', {
+        patient: `${row.patient.name} (${row.patient.uhid})`,
+        analyte: row.analyteName,
+        value: `${row.value} ${row.unit}`,
+      })}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
@@ -225,7 +239,7 @@ function DocumentDialog({
               label={t('notifiedName')}
               required
               className="sm:col-span-2"
-              error={tried && !name.trim() ? 'forms.required' : undefined}
+              error={tried ? nameError : undefined}
             >
               <Input
                 value={name}
@@ -466,7 +480,7 @@ export function Component() {
   const [tab, setTab] = useSearchParam<Tab>('status', 'pending', TABS)
   const [alertId, setAlertId] = useSearchParam<string>('alert', '')
   const [action, setAction] = useState<Action>('document')
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useSearchParam<string>('q', '')
   const q = useDeferredValue(query)
   const { data, isPending, isError, refetch } = useCriticals({ status: tab, q })
   const { data: all } = useCriticals({ status: 'all' })
@@ -498,6 +512,42 @@ export function Component() {
       <PageHeader
         title={t('title')}
         meta={<span>{t('policy', { minutes: limit })}</span>}
+        actions={
+          <ExportButton
+            filename={t('exportFile')}
+            disabled={!data?.rows.length}
+            rows={() => [
+              [
+                t('exportDetected'),
+                tc('patient'),
+                tc('uhid'),
+                tc('sampleId'),
+                t('exportAnalyte'),
+                t('exportValue'),
+                tc('status'),
+                t('exportNotifiedTo'),
+                t('exportNotifiedAt'),
+                t('exportMinutes'),
+                t('exportReadBack'),
+              ],
+              ...(data?.rows ?? []).map((r) => [
+                f.dateTime(r.detectedAt),
+                r.patient.name,
+                r.patient.uhid,
+                r.accessionNo,
+                r.analyteName,
+                `${r.value} ${r.unit}`.trim(),
+                e('criticalState', r.state),
+                r.notifiedTo,
+                r.notifiedAt ? f.dateTime(r.notifiedAt) : '',
+                r.notifiedAt
+                  ? Math.round((r.notifiedAt - r.detectedAt) / 60_000)
+                  : '',
+                r.readBack ? tc('yes') : tc('no'),
+              ]),
+            ]}
+          />
+        }
       />
       <MetricStrip
         className="mb-5"
@@ -507,33 +557,33 @@ export function Component() {
             label: t('kpiPending'),
             value: all?.counts.pending ?? 0,
             alert: (all?.counts.pending ?? 0) > 0,
-            href: '/laboratory/critical-values?status=pending',
+            href: '/critical-results?status=pending',
           },
           {
             key: 'overdue',
             label: t('kpiOverdue', { minutes: limit }),
             value: all?.counts.overdue ?? 0,
             alert: (all?.counts.overdue ?? 0) > 0,
-            href: '/laboratory/critical-values?status=pending',
+            href: '/critical-results?status=pending',
           },
           {
             key: 'escalated',
             label: t('kpiEscalated'),
             value: all?.counts.escalated ?? 0,
             alert: (all?.counts.escalated ?? 0) > 0,
-            href: '/laboratory/critical-values?status=escalated',
+            href: '/critical-results?status=escalated',
           },
           {
             key: 'today',
             label: t('kpiToday'),
             value: today,
-            href: '/laboratory/critical-values?status=all',
+            href: '/critical-results?status=all',
           },
           {
             key: 'median',
             label: t('kpiMedian'),
             value: median === null ? '-' : f.duration(median * 60_000),
-            href: '/laboratory/critical-values?status=acknowledged',
+            href: '/critical-results?status=acknowledged',
           },
         ]}
       />
@@ -660,6 +710,18 @@ export function Component() {
                         name: r.detectedByName,
                       })}
                     </p>
+                    <p className="mt-1 flex flex-wrap gap-x-3 text-xs text-fg-muted">
+                      {r.accessionNo ? (
+                        <RecordLink kind="specimen" id={r.sampleId}>
+                          {r.accessionNo}
+                        </RecordLink>
+                      ) : null}
+                      {r.orderNo ? (
+                        <RecordLink kind="order" id={r.orderId}>
+                          {r.orderNo}
+                        </RecordLink>
+                      ) : null}
+                    </p>
                   </div>
                   <div className="min-w-0">
                     <Lifecycle row={r} />
@@ -698,7 +760,8 @@ export function Component() {
                     <CriticalStateBadge state={r.state} />
                     {live ? (
                       <div className="flex min-w-0 items-center gap-1.5">
-                        <Button
+                        <GuardedButton
+                          permission="critical.communicate"
                           size="sm"
                           variant={r.status === 'open' ? 'danger' : 'primary'}
                           onClick={() => open(r.id)}
@@ -709,7 +772,7 @@ export function Component() {
                             <BadgeCheckIcon />
                           )}
                           {r.status === 'open' ? t('record') : t('acknowledge')}
-                        </Button>
+                        </GuardedButton>
                         <Menu>
                           <MenuTrigger asChild>
                             <IconButton
@@ -737,7 +800,7 @@ export function Component() {
                       </div>
                     ) : (
                       <Link
-                        to={`/laboratory/samples/${r.sampleId}`}
+                        to={`/specimens/${r.sampleId}`}
                         className="text-xs font-medium text-accent-text hover:underline"
                       >
                         {t('openSample')}

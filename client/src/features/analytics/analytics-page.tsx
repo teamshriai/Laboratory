@@ -232,6 +232,9 @@ export function Component() {
           </div>
         </div>
       )}
+      <p className="mt-4 max-w-3xl text-xs text-fg-subtle">
+        {t('historyNote')}
+      </p>
     </>
   )
 }

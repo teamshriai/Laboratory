@@ -14,6 +14,9 @@ import type { LabDb } from '../db/schema'
 import { voidAlert } from './critical'
 import { consumeReagentsFor } from './inventory'
 import { completeSampleIfDone } from './results'
+import { qcHoldFor } from './qc-gate'
+
+export { qcHoldFor }
 import {
   audit,
   history,
@@ -22,10 +25,14 @@ import {
   logActivity,
   must,
   notify,
+  requirePermission,
   resultsOfItem,
   staffName,
   type EngineCtx,
 } from './core'
+
+/** How far a recorded collection time may differ from now without a reason. */
+const UNEXPLAINED_TIME_MS = 10 * 60_000
 
 function transition(sample: Sample, to: Sample['status']) {
   if (!canTransitionSample(sample.status, to))
@@ -43,9 +50,10 @@ function ensureAccession(db: LabDb, sample: Sample, ctx: EngineCtx) {
   return sample.accessionNo
 }
 
-const sampleLink = (s: Sample) => `/laboratory/samples/${s.id}`
+const sampleLink = (s: Sample) => `/specimens/${s.id}`
 
 export function printLabel(db: LabDb, sampleId: string, ctx: EngineCtx) {
+  requirePermission(db, ctx, 'label.print')
   const sample = must(db.samples, sampleId, 'sample')
   if (['rejected', 'discarded'].includes(sample.status))
     throw new LabApiError('invalid-transition')
@@ -59,10 +67,12 @@ export function printLabel(db: LabDb, sampleId: string, ctx: EngineCtx) {
 }
 
 export interface CollectInput {
+  /** When the specimen was drawn; defaults to now in the UI. */
   collectedAt: number
-  collectedBy: string
   site: CollectionSite
   remarks?: string
+  /** Why the collection time differs from now, when it does. */
+  timeReason?: string
 }
 
 export function collectSample(
@@ -71,25 +81,32 @@ export function collectSample(
   input: CollectInput,
   ctx: EngineCtx,
 ) {
+  // The collector is the person recording the collection.
+  requirePermission(db, ctx, 'specimen.collect')
   const sample = must(db.samples, sampleId, 'sample')
-  must(db.staff, input.collectedBy, 'staff')
   const order = must(db.orders, sample.orderId, 'order')
-  if (
-    input.collectedAt > ctx.now + 60_000 ||
-    (order.orderedAt && input.collectedAt < order.orderedAt - 60_000)
-  )
-    throw new LabApiError('validation-failed', { field: 'collectedAt' })
+  if (input.collectedAt > ctx.now)
+    throw new LabApiError('collection-in-future', { now: `time:${ctx.now}` })
+  if (order.orderedAt && input.collectedAt < order.orderedAt)
+    throw new LabApiError('collection-before-order', {
+      time: `time:${order.orderedAt}`,
+    })
+  const timeReason = input.timeReason?.trim()
+  if (ctx.now - input.collectedAt > UNEXPLAINED_TIME_MS && !timeReason)
+    throw new LabApiError('collection-time-reason')
   transition(sample, 'collected')
   ensureAccession(db, sample, ctx)
   consumeContainer(db, sample, ctx)
   sample.collectedAt = input.collectedAt
-  sample.collectedBy = input.collectedBy
+  sample.collectedBy = ctx.by
   sample.collectionSite = input.site
   if (input.remarks) sample.collectionRemarks = input.remarks
-  sample.history.push({
-    ...history(ctx, 'collected'),
-    at: input.collectedAt,
-    by: input.collectedBy,
+  sample.history.push({ ...history(ctx, 'collected'), at: input.collectedAt })
+  audit(db, ctx, 'sample', sample.id, 'collected', {
+    from: 'pending_collection',
+    to: 'collected',
+    ...(timeReason ? { reason: timeReason } : {}),
+    detail: { accession: sample.accessionNo! },
   })
   const patient = db.patients[sample.patientId]
   logActivity(
@@ -102,8 +119,18 @@ export function collectSample(
   return sample
 }
 
-/** Receives a sample in the lab by accession number (scanned) or id. */
-export function receiveSample(db: LabDb, ref: string, ctx: EngineCtx) {
+/**
+ * Receives a sample in the lab by accession number (scanned) or id. The
+ * receiver confirms it is acceptable; an unacceptable one is rejected
+ * instead, with a reason.
+ */
+export function receiveSample(
+  db: LabDb,
+  ref: string,
+  ctx: EngineCtx,
+  input: { note?: string } = {},
+) {
+  requirePermission(db, ctx, 'specimen.receive')
   const key = ref.trim().toUpperCase()
   const sample =
     db.samples[ref] ??
@@ -117,10 +144,21 @@ export function receiveSample(db: LabDb, ref: string, ctx: EngineCtx) {
     throw new LabApiError('sample-already-received', {
       accession: sample.accessionNo ?? ref,
     })
+  if (sample.collectedAt !== undefined && ctx.now < sample.collectedAt)
+    throw new LabApiError('received-before-collected', {
+      time: `time:${sample.collectedAt}`,
+    })
   transition(sample, 'received')
   sample.receivedAt = ctx.now
   sample.receivedBy = ctx.by
+  sample.receiptCondition = 'acceptable'
+  if (input.note?.trim()) sample.receiptNote = input.note.trim()
   sample.history.push(history(ctx, 'received'))
+  audit(db, ctx, 'sample', sample.id, 'received', {
+    from: 'collected',
+    to: 'received',
+    detail: { accession: sample.accessionNo ?? '' },
+  })
   const patient = db.patients[sample.patientId]
   logActivity(
     db,
@@ -130,25 +168,6 @@ export function receiveSample(db: LabDb, ref: string, ctx: EngineCtx) {
     sampleLink(sample),
   )
   return sample
-}
-
-/**
- * An unresolved QC failure on this analyzer for any analyte the sample needs:
- * patient runs wait until a repeat QC passes. Returns the analyte name.
- */
-export function qcHoldFor(db: LabDb, sampleId: string, equipmentId: string) {
-  const analyteIds = new Set(
-    itemsOfSample(db, sampleId)
-      .filter(isItemLive)
-      .flatMap((i) => i.analyteIds),
-  )
-  const event = Object.values(db.qcEvents).find(
-    (e) =>
-      e.equipmentId === equipmentId &&
-      e.status !== 'resolved' &&
-      analyteIds.has(e.analyteId),
-  )
-  return event ? (db.analytes[event.analyteId]?.name ?? event.analyteId) : null
 }
 
 /** Uses one container of the matching consumable for a collected sample. */
@@ -193,6 +212,7 @@ export function startProcessing(
   input: { equipmentId?: string },
   ctx: EngineCtx,
 ) {
+  requirePermission(db, ctx, 'specimen.process')
   const sample = must(db.samples, sampleId, 'sample')
   if (input.equipmentId) {
     const eq = must(db.equipment, input.equipmentId, 'equipment')
@@ -220,6 +240,16 @@ export function startProcessing(
         : undefined,
     ),
   )
+  audit(db, ctx, 'sample', sample.id, 'processing-started', {
+    from: 'received',
+    to: 'processing',
+    detail: {
+      accession: sample.accessionNo ?? '',
+      equipment: input.equipmentId
+        ? db.equipment[input.equipmentId]!.name
+        : 'manual',
+    },
+  })
   return sample
 }
 
@@ -229,6 +259,7 @@ export function holdSample(
   input: { reason: HoldReason; remarks?: string },
   ctx: EngineCtx,
 ) {
+  requirePermission(db, ctx, 'specimen.process')
   const sample = must(db.samples, sampleId, 'sample')
   const from = sample.status
   if (from !== 'received' && from !== 'processing')
@@ -247,17 +278,22 @@ export function holdSample(
   sample.history.push(history(ctx, 'held', { reason: input.reason }))
   audit(db, ctx, 'sample', sample.id, 'held', {
     reason: input.remarks ? `${input.reason}: ${input.remarks}` : input.reason,
+    from,
+    to: 'on_hold',
     detail: { accession: sample.accessionNo ?? '' },
   })
   return sample
 }
 
 export function resumeSample(db: LabDb, sampleId: string, ctx: EngineCtx) {
+  requirePermission(db, ctx, 'specimen.process')
   const sample = must(db.samples, sampleId, 'sample')
   if (sample.status !== 'on_hold') throw new LabApiError('invalid-transition')
   transition(sample, sample.holdFrom ?? 'received')
   sample.history.push(history(ctx, 'resumed'))
   audit(db, ctx, 'sample', sample.id, 'resumed', {
+    from: 'on_hold',
+    to: sample.status,
     detail: { accession: sample.accessionNo ?? '' },
   })
   // Results authorised before the hold still complete the sample.
@@ -279,6 +315,14 @@ export function rejectSample(
 ) {
   const sample = must(db.samples, sampleId, 'sample')
   const stage = sample.status === 'pending_collection' ? 'collection' : 'lab'
+  // "Unable to collect" belongs to collection staff; rejecting a specimen
+  // that reached the lab belongs to the bench.
+  requirePermission(
+    db,
+    ctx,
+    stage === 'collection' ? 'specimen.collect' : 'specimen.reject',
+  )
+  const fromStatus = sample.status
   const reasons: readonly string[] =
     stage === 'collection'
       ? [...COLLECTION_FAILURE_REASONS, ...REJECTION_REASONS]
@@ -308,6 +352,8 @@ export function rejectSample(
     reason: input.remarks?.trim()
       ? `${input.reason}: ${input.remarks.trim()}`
       : input.reason,
+    from: fromStatus,
+    to: 'rejected',
     detail: {
       accession: sample.accessionNo ?? '',
       recollect: input.recollect ? 'yes' : 'no',
@@ -379,14 +425,7 @@ export function rejectSample(
       item.sampleId = recollection.id
       item.status = 'pending'
     }
-    notify(
-      db,
-      ctx,
-      'recollection-requested',
-      'warning',
-      params,
-      '/laboratory/collection',
-    )
+    notify(db, ctx, 'recollection-requested', 'warning', params, '/collection')
   } else {
     for (const item of items) item.status = 'void'
   }
@@ -408,6 +447,13 @@ export function assignSample(
   staffId: string | null,
   ctx: EngineCtx,
 ) {
+  // Picking up work yourself is part of the bench; giving it to someone
+  // else is the lab manager's.
+  requirePermission(
+    db,
+    ctx,
+    staffId === ctx.by ? 'specimen.process' : 'work.assign',
+  )
   const sample = must(db.samples, sampleId, 'sample')
   if (['rejected', 'discarded', 'completed'].includes(sample.status))
     throw new LabApiError('invalid-transition', { from: sample.status })
@@ -418,5 +464,9 @@ export function assignSample(
   sample.history.push(
     history(ctx, 'assigned', { staff: staffId ? staffName(db, staffId) : '' }),
   )
+  audit(db, ctx, 'sample', sample.id, 'assigned', {
+    to: staffId ? staffName(db, staffId) : '',
+    detail: { accession: sample.accessionNo ?? '' },
+  })
   return sample
 }

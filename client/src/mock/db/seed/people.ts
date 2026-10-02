@@ -87,7 +87,7 @@ export const STAFF: Staff[] = [
     id: 'st_ganesh',
     name: 'Ganesh Murthy',
     role: 'lab-manager',
-    qualification: 'MBA Hospital Administration',
+    qualification: 'MSc Medical Laboratory Technology',
   },
   { id: 'st_shruthi', name: 'Shruthi B', role: 'receptionist' },
 ]

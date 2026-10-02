@@ -23,6 +23,7 @@ import { LotActionDialogs } from './lot-dialogs'
 import { ReceiveLotDialog } from './receive-lot-dialog'
 import { roundQty, type LotAction } from './stock'
 import { ExpiryText, LevelBar, QcLotBadge, StorageLabel } from './stock-widgets'
+import { focusWhenScrollable } from '@/lib/scroll-focus'
 
 const FILTERS = [
   'all',
@@ -241,7 +242,10 @@ export function Component() {
                   {t('receiveShort')}
                 </Button>
               </div>
-              <div className="relative scrollbar-thin overflow-x-auto">
+              <div
+                ref={focusWhenScrollable}
+                className="focus-ring relative scrollbar-thin overflow-x-auto"
+              >
                 <table className="w-full min-w-[860px] table-fixed text-meta">
                   <thead>
                     <tr className="text-left text-xs text-fg-muted">

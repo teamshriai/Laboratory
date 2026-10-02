@@ -1,4 +1,9 @@
-import { Undo2Icon, PencilLineIcon } from 'lucide-react'
+import {
+  PencilLineIcon,
+  RotateCcwIcon,
+  SaveIcon,
+  Undo2Icon,
+} from 'lucide-react'
 import { useDeferredValue, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { PRIORITIES } from '@/domain/types'
@@ -9,10 +14,11 @@ import type { SampleRow } from '@/services/lab-api'
 import { useEntryWorklist } from '@/services/queries'
 import { PageHeader } from '@/app/layout/page-header'
 import { FilterBar } from '@/components/lab/filter-bar'
+import { RecordLink } from '@/components/lab/record-link'
 import { PatientCell } from '@/components/lab/patient'
 import { ContainerChip } from '@/components/lab/sample'
 import { PriorityMark } from '@/components/lab/status'
-import { TatIndicator } from '@/components/lab/tat'
+import { TatIndicator, Waiting } from '@/components/lab/tat'
 import { TestChips } from '@/components/lab/test-chips'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
@@ -35,21 +41,48 @@ export function Component() {
     ...(department ? { department } : {}),
   })
 
+  // Where each specimen stands in result entry, in words (never colour only).
+  const entryStatus = (r: SampleRow) =>
+    r.tests.some((x) => x.status === 'returned') ? (
+      <Badge tone="danger" size="sm">
+        <Undo2Icon />
+        {t('sentBack')}
+      </Badge>
+    ) : r.tests.some((x) => x.rerun) ? (
+      <Badge tone="info" size="sm">
+        <RotateCcwIcon />
+        {t('statusRerun')}
+      </Badge>
+    ) : r.tests.some((x) => x.status === 'draft') ? (
+      <Badge tone="neutral" size="sm">
+        <SaveIcon />
+        {t('draftSaved')}
+      </Badge>
+    ) : (
+      <span className="text-meta text-fg-muted">{t('statusAwaiting')}</span>
+    )
+
+  // Audit §11 order: Priority, Accession No., Patient, Test(s), Specimen,
+  // Received, Status, Time in queue, Action.
   const columns: Column<SampleRow>[] = [
+    {
+      id: 'priority',
+      header: t('colPriority'),
+      sortValue: (r) => PRIORITIES.indexOf(r.priority) * -1,
+      cell: (r) => <PriorityMark priority={r.priority} />,
+    },
     {
       id: 'sample',
       header: t('colSample'),
       sortValue: (r) => r.accessionNo ?? '',
       cell: (r) => (
-        <div className="grid gap-1">
-          <span className="font-mono text-meta font-semibold whitespace-nowrap text-fg">
-            {r.accessionNo}
-          </span>
-          <ContainerChip
-            container={r.container}
-            className="text-xs text-fg-muted"
-          />
-        </div>
+        <RecordLink
+          kind="specimen"
+          id={r.id}
+          className="text-meta font-semibold whitespace-nowrap text-fg"
+        >
+          {r.accessionNo}
+        </RecordLink>
       ),
     },
     {
@@ -57,6 +90,11 @@ export function Component() {
       header: t('colPatient'),
       sortValue: (r) => r.patient.name,
       cell: (r) => <PatientCell patient={r.patient} showLocal={false} />,
+    },
+    {
+      id: 'tests',
+      header: t('colTests'),
+      cell: (r) => <TestChips tests={r.tests} max={3} />,
     },
     {
       id: 'department',
@@ -69,21 +107,17 @@ export function Component() {
       ),
     },
     {
-      id: 'tests',
-      header: t('colTests'),
+      id: 'specimen',
+      header: t('colSpecimen'),
       cell: (r) => (
-        <div className="grid justify-items-start gap-1">
-          <TestChips tests={r.tests} max={3} />
-          {r.tests.some((x) => x.status === 'returned') ? (
-            <Badge tone="danger" size="sm">
-              <Undo2Icon />
-              {t('sentBack')}
-            </Badge>
-          ) : r.tests.some((x) => x.status === 'draft') ? (
-            <Badge tone="neutral" size="sm">
-              {t('draftSaved')}
-            </Badge>
-          ) : null}
+        <div className="grid gap-0.5">
+          <span className="text-meta whitespace-nowrap text-fg">
+            {e('specimen', r.specimen)}
+          </span>
+          <ContainerChip
+            container={r.container}
+            className="text-xs text-fg-muted"
+          />
         </div>
       ),
     },
@@ -93,22 +127,26 @@ export function Component() {
       header: t('colReceived'),
       sortValue: (r) => r.receivedAt ?? 0,
       cell: (r) => (
-        <span className="text-meta whitespace-nowrap">
+        <span className="text-meta whitespace-nowrap tabular-nums">
           {r.receivedAt ? f.time(r.receivedAt) : '-'}
         </span>
       ),
     },
     {
-      id: 'priority',
-      header: t('colPriority'),
-      sortValue: (r) => PRIORITIES.indexOf(r.priority) * -1,
-      cell: (r) => <PriorityMark priority={r.priority} />,
+      id: 'status',
+      header: t('colStatus'),
+      cell: entryStatus,
     },
     {
-      id: 'tat',
-      header: t('colTat'),
-      sortValue: (r) => r.tat?.ratio ?? -1,
-      cell: (r) => <TatIndicator tat={r.tat} />,
+      id: 'queue',
+      header: t('colInQueue'),
+      sortValue: (r) => r.receivedAt ?? r.createdAt,
+      cell: (r) => (
+        <div className="grid justify-items-start gap-1">
+          <Waiting since={r.receivedAt ?? r.createdAt} />
+          <TatIndicator tat={r.tat} compact />
+        </div>
+      ),
     },
     {
       id: 'actions',
@@ -116,7 +154,7 @@ export function Component() {
       align: 'right',
       cell: (r) => (
         <Link
-          to={`/laboratory/results/${r.id}`}
+          to={`/results/${r.id}`}
           onClick={(ev) => ev.stopPropagation()}
           className={buttonVariants({ variant: 'primary', size: 'xs' })}
         >
@@ -149,11 +187,10 @@ export function Component() {
             rows={data}
             getRowId={(r) => r.id}
             rowLabel={(r) => r.accessionNo ?? r.patient.name}
-            onRowClick={(r) => void navigate(`/laboratory/results/${r.id}`)}
+            onRowClick={(r) => void navigate(`/results/${r.id}`)}
             isLoading={isPending}
             isError={isError}
             onRetry={() => void refetch()}
-            minWidth={1000}
             empty={
               <EmptyState
                 icon={<PencilLineIcon />}

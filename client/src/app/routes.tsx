@@ -1,30 +1,29 @@
 import { Navigate, type RouteObject } from 'react-router'
+import { LegacyRedirect } from '@/app/legacy-redirect'
 import type { TKey } from '@/i18n/core'
 import { AppShell } from '@/app/layout/app-shell'
 import { AppLoading, NotFoundPage, RouteError } from '@/app/layout/route-states'
 
-const crumb = (key: TKey<'nav'>) => ({ crumb: key })
+const crumb = (key: TKey<'nav'>, to?: string) => ({ crumb: key, crumbTo: to })
 
 export const routes: RouteObject[] = [
+  // Links and bookmarks from before the URLs dropped the /laboratory prefix.
+  { path: '/laboratory/*', element: <LegacyRedirect /> },
   {
     path: '/',
-    element: <Navigate to="/laboratory" replace />,
-    errorElement: <RouteError />,
-  },
-  {
-    path: '/laboratory',
     element: <AppShell />,
     // The shell itself failing (header, sidebar, palette) still gets a
     // recoverable screen rather than the router's default error page.
     errorElement: <RouteError />,
     hydrateFallbackElement: <AppLoading />,
-    handle: crumb('sectionLaboratory'),
+    handle: crumb('sectionLaboratory', '/dashboard'),
     children: [
       {
         errorElement: <RouteError />,
         children: [
+          { index: true, element: <Navigate to="/dashboard" replace /> },
           {
-            index: true,
+            path: 'dashboard',
             handle: crumb('overview'),
             lazy: () => import('@/features/dashboard/dashboard-page'),
           },
@@ -69,28 +68,26 @@ export const routes: RouteObject[] = [
             lazy: () => import('@/features/collection/collection-page'),
           },
           {
-            path: 'samples',
+            path: 'reception',
             handle: crumb('processing'),
-            children: [
-              {
-                index: true,
-                lazy: () => import('@/features/samples/processing-page'),
-              },
-              {
-                path: ':sampleId',
-                handle: crumb('sample'),
-                lazy: () => import('@/features/samples/sample-page'),
-              },
-            ],
+            lazy: () => import('@/features/samples/processing-page'),
           },
           {
-            path: 'results',
+            path: 'specimens/:sampleId',
+            handle: crumb('sample'),
+            lazy: () => import('@/features/samples/sample-page'),
+          },
+          {
+            path: 'worklists',
             handle: crumb('results'),
+            lazy: () => import('@/features/results/worklist-page'),
+          },
+          {
+            // Result entry for one specimen, under the Worklists crumb.
+            path: 'results',
+            handle: crumb('results', '/worklists'),
             children: [
-              {
-                index: true,
-                lazy: () => import('@/features/results/worklist-page'),
-              },
+              { index: true, element: <Navigate to="/worklists" replace /> },
               {
                 path: ':sampleId',
                 handle: crumb('sample'),
@@ -99,7 +96,7 @@ export const routes: RouteObject[] = [
             ],
           },
           {
-            path: 'validation',
+            path: 'verification',
             handle: crumb('validation'),
             lazy: () => import('@/features/validation/validation-page'),
           },
@@ -119,7 +116,7 @@ export const routes: RouteObject[] = [
             ],
           },
           {
-            path: 'critical-values',
+            path: 'critical-results',
             handle: crumb('criticalValues'),
             lazy: () => import('@/features/critical/critical-page'),
           },
@@ -176,6 +173,16 @@ export const routes: RouteObject[] = [
             path: 'analytics',
             handle: crumb('analytics'),
             lazy: () => import('@/features/analytics/analytics-page'),
+          },
+          {
+            path: 'users',
+            handle: crumb('users'),
+            lazy: () => import('@/features/admin/users-page'),
+          },
+          {
+            path: 'audit-log',
+            handle: crumb('auditLog'),
+            lazy: () => import('@/features/admin/audit-log-page'),
           },
           {
             path: 'settings',

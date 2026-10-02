@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Controller, useForm } from 'react-hook-form'
-import { z } from 'zod'
+import { z } from '@/features/shared/zod'
 import {
   BLOOD_GROUPS,
   CLINICAL_DEPARTMENTS,
@@ -13,11 +13,15 @@ import { useEnum, useT } from '@/i18n/context'
 import { labApi } from '@/services/lab-api'
 import { useLabMutation } from '@/services/mutations'
 import { Button } from '@/components/ui/button'
+import { GuardedButton } from '@/components/lab/guarded-button'
 import { Dialog } from '@/components/ui/dialog'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Segmented } from '@/components/ui/toggles'
+import { FormErrorSummary } from '@/components/ui/form-errors'
+import { focusFirstInvalid } from '@/lib/focus'
+import { countFieldErrors, focusInvalid } from '@/lib/form-errors'
 
 const schema = z.object({
   name: z.string().trim().min(2, 'forms.required').max(80, 'forms.tooLong'),
@@ -132,6 +136,7 @@ export function RegisterPatientDialog({
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
+      dirty={formState.isDirty && !formState.isSubmitSuccessful}
       size="lg"
       title={t('registerTitle')}
       description={t('registerDescription')}
@@ -140,21 +145,30 @@ export function RegisterPatientDialog({
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             {tc('cancel')}
           </Button>
-          <Button
+          <GuardedButton
+            permission="patient.register"
             variant="primary"
             loading={mutation.isPending}
-            onClick={() => void handleSubmit((v) => mutation.mutate(v))()}
+            onClick={() =>
+              void handleSubmit((v) => mutation.mutate(v), focusInvalid)()
+            }
           >
             {t('register')}
-          </Button>
+          </GuardedButton>
         </>
       }
     >
       <form
         className="grid gap-4 sm:grid-cols-2"
-        onSubmit={(ev) => void handleSubmit((v) => mutation.mutate(v))(ev)}
+        onSubmit={(ev) =>
+          void handleSubmit((v) => mutation.mutate(v), focusInvalid)(ev)
+        }
         noValidate
       >
+        <FormErrorSummary
+          count={formState.submitCount ? countFieldErrors(formState.errors) : 0}
+          onFocusFirst={() => focusFirstInvalid()}
+        />
         <Field
           label={t('fullName')}
           required

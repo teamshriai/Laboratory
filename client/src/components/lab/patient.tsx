@@ -1,4 +1,5 @@
 import { Link } from 'react-router'
+import { RecordLink } from './record-link'
 import { ageFromDob } from '@/domain/time'
 import type { Sex } from '@/domain/types'
 import { useNow } from '@/hooks/use-now'
@@ -58,7 +59,7 @@ export function PatientCell({
 }) {
   const name = link ? (
     <Link
-      to={`/laboratory/patients/${patient.id}`}
+      to={`/patients/${patient.id}`}
       onClick={(e) => e.stopPropagation()}
       className="truncate py-0.5 font-medium text-fg hover:text-accent-text hover:underline hover:underline-offset-2"
     >
@@ -85,9 +86,19 @@ export function PatientCell({
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-x-1.5 text-xs text-fg-muted">
-          <span className="font-mono tracking-tight whitespace-nowrap">
-            {patient.uhid}
-          </span>
+          {link ? (
+            <RecordLink
+              kind="patient"
+              id={patient.id}
+              className="tracking-tight whitespace-nowrap"
+            >
+              {patient.uhid}
+            </RecordLink>
+          ) : (
+            <span className="font-mono tracking-tight whitespace-nowrap">
+              {patient.uhid}
+            </span>
+          )}
           <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
             <span aria-hidden className="text-fg-subtle">
               /

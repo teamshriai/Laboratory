@@ -10,6 +10,7 @@ import {
   must,
   notify,
   type EngineCtx,
+  requirePermission,
 } from './core'
 
 export interface QcRunInput {
@@ -41,6 +42,7 @@ export function recordQcRun(
   input: QcRunInput,
   ctx: EngineCtx,
 ): QcRun {
+  requirePermission(db, ctx, 'qc.record')
   const eq = must(db.equipment, input.equipmentId, 'equipment')
   const analyte = must(db.analytes, input.analyteId, 'analyte')
   if (!Number.isFinite(input.value))
@@ -93,7 +95,7 @@ export function recordQcRun(
         level: input.level,
         rule: run.rule ?? '',
       },
-      '/laboratory/quality-control',
+      '/quality-control',
     )
   if (run.result !== 'pass')
     audit(db, ctx, 'qc', run.id, `qc-${run.result}`, {
@@ -109,7 +111,7 @@ export function recordQcRun(
     ctx,
     'qc-recorded',
     { equipment: eq.name, analyte: analyte.name, result: run.result },
-    '/laboratory/quality-control',
+    '/quality-control',
   )
   return run
 }
@@ -194,6 +196,7 @@ export function advanceQcEvent(
   note: string,
   ctx: EngineCtx,
 ) {
+  requirePermission(db, ctx, 'qc.record')
   const event = must(db.qcEvents, eventId, 'qc-event')
   const next = NEXT[event.status]
   if (!next) throw new LabApiError('invalid-transition', { from: event.status })
@@ -201,10 +204,16 @@ export function advanceQcEvent(
   if (!text) throw new LabApiError('validation-failed', { field: 'note' })
   if (next === 'investigating') event.issue = text
   if (next === 'corrective') event.action = text
+  const from = event.status
   event.status = next
   event.steps.push(step(ctx, next, text))
   const run = db.qcRuns[event.runId]
   if (run && next === 'corrective')
     run.correctiveAction = event.issue ? `${event.issue} ${text}` : text
+  audit(db, ctx, 'qc', event.id, 'event-advanced', {
+    from,
+    to: next,
+    reason: text,
+  })
   return event
 }

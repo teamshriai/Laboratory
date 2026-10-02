@@ -13,7 +13,9 @@ import { useEnum, useT } from '@/i18n/context'
 import { useFormat } from '@/i18n/format'
 import type { DatePreset, ReportRow } from '@/services/lab-api'
 import { useReports } from '@/services/queries'
+import { ExportButton } from '@/components/lab/export-button'
 import { FilterBar } from '@/components/lab/filter-bar'
+import { RecordLink } from '@/components/lab/record-link'
 import { PatientCell } from '@/components/lab/patient'
 import { ReportStatusBadge } from '@/components/lab/status'
 import { Badge } from '@/components/ui/badge'
@@ -63,10 +65,20 @@ export function Component() {
       sortValue: (r) => r.reportNo,
       cell: (r) => (
         <div>
-          <p className="font-mono text-meta font-semibold whitespace-nowrap text-fg">
+          <RecordLink
+            kind="report"
+            id={r.id}
+            className="text-meta font-semibold whitespace-nowrap text-fg"
+          >
             {r.reportNo}
-          </p>
-          <p className="font-mono text-xs text-fg-subtle">{r.orderNo}</p>
+          </RecordLink>
+          <RecordLink
+            kind="order"
+            id={r.orderId}
+            className="block text-xs text-fg-subtle"
+          >
+            {r.orderNo}
+          </RecordLink>
         </div>
       ),
     },
@@ -160,6 +172,36 @@ export function Component() {
             <span>{t('totalCount', { count: data.counts.all })}</span>
           ) : null
         }
+        actions={
+          <ExportButton
+            filename={t('exportFile')}
+            disabled={!data?.rows.length}
+            rows={() => [
+              [
+                t('colReport'),
+                t('colPatient'),
+                tc('uhid'),
+                t('colDepartment'),
+                t('colTests'),
+                t('colDoctor'),
+                t('colStatus'),
+                t('colReleased'),
+                tc('orderNo'),
+              ],
+              ...(data?.rows ?? []).map((r) => [
+                `${r.reportNo} v${r.version}`,
+                r.patient.name,
+                r.patient.uhid,
+                e('department', r.department),
+                r.tests.join('; '),
+                r.doctorName,
+                e('reportStatus', r.status),
+                r.releasedAt ? f.dateTime(r.releasedAt) : '',
+                r.orderNo,
+              ]),
+            ]}
+          />
+        }
       />
       <Card className="overflow-hidden">
         <div className="border-b border-line px-3 pt-1">
@@ -220,7 +262,7 @@ export function Component() {
             rows={data?.rows}
             getRowId={(r) => r.id}
             rowLabel={(r) => r.reportNo}
-            onRowClick={(r) => void navigate(`/laboratory/reports/${r.id}`)}
+            onRowClick={(r) => void navigate(`/reports/${r.id}`)}
             isLoading={isPending}
             isError={isError}
             onRetry={() => void refetch()}

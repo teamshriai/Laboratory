@@ -1,13 +1,10 @@
 export default {
   breadcrumb: 'ब्रेडक्रंब',
-  searchPlaceholder: 'मरीज़, UHID, सैंपल ID, ऑर्डर ID खोजें...',
+  searchPlaceholder: 'मरीज़, UHID, एक्सेशन नं., ऑर्डर ID खोजें...',
   searchShort: 'खोजें',
   notifications: 'सूचनाएँ',
   notificationsUnread_one: '{count} अपठित सूचना',
   notificationsUnread_other: '{count} अपठित सूचनाएँ',
-  criticalPill_one: '{count} क्रिटिकल',
-  criticalPill_other: '{count} क्रिटिकल',
-  criticalPillLabel: 'कार्रवाई की प्रतीक्षा में क्रिटिकल परिणाम',
   theme: 'थीम',
   darkMode: 'डार्क मोड',
   language: 'भाषा',
@@ -22,6 +19,7 @@ export default {
   actingAsHint:
     'आपके द्वारा की गई कार्रवाइयों पर दर्ज होता है। इस प्रोटोटाइप में लॉगिन नहीं है।',
   settings: 'सेटिंग्स और प्राथमिकताएँ',
-  resetDemo: 'डेमो डेटा रीसेट करें',
-  shift: 'सुबह की शिफ्ट',
+  demoNotice:
+    'डेमो सिस्टम: डेटा केवल इसी ब्राउज़र में सेव होता है और यह क्लिनिकल उपयोग के लिए नहीं है।',
+  demoNoticeMore: 'इसका क्या अर्थ है',
 } as const

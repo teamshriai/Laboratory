@@ -18,8 +18,10 @@ export interface DemoSettings {
 const SETTINGS_KEY = 'demo-settings'
 const isTest = import.meta.env.MODE === 'test'
 
+// Simulated latency exercises loading states while developing; production
+// builds answer at once (it can still be switched on in Settings).
 let settings: DemoSettings = readStored<DemoSettings>(SETTINGS_KEY, {
-  latency: true,
+  latency: !import.meta.env.PROD,
   failures: false,
 })
 let actorId: string = readStored<string>('acting-as', DEFAULT_ACTOR_ID)
@@ -79,13 +81,12 @@ export async function read<T>(
  */
 export async function write<T>(
   fn: (db: LabDb, ctx: EngineCtx) => T,
-  options: { by?: string } = {},
 ): Promise<T> {
   await delay(250)
   maybeFail()
   const working = structuredClone(getDb())
   setTatWarnRatio(working.settings.tatWarnPct / 100)
-  const result = fn(working, { now: Date.now(), by: options.by ?? actorId })
+  const result = fn(working, { now: Date.now(), by: actorId })
   replaceDb(working)
   return structuredClone(result)
 }

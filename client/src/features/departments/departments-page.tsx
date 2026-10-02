@@ -112,7 +112,7 @@ function DepartmentCard({
   return (
     <li>
       <Link
-        to={`/laboratory/departments/${d.department}`}
+        to={`/departments/${d.department}`}
         className="group block h-full rounded-xl focus-visible:outline-offset-4"
       >
         <Card

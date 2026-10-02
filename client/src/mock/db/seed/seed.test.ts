@@ -70,6 +70,7 @@ describe('seedDatabase', () => {
           o,
           items.filter((i) => i.orderId === o.id),
           samplesById,
+          db.reports,
         ),
       ),
     )
@@ -80,6 +81,8 @@ describe('seedDatabase', () => {
       'pending-result',
       'awaiting-review',
       'awaiting-validation',
+      'awaiting-release',
+      'partially-reported',
       'completed',
     ])
       expect(statuses).toContain(s)

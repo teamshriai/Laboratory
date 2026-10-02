@@ -173,7 +173,7 @@ export const ordersApi = {
     }),
 
   discardDraft: (draftId: string) =>
-    write((db) => void discardDraft(db, draftId)),
+    write((db, ctx) => void discardDraft(db, draftId, ctx)),
 
   cancel: (id: string, input: { reason: CancelReason; remarks?: string }) =>
     write((db, ctx) => void cancelOrder(db, id, input, ctx)),

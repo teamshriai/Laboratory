@@ -5,10 +5,12 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { DAY } from '@/domain/time'
 import { getDb, startMemoryDb } from '../db/store'
 import { labApi } from './index'
-import { setActor } from './runtime'
+import { actingAs, STAFF } from './testing'
 
-const PATHOLOGIST = 'st_kavitha'
-const REVIEWER = 'st_ganesh'
+const reception = actingAs(STAFF.reception)
+const manager = actingAs(STAFF.manager)
+const pathologist = actingAs(STAFF.pathologist)
+import { setActor } from './runtime'
 
 async function enterAll(sampleId: string) {
   const view = await labApi.results.entry(sampleId)
@@ -35,7 +37,7 @@ describe('scenarios', () => {
   })
 
   it('A: registers a patient and follows one order to a released report', async () => {
-    const { id: patientId, uhid } = await labApi.patients.register({
+    const { id: patientId, uhid } = await reception.patients.register({
       name: 'Test Scenario Patient',
       sex: 'F',
       dob: '1990-04-12',
@@ -47,7 +49,7 @@ describe('scenarios', () => {
     })
     expect((await labApi.search.query(uhid)).patients[0]?.id).toBe(patientId)
 
-    const { id: orderId, sampleIds } = await labApi.orders.create({
+    const { id: orderId, sampleIds } = await reception.orders.create({
       patientId,
       doctorId: 'dr_asha',
       department: 'general-medicine',
@@ -65,7 +67,6 @@ describe('scenarios', () => {
 
     await labApi.samples.collect(sampleId, {
       collectedAt: Date.now(),
-      collectedBy: 'st_kavya',
       site: 'left-antecubital',
     })
     const accession = (await labApi.samples.get(sampleId)).accessionNo!
@@ -74,12 +75,13 @@ describe('scenarios', () => {
     const itemIds = await enterAll(sampleId)
     expect((await labApi.orders.get(orderId)).status).toBe('awaiting-review')
 
-    await labApi.validation.review(itemIds, REVIEWER)
-    await labApi.validation.validate(itemIds, PATHOLOGIST)
+    await manager.validation.review(itemIds)
+    await pathologist.validation.validate(itemIds)
     const order = await labApi.orders.get(orderId)
-    expect(order.status).toBe('completed')
+    expect(order.status).toBe('awaiting-release')
     const reportId = order.reports[0]!.id
-    await labApi.reports.release(reportId, PATHOLOGIST)
+    await pathologist.reports.release(reportId)
+    expect((await labApi.orders.get(orderId)).status).toBe('completed')
 
     // Every screen agrees.
     const report = await labApi.reports.get(reportId)
@@ -109,7 +111,7 @@ describe('scenarios', () => {
       expiresAt: Date.now() + 3 * DAY,
       qcStatus: 'passed',
     })
-    const { sampleIds } = await labApi.orders.create({
+    const { sampleIds } = await reception.orders.create({
       patientId: 'pat_002184',
       doctorId: 'dr_ramesh',
       department: 'general-medicine',
@@ -121,7 +123,6 @@ describe('scenarios', () => {
     const sampleId = sampleIds[0]!
     await labApi.samples.collect(sampleId, {
       collectedAt: Date.now(),
-      collectedBy: 'st_kavya',
       site: 'left-antecubital',
     })
     await labApi.samples.receive(
@@ -137,7 +138,7 @@ describe('scenarios', () => {
   })
 
   it('E: takes an analyzer offline, services it and brings it back', async () => {
-    const { sampleIds } = await labApi.orders.create({
+    const { sampleIds } = await reception.orders.create({
       patientId: 'pat_002184',
       doctorId: 'dr_ramesh',
       department: 'general-medicine',
@@ -149,7 +150,6 @@ describe('scenarios', () => {
     const sampleId = sampleIds[0]!
     await labApi.samples.collect(sampleId, {
       collectedAt: Date.now(),
-      collectedBy: 'st_kavya',
       site: 'left-antecubital',
     })
     await labApi.samples.receive(
@@ -199,5 +199,31 @@ describe('scenarios', () => {
         'maintenance-completed',
       ]),
     )
+  })
+
+  it('dashboard queue tiles count exactly what their queues list', async () => {
+    // Each tile reads the same API, with the same filters, as its screen.
+    const queue = await labApi.workQueue.list({ bucket: 'all', q: '' })
+    for (const bucket of ['stat', 'transit-delayed', 'recollection'] as const) {
+      const opened = await labApi.workQueue.list({ bucket, q: '' })
+      expect(queue.counts[bucket]).toBe(opened.rows.length)
+    }
+    const stages = await labApi.validation.stageCounts({})
+    const review = await labApi.validation.queue({ stage: 'review' })
+    const authorise = await labApi.validation.queue({ stage: 'authorise' })
+    expect(stages.review).toBe(review.length)
+    expect(stages.authorise).toBe(authorise.length)
+    const criticals = await labApi.critical.list({ status: 'pending', q: '' })
+    expect(criticals.counts.pending).toBe(criticals.rows.length)
+    const ready = await labApi.reports.list({
+      status: 'validated',
+      date: 'all',
+      q: '',
+    })
+    expect(ready.counts.validated).toBe(ready.rows.length)
+    // The seed has work in every tile, so the comparison is not vacuous.
+    expect(queue.counts.stat).toBeGreaterThan(0)
+    expect(stages.review).toBeGreaterThan(0)
+    expect(stages.authorise).toBeGreaterThan(0)
   })
 })

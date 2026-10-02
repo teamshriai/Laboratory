@@ -7,9 +7,9 @@ import {
   PrinterIcon,
 } from 'lucide-react'
 import { useState } from 'react'
-import { Controller, useForm } from 'react-hook-form'
+import { Controller, useForm, useWatch } from 'react-hook-form'
 import { toast } from 'sonner'
-import { z } from 'zod'
+import { z } from '@/features/shared/zod'
 import { COLLECTION_SITES, type StaffRole } from '@/domain/types'
 import { usePreferences } from '@/app/preferences/context'
 import { useNow } from '@/hooks/use-now'
@@ -30,24 +30,34 @@ import { Field } from '@/components/ui/field'
 import { Input, Textarea } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { SkeletonText } from '@/components/ui/skeleton'
+import { FormErrorSummary } from '@/components/ui/form-errors'
+import { focusFirstInvalid } from '@/lib/focus'
+import { countFieldErrors, focusInvalid } from '@/lib/form-errors'
 
 const IST = 330 * 60_000
 const toLocalInput = (ms: number) =>
   new Date(ms + IST).toISOString().slice(0, 16)
 const fromLocalInput = (value: string) => Date.parse(`${value}:00Z`) - IST
 
-const schema = z.object({
-  site: z.enum(COLLECTION_SITES),
-  collectedAt: z
-    .string()
-    .min(1, 'forms.required')
-    .refine(
-      (v) => fromLocalInput(v) <= Date.now() + 60_000,
-      'forms.futureTime',
-    ),
-  collectedBy: z.string().min(1, 'forms.required'),
-  remarks: z.string().max(300, 'forms.tooLong'),
-})
+/** Matches the engine: a time further back than this needs a reason. */
+const UNEXPLAINED_TIME_MS = 10 * 60_000
+
+const schema = z
+  .object({
+    site: z.enum(COLLECTION_SITES),
+    collectedAt: z
+      .string()
+      .min(1, 'forms.required')
+      .refine((v) => fromLocalInput(v) <= Date.now(), 'forms.futureTime'),
+    timeReason: z.string().max(200, 'forms.tooLong'),
+    remarks: z.string().max(300, 'forms.tooLong'),
+  })
+  .refine(
+    (v) =>
+      Date.now() - fromLocalInput(v.collectedAt) <= UNEXPLAINED_TIME_MS ||
+      v.timeReason.trim().length > 0,
+    { path: ['timeReason'], message: 'forms.timeReasonRequired' },
+  )
 type FormIn = z.input<typeof schema>
 type FormOut = z.output<typeof schema>
 
@@ -64,13 +74,12 @@ function defaultSite(container: SampleRow['container']): FormIn['site'] {
 
 function CollectForm({
   sample,
-  collectors,
-  defaultCollector,
+  collector,
   onCollected,
 }: {
   sample: SampleRow
-  collectors: { id: string; name: string; role: StaffRole }[]
-  defaultCollector: string
+  /** The person recording the collection is the collector. */
+  collector: { name: string; role: StaffRole } | undefined
   onCollected: () => void
 }) {
   const t = useT('collection')
@@ -87,16 +96,20 @@ function CollectForm({
     defaultValues: {
       site: defaultSite(sample.container),
       collectedAt: toLocalInput(openedAt),
-      collectedBy: defaultCollector,
+      timeReason: '',
       remarks: '',
     },
   })
+  const collectedAt = useWatch({ control, name: 'collectedAt' })
+  const backdated =
+    Boolean(collectedAt) &&
+    now - fromLocalInput(collectedAt) > UNEXPLAINED_TIME_MS
   const collect = useLabMutation(
     (v: FormOut) =>
       labApi.samples.collect(sample.id, {
         site: v.site,
         collectedAt: fromLocalInput(v.collectedAt),
-        collectedBy: v.collectedBy,
+        ...(v.timeReason.trim() ? { timeReason: v.timeReason.trim() } : {}),
         ...(v.remarks.trim() ? { remarks: v.remarks.trim() } : {}),
       }),
     {
@@ -116,9 +129,15 @@ function CollectForm({
       id="collect-form"
       className="grid gap-4 sm:grid-cols-2"
       noValidate
-      onSubmit={(ev) => void handleSubmit((v) => collect.mutate(v))(ev)}
+      onSubmit={(ev) =>
+        void handleSubmit((v) => collect.mutate(v), focusInvalid)(ev)
+      }
       aria-busy={collect.isPending}
     >
+      <FormErrorSummary
+        count={formState.submitCount ? countFieldErrors(formState.errors) : 0}
+        onFocusFirst={() => focusFirstInvalid()}
+      />
       <Field label={t('sampleId')} className="sm:col-span-2">
         <div className="flex h-9 items-center gap-2 rounded-lg border border-dashed border-line-strong bg-surface-2 px-3 text-meta">
           <ContainerChip container={sample.container} />
@@ -161,31 +180,26 @@ function CollectForm({
         <Input
           type="datetime-local"
           {...register('collectedAt')}
-          max={toLocalInput(now + 60_000)}
+          max={toLocalInput(now)}
         />
       </Field>
-      <Field
-        label={t('collectedBy')}
-        required
-        error={formState.errors.collectedBy?.message}
-        className="sm:col-span-2"
-      >
-        <Controller
-          control={control}
-          name="collectedBy"
-          render={({ field }) => (
-            <Select
-              value={field.value || undefined}
-              onValueChange={field.onChange}
-              placeholder={tc('selectPlaceholder')}
-              options={collectors.map((x) => ({
-                value: x.id,
-                label: x.name,
-                description: e('staffRole', x.role),
-              }))}
-            />
-          )}
-        />
+      {backdated ? (
+        <Field
+          label={t('timeReason')}
+          hint={t('timeReasonHint')}
+          required
+          error={formState.errors.timeReason?.message}
+          className="sm:col-span-2"
+        >
+          <Input {...register('timeReason')} />
+        </Field>
+      ) : null}
+      <Field label={t('collectedBy')} hint={t('collectedByHint')}>
+        <p className="flex min-h-11 items-center text-sm text-fg">
+          {collector
+            ? `${collector.name} · ${e('staffRole', collector.role)}`
+            : '-'}
+        </p>
       </Field>
       <Field
         label={t('remarks')}
@@ -218,12 +232,7 @@ export function CollectDrawer({
   const { data: sample, isPending } = useSample(sampleId)
   const { data: reference } = useReference()
   const [printing, setPrinting] = useState(false)
-  const collectors = (reference?.staff ?? []).filter(
-    (s) => s.role === 'phlebotomist' || s.role === 'technician',
-  )
-  const defaultCollector = collectors.some((s) => s.id === actorId)
-    ? actorId
-    : (collectors[0]?.id ?? '')
+  const collector = reference?.staff.find((s) => s.id === actorId)
   const ready = Boolean(sample && reference)
 
   return (
@@ -360,8 +369,7 @@ export function CollectDrawer({
             {ready ? (
               <CollectForm
                 sample={sample}
-                collectors={collectors}
-                defaultCollector={defaultCollector}
+                collector={collector}
                 onCollected={onClose}
               />
             ) : (

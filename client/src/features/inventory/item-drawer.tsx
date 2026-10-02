@@ -18,6 +18,7 @@ import { useLabMutation } from '@/services/mutations'
 import { useInventoryItem } from '@/services/queries'
 import { StockBadge } from '@/components/lab/status'
 import { Button } from '@/components/ui/button'
+import { GuardedButton } from '@/components/lab/guarded-button'
 import { Drawer } from '@/components/ui/dialog'
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/components/ui/menu'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -171,10 +172,14 @@ export function InventoryItemDrawer({
                 </Button>
               </>
             ) : null}
-            <Button variant="primary" onClick={() => setDialog('receive')}>
+            <GuardedButton
+              permission="inventory.manage"
+              variant="primary"
+              onClick={() => setDialog('receive')}
+            >
               <PackageIcon />
               {t('receive')}
-            </Button>
+            </GuardedButton>
           </div>
         ) : null
       }

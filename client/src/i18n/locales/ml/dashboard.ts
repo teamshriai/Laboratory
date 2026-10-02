@@ -1,5 +1,5 @@
 export default {
-  title: 'അവലോകനം',
+  title: 'ഡാഷ്ബോർഡ്',
   updated: '{time} ന് പുതുക്കി',
   shiftMorning: 'രാവിലെ ഷിഫ്റ്റ്',
   shiftEvening: 'വൈകുന്നേരം ഷിഫ്റ്റ്',
@@ -8,21 +8,12 @@ export default {
   vsYesterday: 'ഇന്നലെ ഇതേ സമയവുമായി താരതമ്യം',
   trend14: 'കഴിഞ്ഞ 14 ദിവസം, {first} മുതൽ {last} വരെ',
   // Snapshot tiles
-  snapshotTitle: 'ഇന്ന് ഒറ്റനോട്ടത്തിൽ',
-  snapshotCaption:
-    'ഇന്നത്തെ രേഖകളിൽ നിന്ന് എണ്ണിയത്. വിശദാംശങ്ങൾ കാണാൻ ഒരു ടൈൽ തിരഞ്ഞെടുക്കുക.',
-  samplesToday: 'ഇന്നത്തെ സാമ്പിളുകൾ',
-  pendingTests: 'ബാക്കിയുള്ള ടെസ്റ്റുകൾ',
-  statDetail: '{count} STAT',
-  awaitingValidation: 'സാധൂകരണം കാത്തിരിക്കുന്നവ',
-  withCritical_one: '{count} എണ്ണത്തിൽ ക്രിട്ടിക്കൽ മൂല്യം',
-  withCritical_other: '{count} എണ്ണത്തിൽ ക്രിട്ടിക്കൽ മൂല്യങ്ങൾ',
+  awaitingValidation: 'അംഗീകാരം കാത്തിരിക്കുന്നവ',
   delayed: 'വൈകിയ ടെസ്റ്റുകൾ',
-  breachedNow: '{count} ഇപ്പോൾ ലക്ഷ്യം കടന്നു',
   // KPI cards
   criticalResults: 'ക്രിട്ടിക്കൽ ഫലങ്ങൾ',
   openCount: '{count} തുറന്നവ',
-  validatedTests: 'സാധൂകരിച്ച ടെസ്റ്റുകൾ',
+  validatedTests: 'അംഗീകരിച്ച ടെസ്റ്റുകൾ',
   rejectedSamples: 'നിരസിച്ച സാമ്പിളുകൾ',
   recollectDue_one: '{count} പുനഃശേഖരണം ബാക്കി',
   recollectDue_other: '{count} പുനഃശേഖരണങ്ങൾ ബാക്കി',
@@ -36,7 +27,7 @@ export default {
   overdue: 'സമയം കഴിഞ്ഞു',
   minutesAgo: '{value} മിനിറ്റ്',
   statusOpen: 'അറിയിച്ചിട്ടില്ല',
-  statusNotified: 'അംഗീകാരം കാത്തിരിക്കുന്നു',
+  statusNotified: 'സ്ഥിരീകരണം കാത്തിരിക്കുന്നു',
   allCommunicated: 'എല്ലാ ക്രിട്ടിക്കൽ മൂല്യങ്ങളും അറിയിച്ചു',
   target30: 'കണ്ടെത്തി {minutes} മിനിറ്റിനുള്ളിൽ അറിയിക്കുക.',
   // Over TAT
@@ -61,11 +52,11 @@ export default {
   byDepartment: 'വിഭാഗം തിരിച്ച് സമയത്ത്',
   targetLine: 'ലക്ഷ്യം {value}',
   belowTarget: 'ലക്ഷ്യത്തിന് താഴെ',
-  noTatYet: 'ഇന്ന് ഇതുവരെ ടെസ്റ്റുകളൊന്നും സാധൂകരിച്ചിട്ടില്ല',
+  noTatYet: 'ഇന്ന് ഇതുവരെ ടെസ്റ്റുകളൊന്നും അംഗീകരിച്ചിട്ടില്ല',
   // Workload
   wip: 'വിഭാഗങ്ങളിലെ ജോലിഭാരം',
   department: 'വിഭാഗം',
-  pending: 'ബാക്കി',
+  pending: 'ലഭിക്കാനുള്ളവ',
   inLab: 'ലാബിൽ',
   completed: 'പൂർത്തിയായി',
   // Hourly
@@ -77,12 +68,7 @@ export default {
   now: 'ഇപ്പോൾ',
   hourlyKeys: 'മണിക്കൂറുകൾക്കിടയിൽ നീങ്ങാൻ ആരോ കീകൾ ഉപയോഗിക്കുക',
   // Patient mix and billing
-  mix: 'രോഗി വിഭാഗങ്ങളും ബില്ലിംഗും',
-  mixLabel: 'എൻകൗണ്ടർ തിരിച്ചുള്ള സാമ്പിളുകൾ: {summary}',
   samples: 'സാമ്പിളുകൾ',
-  noEncounters: 'ഇന്ന് ഇതുവരെ സാമ്പിളുകളൊന്നും ശേഖരിച്ചിട്ടില്ല',
-  billedToday: 'ഇന്നത്തെ ബില്ലിംഗ്',
-  revenueTrend: 'കഴിഞ്ഞ 14 ദിവസത്തെ ബില്ലിംഗ്',
   // Analyzers
   analyzersTitle: 'അനലൈസറുകൾ',
   analyzersHeader: '{total} ൽ {up} പ്രവർത്തിക്കുന്നു',
@@ -103,6 +89,19 @@ export default {
   actionCollect: 'ശേഖരിക്കുക',
   actionReceive: 'സ്വീകരിക്കുക',
   actionEnter: 'ഫലങ്ങൾ നൽകുക',
-  actionValidate: 'സാധൂകരിക്കുക',
+  actionValidate: 'അംഗീകരിക്കുക',
   actionRelease: 'പുറത്തിറക്കുക',
+  // Action queues
+  queuesTitle: 'നടപടി ആവശ്യമുള്ളവ',
+  queueCritical: 'അറിയിക്കാനുള്ള ക്രിട്ടിക്കൽ ഫലങ്ങൾ',
+  queueCriticalOverdue: '{count} സമയപരിധി കഴിഞ്ഞു',
+  queueStat: 'ഫലം കാത്തിരിക്കുന്ന STAT',
+  queueOldest: 'ഏറ്റവും കൂടുതൽ കാത്തിരിപ്പ് {age}',
+  queueTransit: 'ട്രാൻസിറ്റിൽ വൈകിയവ',
+  queueRecollect: 'പുനഃശേഖരണം ബാക്കി',
+  queueVerify: 'പരിശോധിച്ചുറപ്പിക്കൽ കാത്തിരിക്കുന്നവ',
+  queueAuthorise: 'അംഗീകാരം കാത്തിരിക്കുന്നവ',
+  queueRelease: 'പുറത്തിറക്കാൻ തയ്യാറായ റിപ്പോർട്ടുകൾ',
+  queueQc: 'ഫലങ്ങൾ തടഞ്ഞുവെക്കുന്ന QC പരാജയങ്ങൾ',
+  queueClear: 'ഒന്നും കാത്തിരിക്കുന്നില്ല',
 } as const

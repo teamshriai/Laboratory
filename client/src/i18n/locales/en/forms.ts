@@ -19,4 +19,6 @@ export default {
   atLeastOneTest: 'Select at least one test',
   reasonRequired: 'Choose a reason',
   remarksRequired: 'Add remarks when the reason is Other',
+  timeReasonRequired:
+    'Say why the collection time is more than 10 minutes ago.',
 } as const

@@ -31,6 +31,7 @@ const TYPE_GROUP: Record<NotificationType, AlertGroup> = {
   'recollection-requested': 'rejection',
   'report-released': 'reports',
   'report-corrected': 'reports',
+  'report-withdrawn': 'reports',
   'result-returned': 'reports',
   'qc-failed': 'qc',
   'equipment-down': 'equipment',

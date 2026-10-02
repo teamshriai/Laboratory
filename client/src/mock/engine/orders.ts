@@ -1,19 +1,25 @@
 import { groupTestsIntoSamples, sampleKey } from '@/domain/grouping'
 import { nextSequence, orderPrefix, reportPrefix, uid } from '@/domain/ids'
 import { tatHoursFor } from '@/domain/tat'
-import type {
-  CancelReason,
-  ClinicalDepartmentId,
-  DepartmentId,
-  EncounterType,
-  LabOrder,
-  LabTest,
-  OrderItem,
-  Priority,
-  Report,
-  Sample,
+import {
+  CANCEL_REASONS,
+  type CancelReason,
+  type ClinicalDepartmentId,
+  type DepartmentId,
+  type EncounterType,
+  type LabOrder,
+  type LabTest,
+  type OrderItem,
+  type Priority,
+  type Report,
+  type Sample,
 } from '@/domain/types'
-import { isItemLive, isReportReleased } from '@/domain/workflow'
+import {
+  IN_LAB_STATUSES,
+  isItemEntered,
+  isItemLive,
+  isReportReleased,
+} from '@/domain/workflow'
 import type { LabDb } from '../db/schema'
 import { voidAlert } from './critical'
 import {
@@ -24,9 +30,21 @@ import {
   LabApiError,
   logActivity,
   must,
+  requirePermission,
   samplesOfOrder,
   type EngineCtx,
 } from './core'
+
+/** A cancellation reason from the list; "other" needs remarks. */
+function checkCancelReason(input: { reason: CancelReason; remarks?: string }) {
+  if (!CANCEL_REASONS.includes(input.reason))
+    throw new LabApiError('validation-failed', { field: 'reason' })
+  if (input.reason === 'other' && !input.remarks?.trim())
+    throw new LabApiError('reason-required')
+  return input.remarks?.trim()
+    ? `${input.reason}: ${input.remarks.trim()}`
+    : input.reason
+}
 
 export interface OrderInput {
   patientId: string
@@ -161,6 +179,7 @@ export function createOrder(
   input: OrderInput & { draft?: boolean },
   ctx: EngineCtx,
 ): LabOrder {
+  requirePermission(db, ctx, 'order.create')
   const patient = must(db.patients, input.patientId, 'patient')
   must(db.doctors, input.doctorId, 'doctor')
   if (input.testIds.length === 0) throw new LabApiError('order-empty')
@@ -187,14 +206,19 @@ export function createOrder(
 
   if (input.draft) {
     order.draftTestIds = tests.map((t) => t.id)
+    audit(db, ctx, 'order', order.id, 'draft-saved', { to: 'draft' })
   } else {
     materialize(db, order, tests, ctx)
+    audit(db, ctx, 'order', order.id, 'placed', {
+      to: 'new',
+      detail: { orderNo: order.orderNo!, tests: tests.length },
+    })
     logActivity(
       db,
       ctx,
       'order-created',
       { orderNo: order.orderNo!, patient: patient.name, tests: tests.length },
-      `/laboratory/orders?order=${order.id}`,
+      `/orders?order=${order.id}`,
     )
   }
   return order
@@ -206,6 +230,7 @@ export function updateDraft(
   input: OrderInput,
   ctx: EngineCtx,
 ) {
+  requirePermission(db, ctx, 'order.create')
   const order = must(db.orders, orderId, 'order')
   if (order.state !== 'draft') throw new LabApiError('invalid-transition')
   if (input.testIds.length === 0) throw new LabApiError('order-empty')
@@ -239,21 +264,29 @@ export function submitDraft(
   delete order.draftTestIds
   order.history.push(history(ctx, 'ordered'))
   materialize(db, order, tests, ctx)
+  audit(db, ctx, 'order', order.id, 'placed', {
+    from: 'draft',
+    to: 'new',
+    detail: { orderNo: order.orderNo, tests: tests.length },
+  })
   const patient = must(db.patients, order.patientId, 'patient')
   logActivity(
     db,
     ctx,
     'order-created',
     { orderNo: order.orderNo, patient: patient.name, tests: tests.length },
-    `/laboratory/orders?order=${order.id}`,
+    `/orders?order=${order.id}`,
   )
   return order
 }
 
-export function discardDraft(db: LabDb, orderId: string) {
+/** A draft has no clinical record yet, so it is deleted (and audited). */
+export function discardDraft(db: LabDb, orderId: string, ctx: EngineCtx) {
+  requirePermission(db, ctx, 'order.create')
   const order = must(db.orders, orderId, 'order')
   if (order.state !== 'draft') throw new LabApiError('invalid-transition')
   delete db.orders[orderId]
+  audit(db, ctx, 'order', orderId, 'draft-discarded', { from: 'draft' })
 }
 
 /** Discards a sample once nothing live remains on it. */
@@ -273,13 +306,24 @@ export function cancelOrder(
   input: { reason: CancelReason; remarks?: string },
   ctx: EngineCtx,
 ) {
+  requirePermission(db, ctx, 'order.cancel')
   const order = must(db.orders, orderId, 'order')
   if (order.state !== 'active') throw new LabApiError('invalid-transition')
+  const reason = checkCancelReason(input)
   const items = itemsOfOrder(db, orderId)
   if (!items.some(isItemLive))
     throw new LabApiError('order-closed', { status: 'rejected' })
   if (items.some((i) => i.active && i.status === 'validated'))
     throw new LabApiError('order-has-validated-results')
+  // Once the laboratory has a specimen, withdraw individual tests instead,
+  // so work already done stays on the record.
+  const inLab = samplesOfOrder(db, orderId).find((s) =>
+    IN_LAB_STATUSES.includes(s.status),
+  )
+  if (inLab)
+    throw new LabApiError('order-in-lab', {
+      accession: inLab.accessionNo ?? '',
+    })
   for (const item of items) {
     if (!item.active) continue
     item.active = false
@@ -292,10 +336,14 @@ export function cancelOrder(
   voidCriticalsForOrder(db, orderId, ctx, 'order-cancelled')
   order.state = 'cancelled'
   order.cancelReason = input.reason
+  order.cancelledAt = ctx.now
+  order.cancelledBy = ctx.by
   if (input.remarks) order.cancelRemarks = input.remarks
   order.history.push(history(ctx, 'cancelled', { reason: input.reason }))
   audit(db, ctx, 'order', order.id, 'cancelled', {
-    reason: input.remarks ? `${input.reason}: ${input.remarks}` : input.reason,
+    reason,
+    from: 'active',
+    to: 'cancelled',
     detail: { orderNo: order.orderNo ?? '' },
   })
   const patient = db.patients[order.patientId]
@@ -304,7 +352,7 @@ export function cancelOrder(
     ctx,
     'order-cancelled',
     { orderNo: order.orderNo ?? '', patient: patient?.name ?? '' },
-    `/laboratory/orders?order=${order.id}`,
+    `/orders?order=${order.id}`,
   )
   return order
 }
@@ -327,6 +375,7 @@ export function setPriority(
   priority: Priority,
   ctx: EngineCtx,
 ) {
+  requirePermission(db, ctx, 'order.create')
   const order = must(db.orders, orderId, 'order')
   if (order.state === 'cancelled') throw new LabApiError('invalid-transition')
   if (order.priority === priority) return order
@@ -338,12 +387,16 @@ export function setPriority(
     if (test) item.tatHours = tatHoursFor(test, priority)
   }
   order.history.push(history(ctx, 'priority-changed', { from, to: priority }))
+  audit(db, ctx, 'order', order.id, 'priority-changed', {
+    from,
+    to: priority,
+  })
   logActivity(
     db,
     ctx,
     'priority-changed',
     { orderNo: order.orderNo ?? '', priority },
-    `/laboratory/orders?order=${order.id}`,
+    `/orders?order=${order.id}`,
   )
   return order
 }
@@ -362,6 +415,7 @@ export function addTests(
   testIds: string[],
   ctx: EngineCtx,
 ) {
+  requirePermission(db, ctx, 'order.create')
   const order = must(db.orders, orderId, 'order')
   if (order.state !== 'active') throw new LabApiError('invalid-transition')
   const tests = activeTests(db, testIds)
@@ -400,19 +454,27 @@ export function addTests(
       tests: tests.map((t) => t.shortName).join(', '),
     }),
   )
+  audit(db, ctx, 'order', order.id, 'tests-added', {
+    detail: { tests: tests.map((t) => t.shortName).join(', ') },
+  })
   return order
 }
 
 export function removeItem(
   db: LabDb,
   itemId: string,
-  input: { reason: CancelReason },
+  input: { reason: CancelReason; remarks?: string },
   ctx: EngineCtx,
 ) {
+  requirePermission(db, ctx, 'order.cancel')
   const item = must(db.items, itemId, 'item')
   if (!item.active) throw new LabApiError('invalid-transition')
+  const reason = checkCancelReason(input)
   if (item.status === 'validated')
     throw new LabApiError('item-already-validated')
+  // A test with a result on record is corrected or reported, not cancelled.
+  if (isItemEntered(item))
+    throw new LabApiError('test-resulted', { test: item.testName })
   const order = must(db.orders, item.orderId, 'order')
   item.active = false
   item.cancelledAt = ctx.now
@@ -435,7 +497,9 @@ export function removeItem(
     history(ctx, 'test-removed', { test: item.testName, reason: input.reason }),
   )
   audit(db, ctx, 'order', order.id, 'test-removed', {
-    reason: input.reason,
+    reason,
+    from: item.status,
+    to: 'cancelled',
     detail: { test: item.testName },
   })
   return item

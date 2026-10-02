@@ -1,0 +1,48 @@
+# SHRI HEALTH laboratory client: example nginx locations (documentation only).
+#
+# Not applied to any server by this repository. Copy into the `server { }`
+# block that serves the site, adjust the paths, then run `nginx -t` before
+# reloading. `npm run package` writes deploy/security-headers.generated.conf
+# with the Content-Security-Policy hash of this build's inline script; copy
+# that file to the server as /etc/nginx/snippets/shri-health-headers.conf.
+#
+# Assumes the package was unpacked as /var/www/dev-laboratory and the site is
+# served at /dev/laboratory/ (BASE_PATH). Put these at the http { } level once:
+#
+#   gzip on;
+#   gzip_comp_level 6;
+#   gzip_min_length 1024;
+#   gzip_vary on;
+#   gzip_types text/css application/javascript application/json image/svg+xml;
+#   include mime.types;   # serves .js as application/javascript, .woff2 as font/woff2
+
+# /dev/laboratory -> /dev/laboratory/ (the router's basename).
+location = /dev/laboratory {
+    return 301 /dev/laboratory/;
+}
+
+# The app shell. Every client-side route (/dev/laboratory/dashboard,
+# /dev/laboratory/reports/rpt_..., old /dev/laboratory/laboratory/... links)
+# falls back to index.html, which must never be cached so a release is seen.
+location /dev/laboratory/ {
+    alias /var/www/dev-laboratory/;
+    try_files $uri $uri/ /dev/laboratory/index.html;
+    include /etc/nginx/snippets/shri-health-headers.conf;
+    add_header Cache-Control "no-cache" always;
+}
+
+location = /dev/laboratory/index.html {
+    alias /var/www/dev-laboratory/index.html;
+    include /etc/nginx/snippets/shri-health-headers.conf;
+    add_header Cache-Control "no-cache" always;
+}
+
+# Hashed build files: safe to cache for a year. A missing asset is a real 404
+# (never index.html, and not cached), so an old tab notices a new release
+# and reloads.
+location /dev/laboratory/assets/ {
+    alias /var/www/dev-laboratory/assets/;
+    try_files $uri =404;
+    include /etc/nginx/snippets/shri-health-headers.conf;
+    add_header Cache-Control "public, max-age=31536000, immutable";
+}

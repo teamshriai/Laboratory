@@ -196,6 +196,12 @@ export interface Analyte {
   criticalIfAbnormal?: boolean
   /** Delta-check threshold: percentage change versus the previous result. */
   deltaPct?: number
+  /**
+   * Physiologically possible limits. A value outside them is refused at
+   * entry as a likely typing or unit error (absurd-value check).
+   */
+  plausibleLow?: number
+  plausibleHigh?: number
   /** Antibiotic panel for antibiogram results. */
   antibiotics?: string[]
   /** Only shown when this analyte (in the same test) has an abnormal value. */
@@ -223,6 +229,10 @@ export interface LabTest {
   active: boolean
   analyteIds: string[]
   method?: string
+  /** LOINC code (optional external terminology), e.g. 718-7. */
+  loinc?: string
+  /** Increases with every change to the definition (audited with a reason). */
+  version?: number
   keywords?: string[]
   category?: string
   description?: string
@@ -304,6 +314,8 @@ export const ORDER_STATUSES = [
   'pending-result',
   'awaiting-review',
   'awaiting-validation',
+  'awaiting-release',
+  'partially-reported',
   'completed',
   'cancelled',
   'rejected',
@@ -343,6 +355,8 @@ export interface LabOrder {
   state: OrderState
   cancelReason?: CancelReason
   cancelRemarks?: string
+  cancelledAt?: number
+  cancelledBy?: string
   createdAt: number
   createdBy: string
   orderedAt: number | null
@@ -406,6 +420,8 @@ export interface OrderItem {
   validatedBy?: string
   returnedReason?: string
   heldReason?: string
+  /** Times this test was rerun on the same specimen. */
+  rerunCount?: number
   comments: ItemComment[]
   reportId: string
 }
@@ -502,6 +518,9 @@ export interface Sample {
   collectionRemarks?: string
   receivedAt?: number
   receivedBy?: string
+  /** Condition confirmed at receipt (an unacceptable one is rejected). */
+  receiptCondition?: 'acceptable'
+  receiptNote?: string
   processingStartedAt?: number
   processingBy?: string
   equipmentId?: string
@@ -537,6 +556,9 @@ export interface ResultRevision {
   reportVersion?: number
   reason?: string
   comments?: string
+  /** The value was replaced by a rerun (both stay on record). */
+  rerun?: boolean
+  dilution?: number
 }
 
 export interface Result {
@@ -550,6 +572,10 @@ export interface Result {
   remarks?: string
   updatedAt: number
   updatedBy: string
+  /** Where the value came from: an analyzer id, or 'manual' entry. */
+  source?: string
+  /** Dilution factor applied before the measurement (a rerun). */
+  dilution?: number
   /** Earlier values, oldest first. Never overwritten silently. */
   revisions: ResultRevision[]
 }
@@ -660,9 +686,11 @@ export const REPORT_STATUSES = [
   'draft',
   'pending-validation',
   'validated',
+  'preliminary',
   'released',
   'amendment-pending',
   'corrected',
+  'withdrawn',
 ] as const
 export type ReportStatus = (typeof REPORT_STATUSES)[number]
 
@@ -691,6 +719,13 @@ export interface ReportedValue {
 
 export interface ReportVersion {
   version: number
+  /**
+   * preliminary: some tests released before all are authorised;
+   * final: every test authorised; amended: a correction to a released one.
+   */
+  kind?: 'preliminary' | 'final' | 'amended'
+  /** The tests released in this version. */
+  itemIds?: string[]
   releasedAt: number
   releasedBy: string
   correctionReason?: CorrectionReason
@@ -745,6 +780,8 @@ export interface Report {
   renotifyPending?: boolean
   /** A requested correction awaiting authorisation. */
   pendingAmendment?: PendingAmendment
+  /** Withdrawn after release (for example issued for the wrong patient). */
+  withdrawn?: { at: number; by: string; reason: string }
 }
 
 // ---------- Inventory ----------
@@ -1069,6 +1106,7 @@ export const NOTIFICATION_TYPES = [
   'recollection-requested',
   'report-released',
   'report-corrected',
+  'report-withdrawn',
   'qc-failed',
   'equipment-down',
   'lot-quarantined',
@@ -1141,6 +1179,14 @@ export interface LabSettings {
   requireIndependentReview: boolean
   /** Minutes within which a critical value must be communicated. */
   criticalNotifyMin: number
+  /**
+   * Hold a report's release until its critical values are communicated.
+   * Off, release and notification may happen in either order (CAP), and the
+   * open call stays on the dashboard until it is logged.
+   */
+  holdReleaseForCriticals: boolean
+  /** Minutes a collected specimen may be in transit before it is flagged. */
+  transitAlertMin: number
 }
 
 // ---------- Audit ----------
@@ -1157,6 +1203,9 @@ export const AUDIT_ENTITIES = [
   'equipment',
   'qc',
   'settings',
+  'test',
+  'analyte',
+  'system',
 ] as const
 export type AuditEntity = (typeof AUDIT_ENTITIES)[number]
 
@@ -1169,6 +1218,9 @@ export interface AuditEntry {
   entityId: string
   action: string
   reason?: string
-  /** Small before/after or context values, already display-ready. */
+  /** State before and after the change (status values or display text). */
+  from?: string
+  to?: string
+  /** Small context values, already display-ready. */
   detail?: Record<string, string | number>
 }

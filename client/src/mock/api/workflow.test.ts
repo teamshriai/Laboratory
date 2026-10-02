@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { startMemoryDb } from '../db/store'
 import { labApi } from './index'
-import { setActor } from './runtime'
+import { actingAs, STAFF } from './testing'
 
-const PATHOLOGIST = 'st_kavitha'
+const reception = actingAs(STAFF.reception)
+const manager = actingAs(STAFF.manager)
+const pathologist = actingAs(STAFF.pathologist)
+import { setActor } from './runtime'
 
 describe('laboratory workflow (order to corrected report)', () => {
   beforeEach(() => {
@@ -12,7 +15,7 @@ describe('laboratory workflow (order to corrected report)', () => {
   })
 
   it('moves a multi-department order through every stage', async () => {
-    const { id: orderId, sampleIds } = await labApi.orders.create({
+    const { id: orderId, sampleIds } = await reception.orders.create({
       patientId: 'pat_002226',
       doctorId: 'dr_asha',
       department: 'general-medicine',
@@ -35,7 +38,6 @@ describe('laboratory workflow (order to corrected report)', () => {
     for (const id of sampleIds)
       await labApi.samples.collect(id, {
         collectedAt: Date.now(),
-        collectedBy: 'st_kavya',
         site: 'left-antecubital',
       })
     expect((await labApi.orders.get(orderId)).status).toBe('collected')
@@ -75,22 +77,15 @@ describe('laboratory workflow (order to corrected report)', () => {
       (r) => r.orderId === orderId,
     )
     const analyst = rows[0]!.enteredById!
+    const ids = rows.map((r) => r.itemId)
     await expect(
-      labApi.validation.review(
-        rows.map((r) => r.itemId),
-        analyst,
-      ),
+      actingAs(analyst).validation.review(ids),
     ).rejects.toMatchObject({ code: 'self-review-not-allowed' })
-    await expect(
-      labApi.validation.review(
-        rows.map((r) => r.itemId),
-        'st_shruthi',
-      ),
-    ).rejects.toMatchObject({ code: 'not-authorized-reviewer' })
-    await labApi.validation.review(
-      rows.map((r) => r.itemId),
-      'st_ganesh',
-    )
+    // Reception may not verify results at all.
+    await expect(reception.validation.review(ids)).rejects.toMatchObject({
+      code: 'not-permitted',
+    })
+    await manager.validation.review(ids)
     expect((await labApi.orders.get(orderId)).status).toBe(
       'awaiting-validation',
     )
@@ -101,25 +96,21 @@ describe('laboratory workflow (order to corrected report)', () => {
     ).toHaveLength(rows.length)
 
     // Authorisation needs a pathologist.
-    await expect(
-      labApi.validation.validate(
-        rows.map((r) => r.itemId),
-        'st_anjali',
-      ),
-    ).rejects.toMatchObject({ code: 'not-authorized-validator' })
-    const validated = await labApi.validation.validate(
-      rows.map((r) => r.itemId),
-      PATHOLOGIST,
-    )
+    await expect(labApi.validation.validate(ids)).rejects.toMatchObject({
+      code: 'not-permitted',
+    })
+    const validated = await pathologist.validation.validate(ids)
     expect(validated.readyReports).toHaveLength(2)
-    expect((await labApi.orders.get(orderId)).status).toBe('completed')
+    // Authorised is not completed: completion needs the reports released.
+    expect((await labApi.orders.get(orderId)).status).toBe('awaiting-release')
 
     // Release is blocked until the critical value is acknowledged.
     const bioReport = order.reports.find(
       (r) => r.department === 'biochemistry',
     )!
+    const cbcReport = order.reports.find((r) => r.id !== bioReport.id)!
     await expect(
-      labApi.reports.release(bioReport.id, PATHOLOGIST),
+      pathologist.reports.release(bioReport.id),
     ).rejects.toMatchObject({ code: 'critical-unacknowledged' })
     const alert = (await labApi.critical.list({ status: 'pending' })).rows.find(
       (c) => c.orderId === orderId,
@@ -132,7 +123,10 @@ describe('laboratory workflow (order to corrected report)', () => {
       acknowledged: true,
       readBack: true,
     })
-    await labApi.reports.release(bioReport.id, PATHOLOGIST)
+    await pathologist.reports.release(bioReport.id)
+    expect((await labApi.orders.get(orderId)).status).toBe('partially-reported')
+    await pathologist.reports.release(cbcReport.id)
+    expect((await labApi.orders.get(orderId)).status).toBe('completed')
     let report = await labApi.reports.get(bioReport.id)
     expect(report.status).toBe('released')
 
@@ -140,15 +134,11 @@ describe('laboratory workflow (order to corrected report)', () => {
     const creat = report.sections
       .flatMap((s) => s.rows)
       .find((r) => r.analyteId === 'creat')!
-    await labApi.reports.correct(
-      bioReport.id,
-      {
-        corrections: [{ resultId: creat.resultId, value: '1.42' }],
-        reason: 'transcription-error',
-        comments: 'Typed from wrong sample.',
-      },
-      PATHOLOGIST,
-    )
+    await pathologist.reports.correct(bioReport.id, {
+      corrections: [{ resultId: creat.resultId, value: '1.42' }],
+      reason: 'transcription-error',
+      comments: 'Typed from wrong sample.',
+    })
     report = await labApi.reports.get(bioReport.id)
     expect(report.status).toBe('corrected')
     expect(report.version).toBe(2)
@@ -162,7 +152,7 @@ describe('laboratory workflow (order to corrected report)', () => {
   })
 
   it('requests a recollection when a sample is rejected', async () => {
-    const { id: orderId, sampleIds } = await labApi.orders.create({
+    const { id: orderId, sampleIds } = await reception.orders.create({
       patientId: 'pat_002184',
       doctorId: 'dr_ramesh',
       department: 'general-medicine',
@@ -174,7 +164,6 @@ describe('laboratory workflow (order to corrected report)', () => {
     const sampleId = sampleIds[0]!
     await labApi.samples.collect(sampleId, {
       collectedAt: Date.now(),
-      collectedBy: 'st_kavya',
       site: 'left-antecubital',
     })
     await labApi.samples.receive(sampleId)
@@ -194,7 +183,7 @@ describe('laboratory workflow (order to corrected report)', () => {
   })
 
   it('adds a test to a collected sample and cancels another', async () => {
-    const { id: orderId, sampleIds } = await labApi.orders.create({
+    const { id: orderId, sampleIds } = await reception.orders.create({
       patientId: 'pat_001742',
       doctorId: 'dr_nandini',
       department: 'endocrinology',
@@ -205,16 +194,15 @@ describe('laboratory workflow (order to corrected report)', () => {
     })
     await labApi.samples.collect(sampleIds[0]!, {
       collectedAt: Date.now(),
-      collectedBy: 'st_kavya',
       site: 'left-antecubital',
     })
-    await labApi.orders.addTests(orderId, ['crp'])
+    await reception.orders.addTests(orderId, ['crp'])
     let order = await labApi.orders.get(orderId)
     expect(order.items).toHaveLength(2)
     const crp = order.items.find((i) => i.testId === 'crp')!
     // Same bench and tube type: joins the sample already collected.
     expect(crp.sampleId).toBe(sampleIds[0])
-    await labApi.orders.removeTest(crp.itemId, 'doctor-request')
+    await reception.orders.removeTest(crp.itemId, 'doctor-request')
     order = await labApi.orders.get(orderId)
     expect(order.tests.filter((t) => t.active)).toHaveLength(1)
     expect(order.total).toBe(650)

@@ -182,13 +182,17 @@ export const catalogApi = {
         ctx,
       ).id
     }),
+  /** Catalog changes need a reason; they are audited and versioned. */
   update: (
     id: string,
     patch: Partial<TestInput>,
+    reason: string,
     newAnalyte?: NewAnalyteInput,
   ) =>
     write((db, ctx) => {
-      const extra = newAnalyte ? createAnalyte(db, newAnalyte, ctx).id : null
+      const extra = newAnalyte
+        ? createAnalyte(db, newAnalyte, ctx, reason).id
+        : null
       void updateTest(
         db,
         id,
@@ -202,12 +206,13 @@ export const catalogApi = {
             }
           : patch,
         ctx,
+        reason,
       )
     }),
-  setActive: (id: string, active: boolean) =>
-    write((db, ctx) => void setTestActive(db, id, active, ctx)),
-  saveRanges: (analyteId: string, input: RangesInput) =>
-    write((db, ctx) => void saveRanges(db, analyteId, input, ctx)),
+  setActive: (id: string, active: boolean, reason: string) =>
+    write((db, ctx) => void setTestActive(db, id, active, ctx, reason)),
+  saveRanges: (analyteId: string, input: RangesInput, reason: string) =>
+    write((db, ctx) => void saveRanges(db, analyteId, input, ctx, reason)),
 }
 
 // ---------- Inventory ----------
@@ -271,7 +276,7 @@ export function inventorySnapshot(
         quantity: l.quantity,
         unit: l.reagent.unit,
         expiresAt: l.expiresAt,
-        link: `/laboratory/reagents?lot=${l.id}`,
+        link: `/reagents?lot=${l.id}`,
       })),
     ...consumables
       .filter(({ status }) => status !== 'in-stock')
@@ -284,7 +289,7 @@ export function inventorySnapshot(
         quantity: c.quantity,
         unit: c.unit,
         ...(c.expiresAt ? { expiresAt: c.expiresAt } : {}),
-        link: `/laboratory/consumables?item=${c.id}`,
+        link: `/consumables?item=${c.id}`,
       })),
   ]
   const categories = [

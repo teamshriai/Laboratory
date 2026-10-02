@@ -44,6 +44,7 @@ import type {
   DepartmentDetail,
   DepartmentSummary,
   NotificationsView,
+  SearchExact,
   SearchResults,
   SummaryKey,
   SummaryNotification,
@@ -452,7 +453,7 @@ export const workQueueApi = {
             title: row.patient.name,
             subtitle: tests,
             since: s.createdAt,
-            link: `/laboratory/collection?collect=${s.id}`,
+            link: `/collection?collect=${s.id}`,
           })
         else if (s.status === 'collected')
           add({
@@ -462,7 +463,7 @@ export const workQueueApi = {
             title: row.patient.name,
             subtitle: `${s.accessionNo} · ${tests}`,
             since: s.collectedAt ?? s.createdAt,
-            link: `/laboratory/samples?status=collected&sample=${s.id}`,
+            link: `/reception?status=collected&sample=${s.id}`,
           })
         else if (s.status === 'received')
           add({
@@ -472,7 +473,7 @@ export const workQueueApi = {
             title: row.patient.name,
             subtitle: `${s.accessionNo} · ${tests}`,
             since: s.receivedAt ?? s.createdAt,
-            link: `/laboratory/samples/${s.id}`,
+            link: `/specimens/${s.id}`,
           })
         else if (s.status === 'processing' && !row.allEntered)
           add({
@@ -482,7 +483,7 @@ export const workQueueApi = {
             title: row.patient.name,
             subtitle: `${s.accessionNo} · ${tests}`,
             since: s.processingStartedAt ?? s.createdAt,
-            link: `/laboratory/results/${s.id}`,
+            link: `/results/${s.id}`,
           })
       }
       for (const item of liveItems(db)) {
@@ -498,7 +499,7 @@ export const workQueueApi = {
           patient: patientSummary(db.patients[order.patientId]!),
           since: item.enteredAt ?? now,
           tat: tatOf(index, item, now),
-          link: `/laboratory/validation?item=${item.id}`,
+          link: `/verification?item=${item.id}`,
         })
       }
       for (const c of Object.values(db.criticals)) {
@@ -516,7 +517,7 @@ export const workQueueApi = {
           patient: patientSummary(db.patients[c.patientId]!),
           since: c.detectedAt,
           tat: null,
-          link: `/laboratory/critical-values?alert=${c.id}`,
+          link: `/critical-results?alert=${c.id}`,
         })
       }
       for (const r of Object.values(db.reports)) {
@@ -536,7 +537,7 @@ export const workQueueApi = {
           patient: patientSummary(db.patients[r.patientId]!),
           since: Math.max(...items.map((i) => i.validatedAt ?? 0)),
           tat: null,
-          link: `/laboratory/reports/${r.id}`,
+          link: `/reports/${r.id}`,
         })
       }
       const stages: WorkStage[] = [
@@ -563,12 +564,66 @@ export const workQueueApi = {
     }),
 }
 
+/**
+ * The record a scanned or typed identifier names exactly: an accession,
+ * order, UHID or report number (case and surrounding spaces ignored).
+ */
+function exactRecord(db: LabDb, term: string): SearchExact | null {
+  const id = term.trim().toUpperCase()
+  if (id.length < 4) return null
+  const sample = Object.values(db.samples).find(
+    (s) => s.accessionNo?.toUpperCase() === id,
+  )
+  if (sample)
+    return {
+      kind: 'specimen',
+      id: sample.id,
+      label: sample.accessionNo!,
+      patientName: db.patients[sample.patientId]?.name ?? '',
+    }
+  const order = Object.values(db.orders).find(
+    (o) => o.state !== 'draft' && o.orderNo?.toUpperCase() === id,
+  )
+  if (order)
+    return {
+      kind: 'order',
+      id: order.id,
+      label: order.orderNo!,
+      patientName: db.patients[order.patientId]?.name ?? '',
+    }
+  const patient = Object.values(db.patients).find(
+    (p) => p.uhid.toUpperCase() === id,
+  )
+  if (patient)
+    return {
+      kind: 'patient',
+      id: patient.id,
+      label: patient.uhid,
+      patientName: patient.name,
+    }
+  const report = Object.values(db.reports).find(
+    (r) => r.reportNo.toUpperCase() === id,
+  )
+  if (report)
+    return {
+      kind: 'report',
+      id: report.id,
+      label: report.reportNo,
+      patientName: db.patients[report.patientId]?.name ?? '',
+    }
+  return null
+}
+
 export const searchApi = {
+  /** Opens a record straight from its number (a barcode scan). */
+  resolve: (term: string) => read((db) => exactRecord(db, term), 'search'),
+
   query: (q: string) =>
     read((db, { now }): SearchResults => {
       const term = q.trim()
       if (term.length < 2)
         return {
+          exact: null,
           patients: [],
           orders: [],
           samples: [],
@@ -708,6 +763,7 @@ export const searchApi = {
           }
         })
       return {
+        exact: exactRecord(db, term),
         patients,
         orders,
         samples,
@@ -750,16 +806,16 @@ function summaries(
   > = {
     'critical-pending': {
       severity: 'danger',
-      link: '/laboratory/critical-values?status=pending',
+      link: '/critical-results?status=pending',
     },
-    'tat-approaching': { severity: 'warning', link: '/laboratory/tat' },
+    'tat-approaching': { severity: 'warning', link: '/tat' },
     'lots-expiring': {
       severity: 'warning',
-      link: '/laboratory/reagents?status=expiring-soon',
+      link: '/reagents?status=expiring-soon',
     },
     'recollection-pending': {
       severity: 'warning',
-      link: '/laboratory/collection',
+      link: '/collection',
     },
   }
   return (Object.keys(counts) as SummaryKey[])
@@ -867,6 +923,61 @@ function tatRows(
     )
 }
 
+const SEGMENTS = ['transport', 'bench-wait', 'analysis', 'release'] as const
+
+/**
+ * Where the time goes, per completed test: collection to receipt, receipt to
+ * the bench, bench to authorisation, authorisation to release. Medians, with
+ * STAT work kept apart from the rest (CLSI GP33 style phases).
+ */
+function tatSegments(db: LabDb, index: DbIndex, items: OrderItem[]) {
+  const collect = (stat: boolean) => {
+    const spans: Record<(typeof SEGMENTS)[number], number[]> = {
+      transport: [],
+      'bench-wait': [],
+      analysis: [],
+      release: [],
+    }
+    const totals: number[] = []
+    for (const item of items) {
+      const order = db.orders[item.orderId]
+      if (!order || (order.priority === 'stat') !== stat) continue
+      const sample = item.sampleId
+        ? index.samplesById.get(item.sampleId)
+        : undefined
+      const report = db.reports[item.reportId]
+      const released = report?.versions.find(
+        (v) => !v.itemIds || v.itemIds.includes(item.id),
+      )?.releasedAt
+      const points = [
+        sample?.collectedAt,
+        sample?.receivedAt,
+        sample?.processingStartedAt,
+        item.validatedAt,
+        released,
+      ]
+      SEGMENTS.forEach((key, i) => {
+        const from = points[i]
+        const to = points[i + 1]
+        if (from !== undefined && to !== undefined && to >= from)
+          spans[key].push((to - from) / MINUTE)
+      })
+      if (sample?.collectedAt !== undefined && released !== undefined)
+        totals.push((released - sample.collectedAt) / MINUTE)
+    }
+    return {
+      segments: SEGMENTS.map((key) => ({
+        key,
+        medianMin: median(spans[key]),
+        count: spans[key].length,
+      })),
+      totalMedianMin: median(totals),
+      count: totals.length,
+    }
+  }
+  return { stat: collect(true), other: collect(false) }
+}
+
 export const tatApi = {
   get: (range: 'today' | '7d' = 'today') =>
     read((db, { index, now }): TatView => {
@@ -921,6 +1032,7 @@ export const tatApi = {
         },
         tests,
         atRisk,
+        phases: tatSegments(db, index, all),
         byDepartment: DEPARTMENTS.map((department) => {
           const rows = tests.filter((t) => t.department === department)
           const completed = rows.reduce((n, r) => n + r.completed, 0)

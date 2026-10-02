@@ -6,7 +6,11 @@ import type {
   ReportedValue,
   ShareChannel,
 } from '@/domain/types'
-import { deriveReportStatus, isReportReleased } from '@/domain/workflow'
+import {
+  deriveReportStatus,
+  isItemLive,
+  isReportReleased,
+} from '@/domain/workflow'
 import type { LabDb } from '../db/schema'
 import {
   audit,
@@ -15,12 +19,13 @@ import {
   logActivity,
   must,
   notify,
+  requirePermission,
   resultsOfItem,
   type EngineCtx,
 } from './core'
 import { syncCriticalAlert } from './results'
 
-const reportLink = (id: string) => `/laboratory/reports/${id}`
+const reportLink = (id: string) => `/reports/${id}`
 
 function openCriticalsFor(db: LabDb, reportId: string) {
   const itemIds = new Set(itemsOfReport(db, reportId).map((i) => i.id))
@@ -31,18 +36,17 @@ function openCriticalsFor(db: LabDb, reportId: string) {
   )
 }
 
-const SIGNATORIES = ['pathologist', 'microbiologist']
-const REQUESTERS = ['technician', 'lab-manager', ...SIGNATORIES]
+/** Lab policy: a critical value is communicated before its report is released. */
+function ensureCriticalsCommunicated(db: LabDb, reportId: string) {
+  if (!db.settings.holdReleaseForCriticals) return
+  const open = openCriticalsFor(db, reportId)
+  if (open.length > 0)
+    throw new LabApiError('critical-unacknowledged', { count: open.length })
+}
 
-function ensureRole(
-  db: LabDb,
-  ctx: EngineCtx,
-  roles: string[],
-  code: 'not-authorized-releaser' | 'not-authorized-reviewer',
-) {
-  const staff = db.staff[ctx.by]
-  if (!staff || !roles.includes(staff.role))
-    throw new LabApiError(code, { name: staff?.name ?? ctx.by })
+function ensureNotWithdrawn(report: { withdrawn?: unknown; reportNo: string }) {
+  if (report.withdrawn)
+    throw new LabApiError('report-withdrawn', { report: report.reportNo })
 }
 
 /** The released values of a report, for a version snapshot. */
@@ -64,19 +68,43 @@ function snapshotOf(db: LabDb, reportId: string): ReportedValue[] {
   return out
 }
 
-/** Signs and releases a fully validated report (pathologist only). */
-export function releaseReport(db: LabDb, reportId: string, ctx: EngineCtx) {
-  ensureRole(db, ctx, SIGNATORIES, 'not-authorized-releaser')
+/**
+ * Signs and releases a report as the acting signatory (audit D4: only
+ * authorised results are released).
+ * - Final: every live test is authorised.
+ * - Preliminary: at least one test is authorised and others are still in
+ *   progress (ISO 15189 7.4.1.6 k); the final report follows later.
+ * A withdrawn report can be issued again as a new final version.
+ */
+export function releaseReport(
+  db: LabDb,
+  reportId: string,
+  ctx: EngineCtx,
+  options: { preliminary?: boolean } = {},
+) {
+  requirePermission(db, ctx, 'report.release')
   const report = must(db.reports, reportId, 'report')
-  const items = itemsOfReport(db, reportId)
-  if (isReportReleased(report)) throw new LabApiError('invalid-transition')
-  if (deriveReportStatus(report, items) !== 'validated')
+  const items = itemsOfReport(db, reportId).filter(isItemLive)
+  const authorised = items.filter((i) => i.status === 'validated')
+  const last = report.versions.at(-1)
+  const kind = options.preliminary ? 'preliminary' : 'final'
+  if (report.pendingAmendment) throw new LabApiError('amendment-pending')
+  if (last && !report.withdrawn && last.kind !== 'preliminary')
+    throw new LabApiError('invalid-transition')
+  if (options.preliminary) {
+    if (authorised.length === 0) throw new LabApiError('nothing-authorised')
+    if (authorised.length === items.length)
+      throw new LabApiError('invalid-transition')
+  } else if (items.length === 0 || authorised.length !== items.length)
     throw new LabApiError('report-not-validated', { report: report.reportNo })
-  const open = openCriticalsFor(db, reportId)
-  if (open.length > 0)
-    throw new LabApiError('critical-unacknowledged', { count: open.length })
+  ensureCriticalsCommunicated(db, reportId)
+  const version = (last?.version ?? 0) + 1
+  const from = deriveReportStatus(report, items)
+  delete report.withdrawn
   report.versions.push({
-    version: 1,
+    version,
+    kind,
+    itemIds: authorised.map((i) => i.id),
     releasedAt: ctx.now,
     releasedBy: ctx.by,
     snapshot: snapshotOf(db, reportId),
@@ -84,7 +112,9 @@ export function releaseReport(db: LabDb, reportId: string, ctx: EngineCtx) {
   const patient = db.patients[report.patientId]
   const params = { report: report.reportNo, patient: patient?.name ?? '' }
   audit(db, ctx, 'report', report.id, 'released', {
-    detail: { report: report.reportNo, version: 1 },
+    from,
+    to: kind,
+    detail: { report: report.reportNo, version },
   })
   notify(db, ctx, 'report-released', 'success', params, reportLink(report.id))
   logActivity(db, ctx, 'report-released', params, reportLink(report.id))
@@ -107,8 +137,9 @@ export function requestCorrection(
   input: CorrectionInput,
   ctx: EngineCtx,
 ) {
-  ensureRole(db, ctx, REQUESTERS, 'not-authorized-reviewer')
+  requirePermission(db, ctx, 'report.amend.request')
   const report = must(db.reports, reportId, 'report')
+  ensureNotWithdrawn(report)
   if (!isReportReleased(report)) throw new LabApiError('report-not-released')
   if (report.pendingAmendment) throw new LabApiError('amendment-pending')
   const comments = input.comments.trim()
@@ -167,7 +198,7 @@ export function authoriseCorrection(
   reportId: string,
   ctx: EngineCtx,
 ) {
-  ensureRole(db, ctx, SIGNATORIES, 'not-authorized-releaser')
+  requirePermission(db, ctx, 'report.amend.authorise')
   const report = must(db.reports, reportId, 'report')
   const pending = report.pendingAmendment
   if (!pending) throw new LabApiError('no-amendment-pending')
@@ -192,8 +223,15 @@ export function authoriseCorrection(
     syncCriticalAlert(db, result, db.items[result.orderItemId]!, ctx)
     corrected.push(result.id)
   }
+  // A corrected value that is now critical must be communicated first
+  // (the whole correction is undone if this refuses).
+  ensureCriticalsCommunicated(db, reportId)
   report.versions.push({
     version: current + 1,
+    kind: 'amended',
+    itemIds:
+      report.versions.at(-1)?.itemIds ??
+      itemsOfReport(db, reportId).map((i) => i.id),
     releasedAt: ctx.now,
     releasedBy: ctx.by,
     correctionReason: pending.reason,
@@ -213,6 +251,8 @@ export function authoriseCorrection(
   }
   audit(db, ctx, 'report', report.id, 'correction-authorised', {
     reason: `${pending.reason}: ${pending.comments}`,
+    from: `v${current}`,
+    to: `v${current + 1}`,
     detail: { report: report.reportNo, version: current + 1 },
   })
   notify(db, ctx, 'report-corrected', 'warning', params, reportLink(report.id))
@@ -227,7 +267,7 @@ export function rejectCorrection(
   reason: string,
   ctx: EngineCtx,
 ) {
-  ensureRole(db, ctx, SIGNATORIES, 'not-authorized-releaser')
+  requirePermission(db, ctx, 'report.amend.authorise')
   const report = must(db.reports, reportId, 'report')
   if (!report.pendingAmendment) throw new LabApiError('no-amendment-pending')
   if (!reason.trim()) throw new LabApiError('reason-required')
@@ -256,7 +296,9 @@ export function shareReport(
   input: { channel: ShareChannel; recipient: string },
   ctx: EngineCtx,
 ) {
+  requirePermission(db, ctx, 'report.share')
   const report = must(db.reports, reportId, 'report')
+  ensureNotWithdrawn(report)
   if (!isReportReleased(report)) throw new LabApiError('report-not-released')
   const recipient = input.recipient.trim()
   if (!recipient)
@@ -270,6 +312,14 @@ export function shareReport(
     version: report.versions.at(-1)!.version,
   })
   report.renotifyPending = false
+  audit(db, ctx, 'report', report.id, 'sent', {
+    detail: {
+      report: report.reportNo,
+      channel: input.channel,
+      recipient,
+      version: report.versions.at(-1)!.version,
+    },
+  })
   logActivity(
     db,
     ctx,
@@ -287,11 +337,65 @@ export function recordPrint(db: LabDb, reportId: string, ctx: EngineCtx) {
   return report
 }
 
-export function setInterpretation(db: LabDb, reportId: string, text: string) {
+/** The pathologist's interpretive comment, written before final release. */
+export function setInterpretation(
+  db: LabDb,
+  reportId: string,
+  text: string,
+  ctx: EngineCtx,
+) {
+  requirePermission(db, ctx, 'report.release')
   const report = must(db.reports, reportId, 'report')
-  if (isReportReleased(report)) throw new LabApiError('invalid-transition')
+  const last = report.versions.at(-1)
+  if (last && last.kind !== 'preliminary')
+    throw new LabApiError('invalid-transition')
   const trimmed = text.trim()
+  const before = report.interpretation ?? ''
   if (trimmed) report.interpretation = trimmed
   else delete report.interpretation
+  if (before !== trimmed)
+    audit(db, ctx, 'report', report.id, 'interpretation-changed', {
+      from: before,
+      to: trimmed,
+      detail: { report: report.reportNo },
+    })
+  return report
+}
+
+/**
+ * Withdraws a released report (for example issued for the wrong patient).
+ * It stays on record, is marked WITHDRAWN wherever it is shown or printed,
+ * and recipients are due a notice. It can be issued again as a new version.
+ */
+export function withdrawReport(
+  db: LabDb,
+  reportId: string,
+  reason: string,
+  ctx: EngineCtx,
+) {
+  requirePermission(db, ctx, 'report.withdraw')
+  const report = must(db.reports, reportId, 'report')
+  if (!isReportReleased(report)) throw new LabApiError('report-not-released')
+  if (report.pendingAmendment) throw new LabApiError('amendment-pending')
+  const text = reason.trim()
+  if (!text) throw new LabApiError('reason-required')
+  const from = deriveReportStatus(report, itemsOfReport(db, reportId))
+  report.withdrawn = { at: ctx.now, by: ctx.by, reason: text }
+  if (report.shareLog.length > 0) report.renotifyPending = true
+  audit(db, ctx, 'report', report.id, 'withdrawn', {
+    reason: text,
+    from,
+    to: 'withdrawn',
+    detail: { report: report.reportNo },
+  })
+  const patient = db.patients[report.patientId]
+  notify(
+    db,
+    ctx,
+    'report-withdrawn',
+    'danger',
+    { report: report.reportNo, patient: patient?.name ?? '' },
+    reportLink(report.id),
+  )
   return report
 }

@@ -2,6 +2,7 @@
 // errors, lookups and the activity / notification feeds.
 
 import { uid } from '@/domain/ids'
+import { hasPermission, rolesWith, type Permission } from '@/domain/permissions'
 import { ageInYears } from '@/domain/time'
 import type {
   AuditEntity,
@@ -9,6 +10,7 @@ import type {
   LabNotification,
   NotificationType,
   Severity,
+  Staff,
 } from '@/domain/types'
 import {
   MAX_AUDIT_ENTRIES,
@@ -60,6 +62,21 @@ export const ERROR_CODES = [
   'order-closed',
   'amendment-pending',
   'no-amendment-pending',
+  'not-permitted',
+  'outside-discipline',
+  'possible-duplicate',
+  'implausible-value',
+  'not-numeric',
+  'order-in-lab',
+  'test-resulted',
+  'not-yet-collected',
+  'nothing-authorised',
+  'report-withdrawn',
+  'collection-in-future',
+  'collection-before-order',
+  'collection-time-reason',
+  'received-before-collected',
+  'recipient-full-name',
 ] as const
 export type ErrorCode = (typeof ERROR_CODES)[number]
 
@@ -114,14 +131,22 @@ export function logActivity(
     db.activity.length = MAX_FEED_ENTRIES
 }
 
-/** Records a significant action in the durable audit log. */
+/**
+ * Records a significant action in the durable, append-only audit log: who,
+ * when, what, the state before and after, and why.
+ */
 export function audit(
   db: LabDb,
   ctx: EngineCtx,
   entity: AuditEntity,
   entityId: string,
   action: string,
-  extra: { reason?: string; detail?: Record<string, string | number> } = {},
+  extra: {
+    reason?: string
+    from?: string
+    to?: string
+    detail?: Record<string, string | number>
+  } = {},
 ) {
   db.audit.unshift({
     id: uid('aud'),
@@ -131,9 +156,34 @@ export function audit(
     entityId,
     action,
     ...(extra.reason ? { reason: extra.reason } : {}),
+    ...(extra.from ? { from: extra.from } : {}),
+    ...(extra.to ? { to: extra.to } : {}),
     ...(extra.detail ? { detail: extra.detail } : {}),
   })
   if (db.audit.length > MAX_AUDIT_ENTRIES) db.audit.length = MAX_AUDIT_ENTRIES
+}
+
+/**
+ * The acting staff member, refused unless their role holds `permission`
+ * (domain/permissions.ts). The message names who they are and which roles
+ * can do it, so the user knows whom to switch to.
+ */
+export function requirePermission(
+  db: LabDb,
+  ctx: EngineCtx,
+  permission: Permission,
+): Staff {
+  const staff = db.staff[ctx.by]
+  if (!staff || !hasPermission(staff, permission))
+    throw new LabApiError('not-permitted', {
+      name: staff?.name ?? ctx.by,
+      role: staff ? `enum:staffRole.${staff.role}` : '',
+      action: `enum:permission.${permission}`,
+      roles: rolesWith(permission)
+        .map((r) => `enum:staffRole.${r}`)
+        .join('|'),
+    })
+  return staff
 }
 
 export function notify(

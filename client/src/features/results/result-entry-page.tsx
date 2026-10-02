@@ -7,9 +7,12 @@ import {
   PencilLineIcon,
   TriangleAlertIcon,
   OctagonAlertIcon,
+  RotateCcwIcon,
 } from 'lucide-react'
 import { Fragment, useMemo, useRef, useState } from 'react'
-import { Link, useBlocker, useNavigate, useParams } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
+import { useUnsavedChanges } from '@/hooks/use-unsaved-changes'
+import { UnsavedChangesDialog } from '@/components/ui/unsaved-dialog'
 import { toast } from 'sonner'
 import {
   computeFlag,
@@ -20,6 +23,9 @@ import {
 import type { Analyte } from '@/domain/types'
 import { useEnum, useT } from '@/i18n/context'
 import { useFormat } from '@/i18n/format'
+import { PatientBanner } from '@/components/lab/patient-banner'
+import { RecordLink } from '@/components/lab/record-link'
+import { RerunDialog } from '@/components/lab/rerun-dialog'
 import { cn } from '@/lib/cn'
 import {
   isAnalyteRequired,
@@ -31,7 +37,6 @@ import {
 import { useLabMutation } from '@/services/mutations'
 import { useResultEntry } from '@/services/queries'
 import { PageHeader } from '@/app/layout/page-header'
-import { AgeSex } from '@/components/lab/patient'
 import {
   RangeText,
   ResultFlag,
@@ -43,11 +48,12 @@ import { PriorityBadge, ResultStatusBadge } from '@/components/lab/status'
 import { TatIndicator } from '@/components/lab/tat'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
+import { GuardedButton } from '@/components/lab/guarded-button'
 import { Card } from '@/components/ui/card'
+import { Field } from '@/components/ui/field'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { IconButton } from '@/components/ui/icon-button'
 import { Input, Textarea } from '@/components/ui/input'
-import { Avatar } from '@/components/ui/misc'
 import { CardSkeleton, Skeleton } from '@/components/ui/skeleton'
 import { EmptyState, ErrorState } from '@/components/ui/states'
 import { FormErrorSummary } from '@/components/ui/form-errors'
@@ -55,6 +61,7 @@ import { focusFirstInvalid } from '@/lib/focus'
 import { AnalyteInput } from './analyte-input'
 import { DIFFERENTIAL } from './differential'
 import { DifferentialCounter } from './differential-counter'
+import { focusWhenScrollable } from '@/lib/scroll-focus'
 
 type Values = Record<string, Record<string, { value: string; remarks: string }>>
 
@@ -73,82 +80,56 @@ function initialValues(view: ResultEntryView): Values {
   return out
 }
 
-function PatientBanner({ view }: { view: ResultEntryView }) {
+/** Who the results are for, and the specimen they come from. */
+function SpecimenBanner({ view }: { view: ResultEntryView }) {
   const t = useT('results')
   const tc = useT('common')
   const e = useEnum()
   const f = useFormat()
   const s = view.sample
   return (
-    <Card className="mb-5 overflow-hidden">
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-3 px-5 py-4">
-        <Avatar name={s.patient.name} size="md" />
-        <div className="min-w-0 flex-1">
-          <p className="flex flex-wrap items-baseline gap-x-2 text-base font-semibold text-fg">
-            <Link
-              to={`/laboratory/patients/${s.patient.id}`}
-              className="hover:text-accent-text"
-            >
-              {s.patient.name}
-            </Link>
-            {s.patient.nameLocal ? (
-              <span
-                lang={s.patient.nameLocal.lang}
-                className="text-sm font-normal text-fg-muted"
+    <>
+      <PatientBanner
+        patient={s.patient}
+        location={`${e('encounter', s.encounter)}${
+          s.ward
+            ? ` · ${s.bed ? tc('wardBed', { ward: s.ward, bed: s.bed }) : s.ward}`
+            : ''
+        } · ${s.doctorName}`}
+        extra={
+          <>
+            <span className="flex items-baseline gap-1.5">
+              <span className="text-fg-muted">{tc('sampleId')}</span>
+              <RecordLink
+                kind="specimen"
+                id={s.id}
+                className="font-semibold text-fg"
               >
-                {s.patient.nameLocal.text}
-              </span>
-            ) : null}
-          </p>
-          <p className="mt-0.5 flex flex-wrap gap-x-3 text-meta text-fg-muted">
-            <span className="font-mono">{s.patient.uhid}</span>
-            <AgeSex dob={s.patient.dob} sex={s.patient.sex} />
-            <span>
-              {e('encounter', s.encounter)}
-              {s.ward
-                ? ` · ${s.bed ? tc('wardBed', { ward: s.ward, bed: s.bed }) : s.ward}`
-                : ''}
+                {s.accessionNo}
+              </RecordLink>
             </span>
-            <span>{s.doctorName}</span>
-          </p>
-          {s.patient.allergies.length ? (
-            <p className="mt-1 text-xs font-semibold text-danger-text">
-              {tc('allergies')}: {s.patient.allergies.join(', ')}
-            </p>
-          ) : null}
-        </div>
-        <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-meta sm:grid-cols-4">
-          <div>
-            <p className="text-xs text-fg-muted">{tc('sampleId')}</p>
-            <p className="font-mono font-semibold text-fg">{s.accessionNo}</p>
-          </div>
-          <div>
-            <p className="text-xs text-fg-muted">{tc('container')}</p>
             <ContainerChip container={s.container} />
-          </div>
-          <div>
-            <p className="text-xs text-fg-muted">{tc('priority')}</p>
-            <PriorityBadge priority={s.priority} />
-          </div>
-          <div>
-            <p className="text-xs text-fg-muted">
-              {s.receivedAt
-                ? t('received', { time: f.time(s.receivedAt) })
-                : tc('tat')}
-            </p>
-            <TatIndicator tat={s.tat} />
-          </div>
-        </div>
-      </div>
+            <PriorityBadge priority={s.priority} hideRoutine />
+            <span className="flex items-center gap-1.5">
+              {s.receivedAt ? (
+                <span className="text-fg-muted">
+                  {t('received', { time: f.time(s.receivedAt) })}
+                </span>
+              ) : null}
+              <TatIndicator tat={s.tat} compact />
+            </span>
+          </>
+        }
+      />
       {view.clinicalNotes ? (
-        <div className="border-t border-line bg-surface-2/50 px-5 py-3 text-meta">
+        <Card className="mb-5 px-5 py-3 text-meta">
           <span className="font-medium text-fg-muted">
             {t('clinicalNotes')}:{' '}
           </span>
           <span className="text-fg">{view.clinicalNotes}</span>
-        </div>
+        </Card>
       ) : null}
-    </Card>
+    </>
   )
 }
 
@@ -160,6 +141,7 @@ function TestCard({
   showMissing,
   comment,
   onComment,
+  onRerun,
 }: {
   item: EntryItem
   values: Values[string]
@@ -172,6 +154,7 @@ function TestCard({
   showMissing: boolean
   comment: string
   onComment: (text: string) => void
+  onRerun: () => void
 }) {
   const t = useT('results')
   const tc = useT('common')
@@ -182,6 +165,14 @@ function TestCard({
   const plain = Object.fromEntries(
     Object.entries(values).map(([k, v]) => [k, v.value]),
   )
+  // The latest repeat analysis, if any: its reason and the first-run values.
+  const reruns = item.analytes.flatMap((a) => {
+    const rev = a.result?.revisions.findLast((r) => r.rerun)
+    return rev ? [{ analyte: a.analyte, rev }] : []
+  })
+  const rerunReason = reruns.at(-1)?.rev.reason
+  const dilution = item.analytes.find((a) => a.result?.dilution)?.result
+    ?.dilution
   return (
     <Card className="overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
@@ -208,8 +199,28 @@ function TestCard({
             </span>
           ) : null}
           <ResultStatusBadge status={item.status} />
+          {item.status === 'entered' || item.status === 'returned' ? (
+            <GuardedButton
+              permission="result.rerun"
+              size="xs"
+              variant="ghost"
+              onClick={onRerun}
+            >
+              <RotateCcwIcon />
+              {t('rerun')}
+            </GuardedButton>
+          ) : null}
         </div>
       </div>
+      {rerunReason ? (
+        <div className="flex items-start gap-2 border-b border-info/20 bg-info-soft/60 px-5 py-2.5 text-meta text-info-text">
+          <RotateCcwIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <span>
+            {t('rerunBanner', { reason: rerunReason })}
+            {dilution ? ` ${t('dilutionOf', { n: dilution })}` : ''}
+          </span>
+        </div>
+      ) : null}
       {item.status === 'returned' && item.returnedReason ? (
         <div className="flex items-start gap-2 border-b border-danger/20 bg-danger-soft/60 px-5 py-2.5 text-meta text-danger-text">
           <Undo2Icon className="mt-0.5 size-4 shrink-0" />
@@ -221,7 +232,10 @@ function TestCard({
           {t('notEditable')}
         </p>
       ) : null}
-      <div className="relative scrollbar-thin overflow-x-auto">
+      <div
+        ref={focusWhenScrollable}
+        className="focus-ring relative scrollbar-thin overflow-x-auto"
+      >
         <table className="w-full min-w-[760px] text-sm">
           <thead>
             <tr className="text-left text-xs text-fg-muted">
@@ -278,6 +292,17 @@ function TestCard({
                       >
                         {analyte.name}
                       </label>
+                      {reruns.some((r) => r.analyte.id === analyte.id) ? (
+                        <p className="mt-1 text-xs text-fg-muted tabular-nums">
+                          {t('firstRun', {
+                            value: text(
+                              reruns.find((r) => r.analyte.id === analyte.id)!
+                                .rev.value,
+                              analyte,
+                            ),
+                          })}
+                        </p>
+                      ) : null}
                       {critical ? (
                         <p className="mt-1 flex items-start gap-1 text-xs font-medium text-danger-text">
                           <OctagonAlertIcon
@@ -430,7 +455,6 @@ function TestCard({
 
 function EntryForm({ view }: { view: ResultEntryView }) {
   const t = useT('results')
-  const tc = useT('common')
   const navigate = useNavigate()
   const initial = useMemo(() => initialValues(view), [view])
   const [values, setValues] = useState<Values>(initial)
@@ -447,12 +471,7 @@ function EntryForm({ view }: { view: ResultEntryView }) {
     [view],
   )
   const dirty = JSON.stringify(values) !== JSON.stringify(initial)
-  const blocker = useBlocker(
-    ({ currentLocation, nextLocation }) =>
-      dirty &&
-      !submitted.current &&
-      currentLocation.pathname !== nextLocation.pathname,
-  )
+  const blocker = useUnsavedChanges(dirty, () => submitted.current)
 
   const editableItems = view.items.filter((i) => EDITABLE.includes(i.status))
   let total = 0
@@ -474,9 +493,27 @@ function EntryForm({ view }: { view: ResultEntryView }) {
     }
   }
 
-  const entries = () =>
+  // Submitted values being changed: each needs a reason on record.
+  const changes = editableItems
+    .filter((item) => item.status === 'entered')
+    .flatMap((item) =>
+      item.analytes.flatMap(({ analyte }) => {
+        const before = initial[item.itemId]?.[analyte.id]?.value.trim() ?? ''
+        const after = values[item.itemId]?.[analyte.id]?.value.trim() ?? ''
+        return before && before !== after
+          ? [{ key: `${item.itemId}:${analyte.id}`, analyte, before, after }]
+          : []
+      }),
+    )
+  const [asking, setAsking] = useState<boolean | null>(null)
+  const [changeReason, setChangeReason] = useState('')
+  const [reasonTouched, setReasonTouched] = useState(false)
+  const [rerunFor, setRerunFor] = useState<EntryItem | null>(null)
+
+  const entries = (reason?: string) =>
     editableItems.map((item) => ({
       itemId: item.itemId,
+      ...(reason && item.status === 'entered' ? { changeReason: reason } : {}),
       values: Object.fromEntries(
         Object.entries(values[item.itemId] ?? {}).map(([analyteId, v]) => [
           analyteId,
@@ -489,8 +526,12 @@ function EntryForm({ view }: { view: ResultEntryView }) {
     }))
 
   const save = useLabMutation(
-    async (submit: boolean) => {
-      const res = await labApi.results.save(view.sample.id, entries(), submit)
+    async ({ submit, reason }: { submit: boolean; reason?: string }) => {
+      const res = await labApi.results.save(
+        view.sample.id,
+        entries(reason),
+        submit,
+      )
       // Test comments go on the report once the results are saved.
       for (const [itemId, text] of Object.entries(comments))
         if (text.trim())
@@ -499,7 +540,7 @@ function EntryForm({ view }: { view: ResultEntryView }) {
       return res
     },
     {
-      success: (_res, submit) =>
+      success: (_res, { submit }) =>
         submit
           ? {
               title: t('submitted'),
@@ -508,19 +549,21 @@ function EntryForm({ view }: { view: ResultEntryView }) {
               }),
             }
           : t('draftSaved'),
-      onSuccess: (res, submit) => {
+      onSuccess: (res, { submit }) => {
         submitted.current = true
+        setAsking(null)
+        setChangeReason('')
+        setReasonTouched(false)
         if (res.newCriticals > 0)
           toast.error(t('criticalToast', { count: res.newCriticals }), {
             description: t('criticalToastBody'),
             duration: 10_000,
             action: {
               label: t('openCritical'),
-              onClick: () =>
-                void navigate('/laboratory/critical-values?status=pending'),
+              onClick: () => void navigate('/critical-results?status=pending'),
             },
           })
-        if (submit) void navigate('/laboratory/results')
+        if (submit) void navigate('/worklists')
         else submitted.current = false
       },
     },
@@ -544,13 +587,18 @@ function EntryForm({ view }: { view: ResultEntryView }) {
     }))
 
   const missing = total - done
+  // Changing a submitted value asks why first.
+  const attempt = (submit: boolean) => {
+    if (changes.length) setAsking(submit)
+    else save.mutate({ submit })
+  }
   const submit = () => {
     if (missing > 0) {
       setShowMissing(true)
       window.setTimeout(() => focusFirstInvalid(), 0)
       return
     }
-    save.mutate(true)
+    attempt(true)
   }
 
   return (
@@ -563,7 +611,7 @@ function EntryForm({ view }: { view: ResultEntryView }) {
       }}
     >
       <PageHeader
-        back={{ to: '/laboratory/results', label: t('backToWorklist') }}
+        back={{ to: '/worklists', label: t('backToWorklist') }}
         title={t('entryTitle')}
         actions={
           <span className="hidden items-center gap-1.5 text-xs text-fg-subtle lg:flex">
@@ -572,7 +620,7 @@ function EntryForm({ view }: { view: ResultEntryView }) {
           </span>
         }
       />
-      <PatientBanner view={view} />
+      <SpecimenBanner view={view} />
       {view.sample.status !== 'received' &&
       view.sample.status !== 'processing' ? (
         <Card className="mb-5 flex items-center gap-3 border-warning/30 bg-warning-soft/60 p-4 text-meta text-warning-text">
@@ -603,6 +651,7 @@ function EntryForm({ view }: { view: ResultEntryView }) {
             onChange={(analyteId, patch) =>
               setValue(item.itemId, analyteId, patch)
             }
+            onRerun={() => setRerunFor(item)}
           />
         ))}
       </div>
@@ -624,33 +673,97 @@ function EntryForm({ view }: { view: ResultEntryView }) {
           </div>
           <span className="ml-auto" />
           <Button
-            onClick={() => save.mutate(false)}
-            loading={save.isPending && save.variables === false}
+            onClick={() => attempt(false)}
+            loading={save.isPending && save.variables?.submit === false}
             disabled={editableItems.length === 0}
           >
             <SaveIcon />
             {t('saveDraft')}
           </Button>
-          <Button
+          <GuardedButton
+            permission="result.enter"
             variant="primary"
             onClick={submit}
-            loading={save.isPending && save.variables === true}
+            loading={save.isPending && save.variables?.submit === true}
             disabled={editableItems.length === 0}
           >
             <CheckIcon strokeWidth={2.5} />
             {t('submit')}
-          </Button>
+          </GuardedButton>
         </Card>
       </div>
       <ConfirmDialog
-        open={blocker.state === 'blocked'}
-        onOpenChange={(o) => !o && blocker.reset?.()}
-        title={tc('unsavedTitle')}
-        description={tc('unsavedBody')}
-        confirmLabel={tc('unsavedLeave')}
-        tone="danger"
-        onConfirm={() => blocker.proceed?.()}
+        open={asking !== null}
+        onOpenChange={(o) => {
+          if (o) return
+          setAsking(null)
+          setReasonTouched(false)
+        }}
+        title={t('changeReasonTitle')}
+        description={t('changeReasonBody')}
+        confirmLabel={asking ? t('submit') : t('saveDraft')}
+        loading={save.isPending}
+        onConfirm={() => {
+          setReasonTouched(true)
+          if (changeReason.trim())
+            save.mutate({
+              submit: Boolean(asking),
+              reason: changeReason.trim(),
+            })
+        }}
+      >
+        <div className="grid gap-4">
+          <ul className="grid gap-1 rounded-lg bg-surface-2 px-3 py-2 text-meta">
+            {changes.map((c) => (
+              <li key={c.key} className="flex flex-wrap gap-x-2">
+                <span className="font-medium text-fg">{c.analyte.name}</span>
+                <span className="text-fg-subtle tabular-nums line-through">
+                  {c.before}
+                </span>
+                <span className="sr-only">{t('changedTo')}</span>
+                <span className="font-medium text-fg tabular-nums">
+                  {c.after || t('cleared')}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <Field
+            label={t('changeReasonLabel')}
+            required
+            error={
+              reasonTouched && !changeReason.trim()
+                ? 'forms.reasonRequired'
+                : undefined
+            }
+          >
+            <Textarea
+              value={changeReason}
+              onChange={(ev) => setChangeReason(ev.target.value)}
+              placeholder={t('changeReasonPlaceholder')}
+              rows={3}
+            />
+          </Field>
+        </div>
+      </ConfirmDialog>
+      <RerunDialog
+        item={
+          rerunFor ? { itemId: rerunFor.itemId, name: rerunFor.testName } : null
+        }
+        open={rerunFor !== null}
+        onOpenChange={(o) => !o && setRerunFor(null)}
+        onDone={(itemId) =>
+          setValues((prev) => ({
+            ...prev,
+            [itemId]: Object.fromEntries(
+              Object.keys(prev[itemId] ?? {}).map((k) => [
+                k,
+                { value: '', remarks: '' },
+              ]),
+            ),
+          }))
+        }
       />
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   )
 }
@@ -676,7 +789,7 @@ export function Component() {
             title={t('emptyTitle')}
             action={
               <Link
-                to="/laboratory/results"
+                to="/worklists"
                 className={buttonVariants({ variant: 'primary' })}
               >
                 {t('backToWorklist')}

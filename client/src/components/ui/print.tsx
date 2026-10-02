@@ -33,9 +33,15 @@ export function PrintProvider({ children }: { children: ReactNode }) {
     if (!job?.fromApp) return
     let cancelled = false
     let frame = 0
-    // Let the portal paint and barcodes render (their encoder loads on
-    // first use) before printing.
-    void import('jsbarcode').then(() => {
+    // Let the portal paint, barcodes render (their encoder loads on first
+    // use) and images such as the logos decode before printing.
+    const images = () =>
+      Promise.all(
+        [...(target?.querySelectorAll('img') ?? [])].map((img) =>
+          img.decode().catch(() => undefined),
+        ),
+      )
+    void Promise.all([import('jsbarcode'), images()]).then(() => {
       if (cancelled) return
       frame = window.requestAnimationFrame(() => {
         window.setTimeout(() => window.print(), 60)
@@ -45,7 +51,7 @@ export function PrintProvider({ children }: { children: ReactNode }) {
       cancelled = true
       window.cancelAnimationFrame(frame)
     }
-  }, [job])
+  }, [job, target])
 
   // Printing from the browser prints the current screen's document, and
   // either way the print root is cleared afterwards.

@@ -34,10 +34,15 @@ import {
 } from '../../engine/core'
 import { documentCritical, escalateCritical } from '../../engine/critical'
 import { createOrder } from '../../engine/orders'
-import { correctReport, releaseReport } from '../../engine/reports'
+import {
+  correctReport,
+  releaseReport,
+  withdrawReport,
+} from '../../engine/reports'
 import {
   returnItem,
   reviewItems,
+  requestRerun,
   saveResults,
   validateItems,
 } from '../../engine/results'
@@ -115,6 +120,17 @@ interface SamplePlan extends StepTimes {
   returnTest?: { testId: string; at: number; reason: string }
   /** Technically reviewed but not yet authorised by a pathologist. */
   reviewOnly?: boolean
+  /** Tests on the sample that are not resulted yet (a culture still growing). */
+  pendingTestIds?: string[]
+  /** Repeat analysis after the first entry, then the repeat value entered. */
+  rerun?: {
+    at: number
+    testId: string
+    reason: string
+    dilution?: number
+    reenterAt: number
+    values: Record<string, string>
+  }
 }
 
 interface FlowPlan {
@@ -154,6 +170,15 @@ interface FlowPlan {
     by: string
   }
   draft?: boolean
+  /** Released as a preliminary report (some tests still to follow). */
+  preliminary?: { at: number; department: DepartmentId; by: string }
+  /** Withdrawn after release. */
+  withdraw?: {
+    at: number
+    department: DepartmentId
+    reason: string
+    by: string
+  }
 }
 
 interface Action {
@@ -592,32 +617,21 @@ function scheduleFlow(db: LabDb, sched: Scheduler, plan: FlowPlan, rng: Rng) {
 
     if (stopIndex >= 0 && !blockedAfter('collect')) {
       sched.add(times.collect, () => {
-        printLabel(
-          db,
-          sample().id,
-          ctxAt(times.collect, rng.pick(PHLEBOTOMISTS)),
-        )
+        // One phlebotomist labels and draws the specimen.
+        const collector = rng.pick(PHLEBOTOMISTS)
+        printLabel(db, sample().id, ctxAt(times.collect, collector))
         collectSample(
           db,
           sample().id,
-          {
-            collectedAt: times.collect,
-            collectedBy: rng.pick(PHLEBOTOMISTS),
-            site: siteFor(req.container, rng),
-          },
-          ctxAt(times.collect, 'st_shruthi'),
+          { collectedAt: times.collect, site: siteFor(req.container, rng) },
+          ctxAt(times.collect, collector),
         )
       })
     }
     if (stopIndex >= 1 && !blockedAfter('receive'))
       sched.add(
         times.receive,
-        () =>
-          void receiveSample(
-            db,
-            sample().id,
-            ctxAt(times.receive, rng.chance(0.5) ? 'st_shruthi' : tech),
-          ),
+        () => void receiveSample(db, sample().id, ctxAt(times.receive, tech)),
       )
 
     if (stopIndex >= 2 && !blockedAfter('start')) {
@@ -751,7 +765,7 @@ function scheduleFlow(db: LabDb, sched: Scheduler, plan: FlowPlan, rng: Rng) {
 
     if (stopIndex >= 3) {
       for (const tt of testTimes)
-        if (!blockedAt(tt.enter))
+        if (!blockedAt(tt.enter) && !sp.pendingTestIds?.includes(tt.testId))
           sched.add(tt.enter, () => enterItems([tt.testId], tt.enter))
       if (plan.critical) {
         const c = plan.critical
@@ -799,6 +813,41 @@ function scheduleFlow(db: LabDb, sched: Scheduler, plan: FlowPlan, rng: Rng) {
           })
         }
       }
+    }
+    if (sp.rerun) {
+      const r = sp.rerun
+      const item = () =>
+        itemsOfSample(db, sample().id).find(
+          (i) => isItemLive(i) && i.testId === r.testId,
+        )
+      sched.add(r.at, () => {
+        const it = item()
+        if (!it) return
+        requestRerun(
+          db,
+          it.id,
+          { reason: r.reason, ...(r.dilution ? { dilution: r.dilution } : {}) },
+          ctxAt(r.at, tech),
+        )
+      })
+      sched.add(r.reenterAt, () => {
+        const it = item()
+        if (!it) return
+        saveResults(
+          db,
+          sample().id,
+          [
+            {
+              itemId: it.id,
+              values: Object.fromEntries(
+                Object.entries(r.values).map(([k, v]) => [k, { value: v }]),
+              ),
+            },
+          ],
+          true,
+          ctxAt(r.reenterAt, tech),
+        )
+      })
     }
     if (sp.returnTest) {
       const r = sp.returnTest
@@ -900,6 +949,26 @@ function scheduleFlow(db: LabDb, sched: Scheduler, plan: FlowPlan, rng: Rng) {
     })
   }
 
+  const reportOf = (department: DepartmentId) =>
+    Object.values(db.reports).find(
+      (r) => r.orderId === state.orderId && r.department === department,
+    )
+  if (plan.preliminary) {
+    const pr = plan.preliminary
+    sched.add(pr.at, () => {
+      const report = reportOf(pr.department)
+      if (report)
+        releaseReport(db, report.id, ctxAt(pr.at, pr.by), { preliminary: true })
+    })
+  }
+  if (plan.withdraw) {
+    const w = plan.withdraw
+    sched.add(w.at, () => {
+      const report = reportOf(w.department)
+      if (report) withdrawReport(db, report.id, w.reason, ctxAt(w.at, w.by))
+    })
+  }
+
   if (plan.correction) {
     const c = plan.correction
     sched.add(c.at, () => {
@@ -945,7 +1014,15 @@ export interface SeedResult {
   errors: string[]
 }
 
-export function seedDatabase(now: number): SeedResult {
+/**
+ * Builds the demo database by replaying every order through the engine.
+ * `scale` multiplies the generated patients and workload (the stress test
+ * uses 10); the default reproduces the same demo every time.
+ */
+export function seedDatabase(
+  now: number,
+  { scale = 1 }: { scale?: number } = {},
+): SeedResult {
   const rng = createRng(SEED)
   const db = emptyDb(now)
   const ago = (minutes: number) => now - minutes * MINUTE
@@ -969,7 +1046,7 @@ export function seedDatabase(now: number): SeedResult {
     [...NAMED_PATIENTS, ...SCENARIO_PATIENTS].map((p) => [p.name, p]),
   )
   const P = (name: string) => named[name]!
-  const generated = generatePatients(70, rng)
+  const generated = generatePatients(70 * scale, rng)
   for (const p of [...NAMED_PATIENTS, ...SCENARIO_PATIENTS, ...generated])
     db.patients[p.id] = toPatient(p, now, rng)
 
@@ -1164,7 +1241,7 @@ export function seedDatabase(now: number): SeedResult {
   })
 
   // Generated history for previous reports.
-  for (let i = 0; i < 26; i++) {
+  for (let i = 0; i < 26 * scale; i++) {
     const p = rng.pick(generated)
     const { tests, notes } = panelFor(p, rng)
     const shortTests = tests.filter(
@@ -1240,7 +1317,12 @@ export function seedDatabase(now: number): SeedResult {
         stopAfter: 'validate',
         reviewOnly: true,
       },
-      'serology:sst': { enter: ago(110), validate: ago(80), release: ago(70) },
+      // Authorised but held for the rest of the order: nothing released yet.
+      'serology:sst': {
+        enter: ago(110),
+        validate: ago(80),
+        stopAfter: 'validate',
+      },
     },
   })
   flow({
@@ -1568,14 +1650,96 @@ export function seedDatabase(now: number): SeedResult {
     },
   })
 
+  // Preliminary microbiology: the Gram stain is out, the culture is growing.
+  flow({
+    ...base(ipd[3]!),
+    priority: 'urgent',
+    notes:
+      'Catheter-associated fever, day 4. Urine and catheter-site swab sent.',
+    testIds: ['urine_cs', 'gram'],
+    orderedAt: ago(9 * 60),
+    all: {
+      collect: ago(8 * 60 + 50),
+      receive: ago(8 * 60 + 25),
+      start: ago(8 * 60 + 15),
+      enter: ago(7 * 60 + 20),
+      validate: ago(7 * 60),
+      stopAfter: 'validate',
+      pendingTestIds: ['urine_cs'],
+    },
+    overrides: { gram: 'Gram-negative bacilli seen.' },
+    preliminary: {
+      at: ago(6 * 60 + 50),
+      department: 'microbiology',
+      by: 'st_meera',
+    },
+  })
+  // Withdrawn after release: the specimen's identity was in doubt.
+  flow({
+    ...base(opd[4]!),
+    priority: 'routine',
+    notes: 'Routine blood count.',
+    testIds: ['cbc'],
+    orderedAt: ago(28 * 60),
+    all: {
+      collect: ago(28 * 60 - 10),
+      receive: ago(28 * 60 - 35),
+      start: ago(28 * 60 - 40),
+      enter: ago(27 * 60),
+      validate: ago(26 * 60 + 30),
+      release: ago(26 * 60),
+    },
+    withdraw: {
+      at: ago(23 * 60),
+      department: 'hematology',
+      reason:
+        'Two patients with the same name were bled at the same time in OPD; specimen identity cannot be confirmed. Recollection requested before the report is issued again.',
+      by: 'st_sanjay',
+    },
+  })
+  // Repeat analysis: TSH above the measuring range, repeated at 1:10.
+  flow({
+    ...base(opd[5]!),
+    priority: 'routine',
+    notes: 'Known hypothyroidism, stopped thyroxine 2 months ago.',
+    testIds: ['tsh_test'],
+    orderedAt: ago(300),
+    overrides: { tsh: '100.00' },
+    all: {
+      collect: ago(290),
+      receive: ago(270),
+      start: ago(262),
+      enter: ago(110),
+      stopAfter: 'enter',
+      rerun: {
+        at: ago(95),
+        testId: 'tsh_test',
+        reason:
+          'Above the analytical measuring range (100 µIU/mL). Repeated on the same specimen at 1:10 dilution.',
+        dilution: 10,
+        reenterAt: ago(48),
+        values: { tsh: '148.60' },
+      },
+    },
+  })
+
   // ---------- Today: general workload ----------
   const reserved = new Set(
-    [opd[1], opd[2], opd[3], ipd[0], ipd[1], ipd[2], deltaPatient].map(
-      (p) => p!.id,
-    ),
+    [
+      opd[1],
+      opd[2],
+      opd[3],
+      opd[4],
+      opd[5],
+      ipd[0],
+      ipd[1],
+      ipd[2],
+      ipd[3],
+      deltaPatient,
+    ].map((p) => p!.id),
   )
   const pool = generated.filter((p) => !reserved.has(p.id))
-  for (let i = 0; i < 82; i++) {
+  for (let i = 0; i < 82 * scale; i++) {
     const p = rng.pick(pool)
     const { tests, notes } = panelFor(p, rng)
     const priority: Priority =
@@ -1688,7 +1852,7 @@ export function seedDatabase(now: number): SeedResult {
       level: 'L2',
       rule: '2-2s',
     },
-    '/laboratory/quality-control',
+    '/quality-control',
   )
   notify(
     db,
@@ -1696,7 +1860,7 @@ export function seedDatabase(now: number): SeedResult {
     'equipment-down',
     'danger',
     { equipment: 'Electrolyte Analyzer' },
-    '/laboratory/equipment',
+    '/equipment',
   )
   notify(
     db,
@@ -1704,7 +1868,7 @@ export function seedDatabase(now: number): SeedResult {
     'lot-quarantined',
     'warning',
     { item: 'Elecsys HIV combi PT', lot: '67398810' },
-    '/laboratory/reagents',
+    '/reagents',
   )
   db.notifications.sort((a, b) => b.at - a.at)
   for (const n of db.notifications) {

@@ -4,12 +4,21 @@ import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig, loadEnv } from 'vite'
 
+/** "/dev/laboratory" or "dev/laboratory/" become "/dev/laboratory/". */
+function basePath(value = '/dev/laboratory/') {
+  const trimmed = value.trim().replace(/^\/+|\/+$/g, '')
+  return trimmed ? `/${trimmed}/` : '/'
+}
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), 'VITE_')
+  const env = loadEnv(mode, process.cwd(), '')
   const apiProxyTarget = env.VITE_API_PROXY_TARGET || 'http://localhost:4000'
 
   return {
+    // The URL path the site is served under (nginx location). Override with
+    // BASE_PATH=/other/path/ npm run build.
+    base: basePath(env.BASE_PATH),
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
@@ -17,8 +26,11 @@ export default defineConfig(({ mode }) => {
       },
     },
     build: {
-      // Maps are generated for error reporting but not linked from the bundle.
-      sourcemap: 'hidden',
+      // Source maps are two thirds of the build and browsers never load
+      // them. Generate them (unlinked) only when asked: SOURCEMAP=true.
+      sourcemap: env.SOURCEMAP === 'true' ? 'hidden' : false,
+      // Skips gzip-measuring every file during the build.
+      reportCompressedSize: false,
       rolldownOptions: {
         output: {
           // Stable vendor chunks cache across releases; the in-browser mock
@@ -50,7 +62,21 @@ export default defineConfig(({ mode }) => {
                 test: /node_modules[\\/](zod|react-hook-form|@hookform)[\\/]/,
                 priority: 30,
               },
+              // Icons are tiny modules shared by many screens; one chunk
+              // instead of dozens of separate requests.
+              {
+                name: 'icons',
+                test: /node_modules[\\/]lucide-react[\\/]/,
+                priority: 30,
+              },
               { name: 'mock', test: /[\\/]src[\\/]mock[\\/]/, priority: 20 },
+              // The shared app core (primitives, hooks, helpers, rules): used
+              // by every screen, so one cached file rather than dozens.
+              {
+                name: 'core',
+                test: /[\\/]src[\\/](components[\\/]ui|hooks|lib|services|domain)[\\/]/,
+                priority: 10,
+              },
             ],
           },
         },

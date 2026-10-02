@@ -1,7 +1,14 @@
 // Laboratory analytics for a date range, built from the daily aggregates plus
 // today's live figures. Single-day ranges are broken down by hour.
 
-import { DAY, istDay, istHour, startOfIstDay } from '@/domain/time'
+import {
+  DAY,
+  HOUR,
+  MINUTE,
+  istDay,
+  istHour,
+  startOfIstDay,
+} from '@/domain/time'
 import {
   CONSUMABLE_CATEGORIES,
   DEPARTMENTS,
@@ -16,28 +23,6 @@ import { todayStat } from './overview'
 import { read } from './runtime'
 import { dayShareUntilHour } from '../db/seed/stats'
 import type { AnalyticsRange, AnalyticsReport } from './types'
-
-/** Relative bench speed; microbiology cultures take days, haematology minutes. */
-const DEPT_TAT_FACTOR: Record<DepartmentId, number> = {
-  hematology: 0.55,
-  biochemistry: 0.85,
-  'clinical-pathology': 0.7,
-  microbiology: 9,
-  immunology: 1.3,
-  serology: 1.2,
-  histopathology: 22,
-  cytology: 14,
-}
-const DEPT_DELAY_FACTOR: Record<DepartmentId, number> = {
-  hematology: 0.6,
-  biochemistry: 1.1,
-  'clinical-pathology': 0.8,
-  microbiology: 1.6,
-  immunology: 1.2,
-  serology: 0.9,
-  histopathology: 1.8,
-  cytology: 1.4,
-}
 
 function resolveRange(range: AnalyticsRange, now: number) {
   const todayKey = istDay(now)
@@ -171,28 +156,39 @@ export const analyticsReportApi = {
           }))
 
       const t = totals(days)
+      // Department TAT is measured from the tests on record (receipt to
+      // authorisation) in the range, not estimated from the daily totals.
+      const fromMs = Date.parse(`${from}T00:00:00+05:30`)
+      const toMs = Date.parse(`${to}T00:00:00+05:30`) + DAY
+      const measured = new Map<DepartmentId, { mins: number[]; met: number }>()
+      for (const item of Object.values(db.items)) {
+        if (!isItemLive(item) || item.validatedAt === undefined) continue
+        if (item.validatedAt < fromMs || item.validatedAt >= toMs) continue
+        const received = item.sampleId
+          ? index.samplesById.get(item.sampleId)?.receivedAt
+          : undefined
+        if (received === undefined) continue
+        const elapsed = item.validatedAt - received
+        const entry = measured.get(item.department) ?? { mins: [], met: 0 }
+        entry.mins.push(elapsed / MINUTE)
+        if (elapsed <= item.tatHours * HOUR) entry.met += 1
+        measured.set(item.department, entry)
+      }
       const byDepartment = DEPARTMENTS.map((department) => {
         const tests = days.reduce(
           (n, d) => n + (d.byDepartment[department] ?? 0),
           0,
         )
+        const m = measured.get(department)
+        const n = m?.mins.length ?? 0
         return {
           department,
           tests,
-          tatAvgMin:
-            tests && t.tatAvgMin !== null
-              ? Math.round(t.tatAvgMin * DEPT_TAT_FACTOR[department])
-              : null,
-          onTimePct:
-            tests && t.delayedPct !== null
-              ? Math.max(
-                  0,
-                  Math.min(
-                    100,
-                    100 - t.delayedPct * DEPT_DELAY_FACTOR[department],
-                  ),
-                )
-              : null,
+          tatCount: n,
+          tatAvgMin: n
+            ? Math.round(m!.mins.reduce((a, b) => a + b, 0) / n)
+            : null,
+          onTimePct: n ? (m!.met / n) * 100 : null,
         }
       })
 
@@ -243,8 +239,6 @@ export const analyticsReportApi = {
         .toSorted((a, b) => b.ordered - a.ordered)
         .slice(0, 10)
 
-      const fromMs = Date.parse(`${from}T00:00:00+05:30`)
-      const toMs = Date.parse(`${to}T00:00:00+05:30`) + DAY
       const liveCriticals = Object.values(db.criticals).filter(
         (c) =>
           c.status !== 'voided' &&

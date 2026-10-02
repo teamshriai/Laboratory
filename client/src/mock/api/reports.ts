@@ -3,6 +3,7 @@ import {
   type ReportStatus,
   type ShareChannel,
 } from '@/domain/types'
+import { criticalState } from '@/domain/critical'
 import { isItemEntered, isItemLive } from '@/domain/workflow'
 import { must } from '../engine/core'
 import {
@@ -14,6 +15,7 @@ import {
   releaseReport,
   setInterpretation,
   shareReport,
+  withdrawReport,
 } from '../engine/reports'
 import { read, write } from './runtime'
 import type {
@@ -92,6 +94,11 @@ export const reportsApi = {
       const patient = db.patients[report.patientId]!
       const items = (index.itemsByReport.get(id) ?? []).filter(isItemLive)
       const row = reportRow(db, index, report)
+      // The tests released in the current version (all, for older versions).
+      const latest = report.versions.at(-1)
+      const releasedItems = latest
+        ? new Set(latest.itemIds ?? items.map((i) => i.id))
+        : new Set<string>()
       const sections: ReportSection[] = items.map((item) => {
         const test = db.tests[item.testId]
         const results = index.resultsByItem.get(item.id) ?? []
@@ -137,14 +144,56 @@ export const reportsApi = {
             .filter((c) => c.visibility === 'report')
             .map((c) => c.text),
         }
+        if (releasedItems.has(item.id)) section.released = true
         if (test?.method) section.method = test.method
         if (item.validatedAt) section.validatedAt = item.validatedAt
         if (item.validatedBy)
           section.validatedBy = staffName(db, item.validatedBy)
         return section
       })
-      const validator = items.find((i) => i.validatedBy)?.validatedBy
-      const pathologistStaff = validator ? db.staff[validator] : undefined
+      // The signatory is whoever released the current version.
+      const signer = report.versions.at(-1)?.releasedBy
+      const pathologistStaff = signer ? db.staff[signer] : undefined
+      const person = (id: string) => {
+        const staff = db.staff[id]
+        return {
+          name: staff?.name ?? id,
+          ...(staff?.qualification
+            ? { qualification: staff.qualification }
+            : {}),
+        }
+      }
+      // Each signer once, with the time of their latest sign-off.
+      const signers = (stage: 'review' | 'validate') => {
+        const latestBy = new Map<string, number>()
+        for (const i of items) {
+          const by = stage === 'review' ? i.reviewedBy : i.validatedBy
+          const at = stage === 'review' ? i.reviewedAt : i.validatedAt
+          if (by && at) latestBy.set(by, Math.max(latestBy.get(by) ?? 0, at))
+        }
+        return [...latestBy].map(([id, at]) => ({ ...person(id), at }))
+      }
+      const authorisers = signers('validate')
+      const reviewers = signers('review')
+      const criticals = items.flatMap((i) =>
+        (index.criticalsByItem.get(i.id) ?? [])
+          .filter((c) => c.status !== 'voided')
+          .map((c) => {
+            const analyte = db.analytes[c.analyteId]
+            return {
+              itemId: i.id,
+              analyteName: analyte?.name ?? c.analyteId,
+              value: c.value,
+              unit: analyte?.unit ?? '',
+              state: criticalState(c),
+              ...(c.notifiedTo ? { notifiedTo: c.notifiedTo } : {}),
+              ...(c.notifiedRole ? { notifiedRole: c.notifiedRole } : {}),
+              ...(c.method ? { method: c.method } : {}),
+              ...(c.notifiedAt ? { notifiedAt: c.notifiedAt } : {}),
+              ...(c.readBack ? { readBack: true } : {}),
+            }
+          }),
+      )
       const openCriticals = items.reduce(
         (n, i) =>
           n +
@@ -217,14 +266,21 @@ export const reportsApi = {
           }
         }),
         sections,
-        pathologist: pathologistStaff
+        pathologist: pathologistStaff ? person(pathologistStaff.id) : null,
+        authorisers,
+        reviewers,
+        testCount: items.length,
+        authorisedCount: items.filter((i) => i.status === 'validated').length,
+        ...(report.withdrawn
           ? {
-              name: pathologistStaff.name,
-              ...(pathologistStaff.qualification
-                ? { qualification: pathologistStaff.qualification }
-                : {}),
+              withdrawn: {
+                at: report.withdrawn.at,
+                byName: staffName(db, report.withdrawn.by),
+                reason: report.withdrawn.reason,
+              },
             }
-          : null,
+          : {}),
+        criticals,
         enteredBy: [
           ...new Set(
             items
@@ -266,48 +322,43 @@ export const reportsApi = {
       return detail
     }),
 
-  release: (id: string, by: string) =>
-    write((db, ctx) => void releaseReport(db, id, ctx), { by }),
+  // Release and corrections are signed by the acting user.
+  release: (id: string, options: { preliminary?: boolean } = {}) =>
+    write((db, ctx) => void releaseReport(db, id, ctx, options)),
 
   /** Asks for a correction; it takes effect when a pathologist authorises it. */
-  requestCorrection: (id: string, request: CorrectionRequest, by: string) =>
-    write((db, ctx) => void requestCorrection(db, id, request, ctx), { by }),
+  requestCorrection: (id: string, request: CorrectionRequest) =>
+    write((db, ctx) => void requestCorrection(db, id, request, ctx)),
 
-  authoriseCorrection: (id: string, by: string) =>
-    write(
-      (db, ctx) => {
-        const report = authoriseCorrection(db, id, ctx)
-        const newCriticals = Object.values(db.criticals).filter(
-          (c) => c.detectedAt === ctx.now,
-        )
-        return {
-          version: report.versions.at(-1)!.version,
-          newCriticals: newCriticals.length,
-        }
-      },
-      { by },
-    ),
+  authoriseCorrection: (id: string) =>
+    write((db, ctx) => {
+      const report = authoriseCorrection(db, id, ctx)
+      const newCriticals = Object.values(db.criticals).filter(
+        (c) => c.detectedAt === ctx.now,
+      )
+      return {
+        version: report.versions.at(-1)!.version,
+        newCriticals: newCriticals.length,
+      }
+    }),
 
-  declineCorrection: (id: string, reason: string, by: string) =>
-    write((db, ctx) => void rejectCorrection(db, id, reason, ctx), { by }),
+  declineCorrection: (id: string, reason: string) =>
+    write((db, ctx) => void rejectCorrection(db, id, reason, ctx)),
 
   /** Request and authorise in one step (a pathologist's own correction). */
-  correct: (id: string, request: CorrectionRequest, by: string) =>
-    write(
-      (db, ctx) => {
-        const report = correctReport(db, id, request, ctx)
-        const newCriticals = Object.values(db.criticals).filter(
-          (c) =>
-            c.detectedAt === ctx.now &&
-            request.corrections.some((x) => x.resultId === c.resultId),
-        )
-        return {
-          version: report.versions.at(-1)!.version,
-          newCriticals: newCriticals.length,
-        }
-      },
-      { by },
-    ),
+  correct: (id: string, request: CorrectionRequest) =>
+    write((db, ctx) => {
+      const report = correctReport(db, id, request, ctx)
+      const newCriticals = Object.values(db.criticals).filter(
+        (c) =>
+          c.detectedAt === ctx.now &&
+          request.corrections.some((x) => x.resultId === c.resultId),
+      )
+      return {
+        version: report.versions.at(-1)!.version,
+        newCriticals: newCriticals.length,
+      }
+    }),
 
   share: (id: string, input: { channel: ShareChannel; recipient: string }) =>
     write((db, ctx) => void shareReport(db, id, input, ctx)),
@@ -316,5 +367,8 @@ export const reportsApi = {
     write((db, ctx) => void recordPrint(db, id, ctx)),
 
   setInterpretation: (id: string, text: string) =>
-    write((db) => void setInterpretation(db, id, text)),
+    write((db, ctx) => void setInterpretation(db, id, text, ctx)),
+
+  withdraw: (id: string, reason: string) =>
+    write((db, ctx) => void withdrawReport(db, id, reason, ctx)),
 }

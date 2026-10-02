@@ -2,11 +2,11 @@ export default {
   'order-created': '{patient}: order {orderNo} with {tests} test(s)',
   'order-cancelled': '{patient}: order {orderNo} cancelled',
   'priority-changed': 'Order {orderNo} marked {priority}',
-  'sample-collected': '{patient}: sample {accession} collected',
-  'sample-received': '{patient}: sample {accession} received',
-  'sample-rejected': '{patient}: sample {accession} rejected',
+  'sample-collected': '{patient}: specimen {accession} collected',
+  'sample-received': '{patient}: specimen {accession} received',
+  'sample-rejected': '{patient}: specimen {accession} rejected',
   'sample-rejected-recollect':
-    '{patient}: sample {accession} rejected, recollection requested',
+    '{patient}: specimen {accession} rejected, recollection requested',
   'results-entered': '{patient}: results entered for {accession}',
   'results-reviewed': '{count} test(s) technically reviewed',
   'results-validated': '{count} test(s) authorised',
@@ -28,5 +28,5 @@ export default {
   'test-updated': 'Test updated: {test}',
   'test-activated': 'Test activated: {test}',
   'test-deactivated': 'Test deactivated: {test}',
-  'ranges-updated': 'Reference ranges updated: {analyte}',
+  'ranges-updated': 'Reference intervals updated: {analyte}',
 } as const

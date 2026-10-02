@@ -1,6 +1,12 @@
 import { DEPARTMENTS, LANGUAGES, type LabSettings } from '@/domain/types'
 import type { LabDb } from '../db/schema'
-import { audit, LabApiError, logActivity, type EngineCtx } from './core'
+import {
+  audit,
+  LabApiError,
+  logActivity,
+  requirePermission,
+  type EngineCtx,
+} from './core'
 
 const TEXT_LIMITS = {
   labName: 80,
@@ -16,6 +22,7 @@ export function updateSettings(
   patch: Partial<LabSettings>,
   ctx: EngineCtx,
 ) {
+  requirePermission(db, ctx, 'settings.edit')
   const next = { ...db.settings, ...patch }
   for (const [field, max] of Object.entries(TEXT_LIMITS) as [
     keyof typeof TEXT_LIMITS,
@@ -50,20 +57,32 @@ export function updateSettings(
     next.criticalNotifyMin > 120
   )
     throw new LabApiError('validation-failed', { field: 'criticalNotifyMin' })
-  if (typeof next.requireIndependentReview !== 'boolean')
-    throw new LabApiError('validation-failed', {
-      field: 'requireIndependentReview',
-    })
+  for (const field of [
+    'requireIndependentReview',
+    'holdReleaseForCriticals',
+  ] as const)
+    if (typeof next[field] !== 'boolean')
+      throw new LabApiError('validation-failed', { field })
+  if (
+    !Number.isInteger(next.transitAlertMin) ||
+    next.transitAlertMin < 15 ||
+    next.transitAlertMin > 240
+  )
+    throw new LabApiError('validation-failed', { field: 'transitAlertMin' })
   if (!LANGUAGES.includes(next.defaultLanguage))
     throw new LabApiError('validation-failed', { field: 'defaultLanguage' })
   const changed = (Object.keys(patch) as (keyof LabSettings)[]).filter(
     (k) => db.settings[k] !== next[k],
   )
+  const before = db.settings
   db.settings = next
-  if (changed.length)
+  // One entry per changed field, with the old and new value.
+  for (const field of changed)
     audit(db, ctx, 'settings', 'lab', 'updated', {
-      detail: { fields: changed.join(', ') },
+      from: String(before[field]),
+      to: String(next[field]),
+      detail: { field },
     })
-  logActivity(db, ctx, 'settings-updated', {}, '/laboratory/settings')
+  logActivity(db, ctx, 'settings-updated', {}, '/settings')
   return next
 }

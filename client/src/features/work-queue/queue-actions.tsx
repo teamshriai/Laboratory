@@ -18,7 +18,7 @@ import {
 import { useLabMutation } from '@/services/mutations'
 import { useSampleActions } from '@/features/samples/sample-actions'
 import { Button } from '@/components/ui/button'
-import { IconButton } from '@/components/ui/icon-button'
+import { GuardedButton } from '@/components/lab/guarded-button'
 import {
   Menu,
   MenuContent,
@@ -48,12 +48,15 @@ export function QueueActions({ row }: { row: WorkQueueRow }) {
   let lead = primary
   if (row.status === 'processing' && row.enteredCount > 0 && !row.allEntered)
     lead = (
-      <IconButton
-        label={t('continueResult')}
-        icon={<PencilLineIcon />}
+      <GuardedButton
+        permission="result.enter"
+        size="xs"
         variant="primary"
-        onClick={() => void navigate(`/laboratory/results/${row.id}`)}
-      />
+        onClick={() => void navigate(`/results/${row.id}`)}
+      >
+        <PencilLineIcon />
+        {t('continueResult')}
+      </GuardedButton>
     )
   if (
     (row.buckets.includes('awaiting-review') ||
@@ -61,16 +64,23 @@ export function QueueActions({ row }: { row: WorkQueueRow }) {
     pendingValidation
   )
     lead = (
-      <IconButton
-        label={t('validate')}
-        icon={<BadgeCheckIcon />}
+      <GuardedButton
+        permission={
+          pendingValidation.status === 'reviewed'
+            ? 'result.authorise'
+            : 'result.verify'
+        }
+        size="xs"
         variant="primary"
         onClick={() =>
           void navigate(
-            `/laboratory/validation?stage=${pendingValidation.status === 'reviewed' ? 'authorise' : 'review'}&item=${pendingValidation.itemId}`,
+            `/verification?stage=${pendingValidation.status === 'reviewed' ? 'authorise' : 'review'}&item=${pendingValidation.itemId}`,
           )
         }
-      />
+      >
+        <BadgeCheckIcon />
+        {pendingValidation.status === 'reviewed' ? t('authorise') : t('verify')}
+      </GuardedButton>
     )
   return (
     <div
@@ -91,24 +101,20 @@ export function QueueActions({ row }: { row: WorkQueueRow }) {
           {row.status === 'processing' && !row.allEntered ? (
             <MenuItem
               icon={<PencilLineIcon />}
-              onSelect={() => void navigate(`/laboratory/results/${row.id}`)}
+              onSelect={() => void navigate(`/results/${row.id}`)}
             >
               {row.enteredCount ? t('continueResult') : t('enterResult')}
             </MenuItem>
           ) : null}
           <MenuItem
             icon={<CircleUserIcon />}
-            onSelect={() =>
-              void navigate(`/laboratory/patients/${row.patient.id}`)
-            }
+            onSelect={() => void navigate(`/patients/${row.patient.id}`)}
           >
             {t('viewPatient')}
           </MenuItem>
           <MenuItem
             icon={<ClipboardListIcon />}
-            onSelect={() =>
-              void navigate(`/laboratory/orders?order=${row.orderId}`)
-            }
+            onSelect={() => void navigate(`/orders?order=${row.orderId}`)}
           >
             {t('viewOrder')}
           </MenuItem>
@@ -119,6 +125,8 @@ export function QueueActions({ row }: { row: WorkQueueRow }) {
               icon={a.icon}
               onSelect={a.onSelect}
               danger={a.danger}
+              disabled={a.disabled}
+              hint={a.hint}
             >
               {a.label}
             </MenuItem>

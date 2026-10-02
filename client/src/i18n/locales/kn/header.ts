@@ -1,13 +1,10 @@
 export default {
   breadcrumb: 'ಬ್ರೆಡ್‌ಕ್ರಂಬ್',
-  searchPlaceholder: 'ರೋಗಿ, UHID, ಸ್ಯಾಂಪಲ್ ID, ಆರ್ಡರ್ ID ಹುಡುಕಿ...',
+  searchPlaceholder: 'ರೋಗಿ, UHID, ಆಕ್ಸೆಶನ್ ಸಂಖ್ಯೆ, ಆರ್ಡರ್ ID ಹುಡುಕಿ...',
   searchShort: 'ಹುಡುಕಿ',
   notifications: 'ಅಧಿಸೂಚನೆಗಳು',
   notificationsUnread_one: '{count} ಓದದ ಅಧಿಸೂಚನೆ',
   notificationsUnread_other: '{count} ಓದದ ಅಧಿಸೂಚನೆಗಳು',
-  criticalPill_one: '{count} ಕ್ರಿಟಿಕಲ್',
-  criticalPill_other: '{count} ಕ್ರಿಟಿಕಲ್',
-  criticalPillLabel: 'ಕ್ರಮಕ್ಕಾಗಿ ಕಾಯುತ್ತಿರುವ ಕ್ರಿಟಿಕಲ್ ಫಲಿತಾಂಶಗಳು',
   theme: 'ಥೀಮ್',
   darkMode: 'ಡಾರ್ಕ್ ಮೋಡ್',
   language: 'ಭಾಷೆ',
@@ -20,8 +17,9 @@ export default {
   labIdentity: 'ಕೇಂದ್ರ ಪ್ರಯೋಗಾಲಯ',
   actingAs: 'ಈ ಹೆಸರಿನಲ್ಲಿ ಕಾರ್ಯ',
   actingAsHint:
-    'ನೀವು ಮಾಡುವ ಕ್ರಿಯೆಗಳಲ್ಲಿ ದಾಖಲಾಗುತ್ತದೆ. ಈ ಮಾದರಿಯಲ್ಲಿ ಲಾಗಿನ್ ಇಲ್ಲ.',
+    'ನೀವು ಮಾಡುವ ಕ್ರಿಯೆಗಳಲ್ಲಿ ದಾಖಲಾಗುತ್ತದೆ. ಈ ಪ್ರಾಯೋಗಿಕ ಆವೃತ್ತಿಯಲ್ಲಿ ಲಾಗಿನ್ ಇಲ್ಲ.',
   settings: 'ಸೆಟ್ಟಿಂಗ್‌ಗಳು ಮತ್ತು ಆದ್ಯತೆಗಳು',
-  resetDemo: 'ಡೆಮೊ ಡೇಟಾ ಮರುಹೊಂದಿಸಿ',
-  shift: 'ಬೆಳಗಿನ ಪಾಳಿ',
+  demoNotice:
+    'ಡೆಮೊ ವ್ಯವಸ್ಥೆ: ಡೇಟಾವನ್ನು ಈ ಬ್ರೌಸರ್‌ನಲ್ಲಿ ಮಾತ್ರ ಉಳಿಸಲಾಗುತ್ತದೆ ಮತ್ತು ಇದು ಕ್ಲಿನಿಕಲ್ ಬಳಕೆಗೆ ಅಲ್ಲ.',
+  demoNoticeMore: 'ಇದರ ಅರ್ಥವೇನು',
 } as const

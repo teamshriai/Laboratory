@@ -51,6 +51,8 @@ export const NAV_TONES = {
   tat: 'amber',
   analytics: 'indigo',
   testCatalog: 'teal',
+  users: 'sky',
+  auditLog: 'indigo',
   settings: 'violet',
 } as const satisfies Record<string, IconTone>
 

@@ -1,5 +1,6 @@
 import { BadgeCheckIcon } from 'lucide-react'
-import { Logo } from '@/components/ui/logo'
+import { IndostatesLogo, Logo } from '@/components/ui/logo'
+import { INDOSTATES } from '@/lib/brand'
 import { ageFromDob } from '@/domain/time'
 import type { LabSettings, Language } from '@/domain/types'
 import { translate, translateEnum } from '@/i18n/core'
@@ -7,6 +8,29 @@ import { createFormatter } from '@/i18n/format'
 import { formatRange } from '@/domain/reference-ranges'
 import type { ReportDetail } from '@/services/lab-api'
 import { cn } from '@/lib/cn'
+import { cssString, usePageRules } from '@/components/ui/page-margins'
+
+type Kind = 'draft' | 'preliminary' | 'final' | 'amended' | 'withdrawn'
+const KIND_KEY = {
+  draft: 'kindDraft',
+  preliminary: 'kindPreliminary',
+  final: 'kindFinal',
+  amended: 'kindAmended',
+  withdrawn: 'kindWithdrawn',
+} as const satisfies Record<Kind, string>
+/** Statuses in which a version has gone to the ordering doctor. */
+const ISSUED = new Set<ReportDetail['status']>([
+  'preliminary',
+  'released',
+  'amendment-pending',
+  'corrected',
+  'withdrawn',
+])
+const MARGIN_TEXT = [
+  "font: 7.5pt 'Plus Jakarta Sans Variable', 'Noto Sans Kannada Variable',",
+  "'Noto Sans Devanagari Variable', 'Noto Sans Tamil Variable',",
+  "'Noto Sans Malayalam Variable', sans-serif; color: #5b6670;",
+].join(' ')
 
 function flagText(lang: Language, flag: string | null) {
   if (!flag || flag === 'NORMAL' || flag === 'NEGATIVE') return ''
@@ -39,8 +63,70 @@ export function ReportSheet({
     translate(lang, 'reports', key, params)
   const e = (group: string, value: string) => translateEnum(lang, group, value)
   const f = createFormatter(lang)
+  const tc = (key: string, params?: Record<string, string | number>) =>
+    translate(lang, 'common', key, params)
   const p = report.patient
   const age = ageFromDob(p.dob, now)
+  // Infants are reported in months or days, never as "0 y".
+  const ageText =
+    age.years >= 2
+      ? tc('ageYears', { years: age.years })
+      : age.years >= 1 || age.months >= 1
+        ? tc('ageMonths', { months: age.years * 12 + age.months })
+        : tc('ageDays', { days: age.days })
+  const issued = ISSUED.has(report.status)
+  const latest = report.versions.at(-1)
+  const previous = report.versions.at(-2)
+  const kind: Kind =
+    report.status === 'withdrawn'
+      ? 'withdrawn'
+      : !issued
+        ? 'draft'
+        : (latest?.kind ?? (report.version > 1 ? 'amended' : 'final'))
+  const kindLabel = t(KIND_KEY[kind])
+  const releasedCount = report.sections.filter((s) => s.released).length
+  // A preliminary report must not show values that were not released.
+  const shown = (itemId: string) =>
+    !issued || report.sections.some((s) => s.itemId === itemId && s.released)
+  const criticals = report.criticals.filter((c) => shown(c.itemId))
+  const collectedAt = Math.min(
+    ...report.samples.map((s) => s.collectedAt ?? Infinity),
+  )
+  // Running header and footer on every printed page (ISO 15189 7.4.1.6):
+  // the patient and report identity, and "Page x of y".
+  const pageOf = t('pageOf', { page: '{page}', pages: '{pages}' })
+    .split(/(\{pages?\})/)
+    .filter(Boolean)
+    .map((part) =>
+      part === '{page}'
+        ? 'counter(page)'
+        : part === '{pages}'
+          ? 'counter(pages)'
+          : cssString(part),
+    )
+    .join(' ')
+  const footerLeft = [
+    Number.isFinite(collectedAt)
+      ? t('runningCollected', { time: f.dateTime(collectedAt) })
+      : '',
+    report.reportedAt && issued
+      ? t('runningIssued', { time: f.dateTime(report.reportedAt) })
+      : kindLabel,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+  usePageRules(
+    [
+      '@page {',
+      `  @top-left { content: ${cssString(`${p.name} · ${t('uhid')} ${p.uhid} · ${ageText} / ${e('sexShort', p.sex)}`)}; ${MARGIN_TEXT} }`,
+      `  @top-right { content: ${cssString(`${report.reportNo} · ${t('version', { version: report.version })} · ${kindLabel}`)}; ${MARGIN_TEXT} }`,
+      `  @bottom-left { content: ${cssString(footerLeft)}; ${MARGIN_TEXT} }`,
+      `  @bottom-right { content: ${pageOf}; ${MARGIN_TEXT} }`,
+      '}',
+      // The first page carries the full header already.
+      '@page :first { @top-left { content: none } @top-right { content: none } }',
+    ].join('\n'),
+  )
   const valueText = (row: ReportDetail['sections'][number]['rows'][number]) => {
     if (!row.value) return ''
     if (row.resultType === 'posneg') {
@@ -66,8 +152,19 @@ export function ReportSheet({
     }
     return row.value
   }
-  const unreleased =
-    report.status !== 'released' && report.status !== 'corrected'
+  const watermark =
+    kind === 'draft'
+      ? t('draftWatermark')
+      : kind === 'withdrawn'
+        ? t('withdrawnWatermark')
+        : null
+  const signers = (people: ReportDetail['reviewers']) =>
+    people
+      .map(
+        (x) =>
+          `${x.name}${x.qualification ? `, ${x.qualification}` : ''} (${f.dateTime(x.at)})`,
+      )
+      .join('; ')
   const location = report.order.ward
     ? `${report.order.ward}${report.order.bed ? ` / ${report.order.bed}` : ''}`
     : e('encounter', report.order.encounter)
@@ -76,7 +173,8 @@ export function ReportSheet({
   const expectedText = (
     row: ReportDetail['sections'][number]['rows'][number],
   ) => {
-    if (row.resultType === 'numeric') return formatRange(row.range) ?? ''
+    if (row.resultType === 'numeric')
+      return formatRange(row.range) ?? t('notEstablished')
     if (!row.expected?.length) return ''
     if (row.resultType === 'posneg') {
       const style = row.posnegStyle ?? 'positive'
@@ -96,13 +194,20 @@ export function ReportSheet({
       lang={lang}
       className="relative mx-auto w-full max-w-[210mm] min-w-[180mm] bg-[#ffffff] px-[14mm] py-[12mm] text-[10pt] leading-snug text-[#141a1f] shadow-overlay print:shadow-none"
     >
-      {unreleased ? (
+      {watermark ? (
         <span
           aria-hidden
           className="pointer-events-none absolute inset-0 grid place-items-center overflow-hidden"
         >
-          <span className="-rotate-30 text-[48pt] font-bold tracking-widest text-[#141a1f]/[0.05] uppercase">
-            {t('draftWatermark')}
+          <span
+            className={cn(
+              '-rotate-30 text-[48pt] font-bold tracking-widest uppercase',
+              kind === 'withdrawn'
+                ? 'text-[#b91c1c]/[0.09]'
+                : 'text-[#141a1f]/[0.05]',
+            )}
+          >
+            {watermark}
           </span>
         </span>
       ) : null}
@@ -140,14 +245,25 @@ export function ReportSheet({
             ) : null}
           </div>
         </div>
-        <div className="text-right text-[8.5pt] text-[#4a5560]">
+        <div className="flex shrink-0 flex-col items-end text-right text-[8.5pt] text-[#4a5560]">
+          <IndostatesLogo alt={INDOSTATES.name} className="mb-2 h-[30px]" />
           <p className="font-mono text-[10pt] font-bold whitespace-nowrap text-[#141a1f]">
             {report.reportNo}
           </p>
           <p>{e('department', report.department)}</p>
-          {report.version > 1 ? (
-            <p className="font-semibold text-[#b45309]">v{report.version}</p>
-          ) : null}
+          <p
+            className={cn(
+              'mt-1 text-[8pt] font-bold tracking-[0.12em] uppercase',
+              kind === 'withdrawn'
+                ? 'text-[#b91c1c]'
+                : kind === 'final'
+                  ? 'text-[#1e3a8a]'
+                  : 'text-[#b45309]',
+            )}
+          >
+            {kindLabel}
+          </p>
+          <p>{t('version', { version: report.version })}</p>
         </div>
       </header>
 
@@ -160,7 +276,7 @@ export function ReportSheet({
               {p.uhid}
             </span>,
           ],
-          [t('ageSex'), `${age.years} / ${e('sexShort', p.sex)}`],
+          [t('ageSex'), `${ageText} / ${e('sexShort', p.sex)}`],
           [t('doctor'), report.order.doctor.name],
           [
             t('department'),
@@ -259,10 +375,45 @@ export function ReportSheet({
         </table>
       ) : null}
 
-      {report.version > 1 ? (
-        <p className="mt-3 rounded-md border border-[#f59e0b]/50 bg-[#fffbeb] px-3 py-1.5 text-[8.5pt] font-medium text-[#92400e]">
-          {t('correctedNotice', { version: report.version })}
+      {kind === 'withdrawn' && report.withdrawn ? (
+        <p className="mt-3 rounded-md border-2 border-[#b91c1c] bg-[#fef2f2] px-3 py-2 text-[9pt] font-semibold text-[#991b1b]">
+          {t('withdrawnNotice', {
+            time: f.dateTime(report.withdrawn.at),
+            name: report.withdrawn.byName,
+            reason: report.withdrawn.reason.replace(/[.\s]+$/, ''),
+          })}
         </p>
+      ) : null}
+      {kind === 'preliminary' ? (
+        <p className="mt-3 rounded-md border border-[#f59e0b]/60 bg-[#fffbeb] px-3 py-1.5 text-[8.5pt] font-semibold text-[#92400e]">
+          {t('preliminaryNotice', {
+            released: releasedCount,
+            total: report.testCount,
+          })}
+        </p>
+      ) : null}
+      {kind === 'amended' && latest ? (
+        <div className="mt-3 rounded-md border border-[#f59e0b]/60 bg-[#fffbeb] px-3 py-1.5 text-[8.5pt] text-[#92400e]">
+          <p className="font-semibold">
+            {t('amendedNotice', {
+              version: latest.version,
+              previous: previous?.version ?? latest.version - 1,
+              time: previous ? f.dateTime(previous.releasedAt) : '-',
+            })}
+          </p>
+          {latest.correctionReason ? (
+            <p>
+              {t('amendedReason', {
+                reason: [
+                  e('correctionReason', latest.correctionReason),
+                  latest.correctionComments,
+                ]
+                  .filter(Boolean)
+                  .join(': '),
+              })}
+            </p>
+          ) : null}
+        </div>
       ) : null}
 
       <h2 className="mt-5 mb-2 text-[9pt] font-bold tracking-[0.12em] text-[#1e3a8a] uppercase">
@@ -292,7 +443,17 @@ export function ReportSheet({
                 ) : null}
               </td>
             </tr>
-            {section.rows.map((row) => {
+            {issued && !section.released ? (
+              <tr className="border-b border-[#e3e8eb]">
+                <td
+                  colSpan={5}
+                  className="py-1 pl-3 text-[8.5pt] text-[#5b6670] italic"
+                >
+                  {t('toFollow')}
+                </td>
+              </tr>
+            ) : null}
+            {(issued && !section.released ? [] : section.rows).map((row) => {
               const flag = flagText(lang, row.flag)
               const abnormal = Boolean(flag)
               const prev = row.previousVersions.at(-1)
@@ -337,7 +498,7 @@ export function ReportSheet({
                 </tr>
               )
             })}
-            {section.comments.length ? (
+            {section.comments.length && shown(section.itemId) ? (
               <tr>
                 <td
                   colSpan={5}
@@ -351,6 +512,39 @@ export function ReportSheet({
         ))}
       </table>
 
+      {criticals.length ? (
+        <section className="print-avoid-break mt-4 rounded-md border border-[#b91c1c]/40 px-3 py-2">
+          <h3 className="text-[8.5pt] font-bold tracking-[0.12em] text-[#b91c1c] uppercase">
+            {t('criticalsTitle')}
+          </h3>
+          <ul className="mt-1 grid gap-0.5 text-[8.5pt] text-[#141a1f]">
+            {criticals.map((c, i) => {
+              const what = `${c.analyteName} ${c.value}${c.unit ? ` ${c.unit}` : ''}`
+              if (!c.notifiedAt || !c.notifiedTo)
+                return <li key={i}>{t('criticalNotYet', { what })}</li>
+              const params = {
+                what,
+                method: c.method
+                  ? e('notifyMethod', c.method)
+                  : t('criticalNotified'),
+                who: c.notifiedRole
+                  ? `${c.notifiedTo} (${e('notifyRole', c.notifiedRole)})`
+                  : c.notifiedTo,
+                time: f.dateTime(c.notifiedAt),
+              }
+              return (
+                <li key={i}>
+                  {t(
+                    c.readBack ? 'criticalLineReadBack' : 'criticalLine',
+                    params,
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      ) : null}
+
       {report.interpretation ? (
         <section className="print-avoid-break mt-5">
           <h3 className="text-[8.5pt] font-bold tracking-[0.12em] text-[#1e3a8a] uppercase">
@@ -361,19 +555,17 @@ export function ReportSheet({
       ) : null}
 
       <footer className="print-avoid-break mt-8 flex items-end justify-between gap-6 border-t border-[#c9d2d8] pt-4">
-        <div className="text-[8pt] text-[#5b6670]">
+        <div className="min-w-0 flex-1 text-[8pt] text-[#5b6670]">
           <p>{t('generated', { time: f.dateTime(now) })}</p>
           {report.enteredBy.length ? (
             <p>{t('analysedBy', { names: report.enteredBy.join(', ') })}</p>
           ) : null}
-          {report.reviewedBy.length ? (
-            <p>
-              {t('reviewedByLine', { names: report.reviewedBy.join(', ') })}
-            </p>
+          {report.reviewers.length ? (
+            <p>{t('reviewedByLine', { names: signers(report.reviewers) })}</p>
           ) : null}
-          {report.authorisedAt ? (
+          {report.authorisers.length ? (
             <p>
-              {t('authorisedAt', { time: f.dateTime(report.authorisedAt) })}
+              {t('authorisedByLine', { names: signers(report.authorisers) })}
             </p>
           ) : null}
           {lab?.reportFooter ? (
@@ -383,7 +575,7 @@ export function ReportSheet({
             {t('endOfReport')}
           </p>
         </div>
-        <div className="text-right">
+        <div className="shrink-0 text-right whitespace-nowrap">
           {report.pathologist ? (
             <>
               <p className="inline-flex items-center gap-1 text-[8pt] font-semibold text-[#1d4ed8]">
@@ -399,9 +591,14 @@ export function ReportSheet({
               <p className="text-[8pt] text-[#5b6670]">
                 {report.pathologist.qualification}
               </p>
+              {latest ? (
+                <p className="text-[8pt] text-[#5b6670]">
+                  {t('releasedOn', { time: f.dateTime(latest.releasedAt) })}
+                </p>
+              ) : null}
             </>
           ) : (
-            <p className="text-[8pt] text-[#5b6670]">{t('validatedBy')}: -</p>
+            <p className="text-[8pt] text-[#5b6670]">{t('notSigned')}</p>
           )}
         </div>
       </footer>

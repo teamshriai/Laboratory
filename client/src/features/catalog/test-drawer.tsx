@@ -8,6 +8,8 @@ import { ContainerChip } from '@/components/lab/sample'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { Field } from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
 import { Drawer } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ErrorState } from '@/components/ui/states'
@@ -276,9 +278,10 @@ export function TestDrawer({
   const e = useEnum()
   const { data, isPending, isError, refetch } = useCatalogTest(id)
   const [confirm, setConfirm] = useState(false)
+  const [reason, setReason] = useState('')
   const [editing, setEditing] = useState(false)
   const toggle = useLabMutation(
-    () => labApi.catalog.setActive(id, !data!.active),
+    () => labApi.catalog.setActive(id, !data!.active, reason),
     {
       success: () =>
         data!.active
@@ -290,7 +293,10 @@ export function TestDrawer({
               title: t('testActivated', { test: data!.name }),
               description: t('testActivatedBody'),
             },
-      onSuccess: () => setConfirm(false),
+      onSuccess: () => {
+        setConfirm(false)
+        setReason('')
+      },
     },
   )
   return (
@@ -359,8 +365,17 @@ export function TestDrawer({
           confirmLabel={data.active ? t('deactivate') : t('activate')}
           {...(data.active ? { tone: 'danger' as const } : {})}
           loading={toggle.isPending}
+          disabled={!reason.trim()}
           onConfirm={() => toggle.mutate(undefined)}
-        />
+        >
+          <Field label={t('changeReason')} required>
+            <Input
+              value={reason}
+              onChange={(ev) => setReason(ev.target.value)}
+              placeholder={t('changeReasonPlaceholder')}
+            />
+          </Field>
+        </ConfirmDialog>
       ) : null}
       {data && editing ? (
         <TestFormDialog test={data} onClose={() => setEditing(false)} />

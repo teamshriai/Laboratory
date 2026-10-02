@@ -65,6 +65,63 @@ describe('persisted store', () => {
     expect(store.wasDataRefreshed()).toBe(true)
   })
 
+  it('saves a fresh seed and reuses it the same day', async () => {
+    const first = await freshStore()
+    first.getDb()
+    first.flush()
+    // Tag the saved seed: a regenerated one would not carry the tag.
+    const saved = JSON.parse(localStorage.getItem(DB_KEY)!) as {
+      patients: Record<string, { name: string }>
+    }
+    const [id] = Object.keys(saved.patients)
+    saved.patients[id!]!.name = 'Saved Seed'
+    localStorage.setItem(DB_KEY, JSON.stringify(saved))
+
+    const second = await freshStore()
+    expect(second.getDb().patients[id!]?.name).toBe('Saved Seed')
+    expect(second.getDbStats().dirty).toBe(false)
+    expect(second.wasDataRefreshed()).toBe(false)
+  })
+
+  it('regenerates an untouched seed on a new day', async () => {
+    const first = await freshStore()
+    first.getDb()
+    first.flush()
+    const meta = JSON.parse(localStorage.getItem(META_KEY)!) as {
+      seededAt: number
+    }
+    meta.seededAt -= 2 * 24 * 60 * 60 * 1000
+    localStorage.setItem(META_KEY, JSON.stringify(meta))
+
+    const second = await freshStore()
+    expect(second.getDb().seededAt).toBeGreaterThan(meta.seededAt)
+    expect(second.wasDataRefreshed()).toBe(false)
+  })
+
+  it('moves every instant forward together after time away', async () => {
+    const seeded = await freshStore()
+    const db = seeded.startMemoryDb()
+    db.audit.unshift({
+      id: 'au_test',
+      at: 1_000,
+      by: 'st_anjali',
+      entity: 'order',
+      entityId: 'o1',
+      action: 'cancelled',
+    })
+    const before = { seededAt: db.seededAt, at: db.audit[0]!.at }
+    seeded.shiftInstants(db, 5_000)
+    expect(db.seededAt - before.seededAt).toBe(5_000)
+    expect(db.audit[0]!.at - before.at).toBe(5_000)
+    const sample = Object.values(db.samples).find((s) => s.history.length)!
+    const history = sample.history[0]!
+    const shifted = structuredClone(sample)
+    seeded.shiftInstants(shifted, 1)
+    expect(shifted.history[0]!.at).toBe(history.at + 1)
+    if (sample.collectedAt)
+      expect(shifted.collectedAt).toBe(sample.collectedAt + 1)
+  })
+
   it('starts fresh without a notice when nothing was changed', async () => {
     const store = await freshStore()
     store.getDb()

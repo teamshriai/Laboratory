@@ -7,35 +7,76 @@ import { cn } from '@/lib/cn'
 import { DESKTOP_QUERY, useMediaQuery } from '@/hooks/use-media-query'
 import { DEPARTMENT_TONES, NAV_TONES, type IconTone } from '@/lib/icon-tones'
 import { IconTile } from '@/components/ui/icon-tile'
-import { Logo } from '@/components/ui/logo'
+import { IndostatesLogo, Logo } from '@/components/ui/logo'
+import { INDOSTATES, SHRI_AI } from '@/lib/brand'
 import { useWorkQueue } from '@/services/queries'
 import { usePreferences } from '../preferences/context'
 import { Count } from '@/components/ui/badge'
 import { Tooltip } from '@/components/ui/tooltip'
 import {
   DEPARTMENT_ICONS,
+  ADMIN_NAV,
   INVENTORY_NAV,
   LAB_NAV,
   OPERATIONS_NAV,
   type NavItem,
 } from './nav-config'
 
-export function Brand({ collapsed }: { collapsed?: boolean }) {
+/** The product's mark and name. The mark opens Shri AI's site in a new tab. */
+export function Brand({
+  collapsed,
+  onNavigate,
+}: {
+  collapsed?: boolean
+  onNavigate?: () => void
+}) {
   const t = useT('common')
+  const label = t('opensInNewTab', { name: SHRI_AI.name })
   return (
-    <div className="flex items-center gap-2.5">
-      {/* Collapsed to the rail, the mark alone names the product. */}
-      <Logo alt={collapsed ? t('appName') : ''} className="-m-1 size-10" />
+    <div className="flex min-w-0 items-center gap-2.5">
+      <Tooltip content={label} side={collapsed ? 'right' : 'bottom'}>
+        <a
+          href={SHRI_AI.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={label}
+          className="focus-ring tap-reach shrink-0 rounded-lg"
+        >
+          <Logo className="-m-1 size-10" />
+        </a>
+      </Tooltip>
       {!collapsed ? (
-        <span className="min-w-0 leading-tight">
+        <NavLink
+          to="/dashboard"
+          onClick={onNavigate}
+          className="focus-ring min-w-0 rounded-lg leading-tight"
+        >
           <span className="block text-[15px] font-bold tracking-[0.06em] whitespace-nowrap text-fg uppercase">
             {t('appName')}
           </span>
           <span className="block text-xs font-medium text-fg-subtle">
             {t('moduleName')}
           </span>
-        </span>
+        </NavLink>
       ) : null}
+    </div>
+  )
+}
+
+/** The Indo States Health wordmark under the brand, linking to its site. */
+export function CoBrandRow() {
+  const t = useT('common')
+  return (
+    <div className="flex shrink-0 items-center border-b border-line px-4 py-2">
+      <a
+        href={INDOSTATES.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={t('opensInNewTab', { name: INDOSTATES.name })}
+        className="focus-ring inline-flex min-h-11 items-center rounded-md transition-opacity hover:opacity-85"
+      >
+        <IndostatesLogo className="rounded-md" />
+      </a>
     </div>
   )
 }
@@ -199,7 +240,7 @@ export function SidebarNav({
         {DEPARTMENTS.map((d) => (
           <NavEntry
             key={d}
-            to={`/laboratory/departments/${d}`}
+            to={`/departments/${d}`}
             label={e('department', d)}
             icon={DEPARTMENT_ICONS[d]}
             tone={DEPARTMENT_TONES[d]}
@@ -214,6 +255,9 @@ export function SidebarNav({
       <Section title={t('sectionOperations')} collapsed={collapsed}>
         {render(OPERATIONS_NAV)}
       </Section>
+      <Section title={t('sectionAdministration')} collapsed={collapsed}>
+        {render(ADMIN_NAV)}
+      </Section>
     </nav>
   )
 }
@@ -222,7 +266,7 @@ export function SettingsEntry({ onNavigate }: { onNavigate?: () => void }) {
   const t = useT('nav')
   return (
     <NavEntry
-      to="/laboratory/settings"
+      to="/settings"
       label={t('settings')}
       icon={<SettingsIcon />}
       tone={NAV_TONES.settings}
@@ -269,13 +313,7 @@ export function Sidebar() {
             : 'h-16 justify-between px-4',
         )}
       >
-        <NavLink
-          to="/laboratory"
-          aria-label={t('overview')}
-          className="focus-ring rounded-lg"
-        >
-          <Brand collapsed={collapsed} />
-        </NavLink>
+        <Brand collapsed={collapsed} />
         {toggle}
       </div>
       <div
@@ -288,7 +326,7 @@ export function Sidebar() {
       </div>
       <div className="shrink-0 border-t border-line p-3">
         <NavEntry
-          to="/laboratory/settings"
+          to="/settings"
           label={t('settings')}
           icon={<SettingsIcon />}
           tone={NAV_TONES.settings}

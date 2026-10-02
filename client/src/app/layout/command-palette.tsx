@@ -17,12 +17,14 @@ import {
 } from 'lucide-react'
 import { Command } from 'cmdk'
 import { Dialog as D } from 'radix-ui'
-import { useDeferredValue, useRef, useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
+import { toast } from 'sonner'
+import { useDebouncedValue } from '@/hooks/use-debounced-value'
 import { useEnum, useT } from '@/i18n/context'
 import { cn } from '@/lib/cn'
 import { usePersistentState } from '@/hooks/use-persistent-state'
-import { labApi } from '@/services/lab-api'
+import { labApi, type SearchExact } from '@/services/lab-api'
 import { useLabMutation } from '@/services/mutations'
 import { useSearch } from '@/services/queries'
 import { ContainerChip } from '@/components/lab/sample'
@@ -40,7 +42,7 @@ import { useReturnFocus } from '@/components/ui/return-focus'
 import { useRecentPatients } from '@/hooks/use-recent-patients'
 import { IconTile } from '@/components/ui/icon-tile'
 import { NAV_TONES, type IconTone } from '@/lib/icon-tones'
-import { INVENTORY_NAV, LAB_NAV, OPERATIONS_NAV } from './nav-config'
+import { ADMIN_NAV, INVENTORY_NAV, LAB_NAV, OPERATIONS_NAV } from './nav-config'
 
 function Item({
   value,
@@ -93,8 +95,14 @@ export function CommandPalette({
   // Enter receives the matching in-transit sample.
   const [receiving, setReceiving] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-  const deferred = useDeferredValue(query)
-  const destinations = [...LAB_NAV, ...INVENTORY_NAV, ...OPERATIONS_NAV]
+  // The API is asked once typing pauses (150 ms), not on every key.
+  const deferred = useDebouncedValue(query, 150)
+  const destinations = [
+    ...LAB_NAV,
+    ...INVENTORY_NAV,
+    ...OPERATIONS_NAV,
+    ...ADMIN_NAV,
+  ]
   const needle = deferred.trim().toLowerCase()
   const navMatches = needle
     ? destinations.filter((d) => tn(d.key).toLowerCase().includes(needle))
@@ -149,6 +157,28 @@ export function CommandPalette({
     void navigate(to)
   }
 
+  const exactHref = (x: SearchExact) =>
+    x.kind === 'specimen'
+      ? `/specimens/${x.id}`
+      : x.kind === 'order'
+        ? `/orders?order=${x.id}`
+        : x.kind === 'patient'
+          ? `/patients/${x.id}`
+          : `/reports/${x.id}`
+  // A scanner types the number and presses Enter at once: if the results for
+  // exactly this text are not in yet, look the number up and open it.
+  const onEnter = (ev: React.KeyboardEvent<HTMLInputElement>) => {
+    if (ev.key !== 'Enter' || receiving) return
+    const term = query.trim()
+    if (!/^[a-z]{2,6}-[a-z0-9-]{3,}$/i.test(term)) return
+    if (deferred === query && data && !isFetching) return
+    ev.preventDefault()
+    void labApi.search.resolve(term).then((hit) => {
+      if (hit) go(exactHref(hit))
+      else toast.info(t('noExact', { query: term }))
+    })
+  }
+
   const hasQuery = deferred.trim().length >= 2
   const total = data
     ? data.patients.length +
@@ -200,6 +230,7 @@ export function CommandPalette({
                 ref={inputRef}
                 value={query}
                 onValueChange={setQuery}
+                onKeyDown={onEnter}
                 placeholder={
                   receiving ? t('receivePlaceholder') : t('placeholder')
                 }
@@ -267,7 +298,7 @@ export function CommandPalette({
                         <Item
                           key={p.id}
                           value={`recent-${p.id}`}
-                          onSelect={() => go(`/laboratory/patients/${p.id}`)}
+                          onSelect={() => go(`/patients/${p.id}`)}
                           icon={<HistoryIcon />}
                           tone="slate"
                         >
@@ -300,7 +331,7 @@ export function CommandPalette({
                   >
                     <Item
                       value="register-patient"
-                      onSelect={() => go('/laboratory/patients?new=1')}
+                      onSelect={() => go('/patients?new=1')}
                       icon={<UserPlusIcon />}
                       tone="sky"
                     >
@@ -308,7 +339,7 @@ export function CommandPalette({
                     </Item>
                     <Item
                       value="new-order"
-                      onSelect={() => go('/laboratory/orders/new')}
+                      onSelect={() => go('/orders/new')}
                       icon={<PlusIcon />}
                       tone="teal"
                     >
@@ -328,7 +359,7 @@ export function CommandPalette({
                     </Item>
                     <Item
                       value="record-qc"
-                      onSelect={() => go('/laboratory/quality-control?new=1')}
+                      onSelect={() => go('/quality-control?new=1')}
                       icon={<ShieldCheckIcon />}
                       tone="green"
                     >
@@ -336,7 +367,7 @@ export function CommandPalette({
                     </Item>
                     <Item
                       value="receive-stock"
-                      onSelect={() => go('/laboratory/reagents?new=1')}
+                      onSelect={() => go('/reagents?new=1')}
                       icon={<PackagePlusIcon />}
                       tone="amber"
                     >
@@ -344,7 +375,7 @@ export function CommandPalette({
                     </Item>
                     <Item
                       value="critical-values"
-                      onSelect={() => go('/laboratory/critical-values')}
+                      onSelect={() => go('/critical-results')}
                       icon={<BellRingIcon />}
                       tone="red"
                     >
@@ -384,6 +415,41 @@ export function CommandPalette({
                 </div>
               ) : data || navMatches.length ? (
                 <>
+                  {data?.exact ? (
+                    <Command.Group
+                      heading={t('exactMatch')}
+                      className={groupClass}
+                    >
+                      <Item
+                        value={`exact-${data.exact.kind}-${data.exact.id}`}
+                        onSelect={() => go(exactHref(data.exact!))}
+                        icon={
+                          data.exact.kind === 'specimen' ? (
+                            <TestTubeIcon />
+                          ) : data.exact.kind === 'order' ? (
+                            <ClipboardListIcon />
+                          ) : data.exact.kind === 'patient' ? (
+                            <UserIcon />
+                          ) : (
+                            <FileTextIcon />
+                          )
+                        }
+                        tone="sky"
+                        meta={
+                          <span className="text-xs font-medium text-accent-text">
+                            {t(`exactKind.${data.exact.kind}`)}
+                          </span>
+                        }
+                      >
+                        <span className="font-mono text-meta font-medium">
+                          {data.exact.label}
+                        </span>
+                        <span className="block text-xs text-fg-muted">
+                          {data.exact.patientName}
+                        </span>
+                      </Item>
+                    </Command.Group>
+                  ) : null}
                   {navMatches.length ? goTo(navMatches) : null}
                   {results.patients.length > 0 ? (
                     <Command.Group
@@ -394,7 +460,7 @@ export function CommandPalette({
                         <Command.Item
                           key={p.id}
                           value={`patient-${p.id}`}
-                          onSelect={() => go(`/laboratory/patients/${p.id}`)}
+                          onSelect={() => go(`/patients/${p.id}`)}
                           className="flex cursor-default items-center gap-3 rounded-xl px-3 py-2.5 outline-none select-none data-[selected=true]:bg-surface-2"
                         >
                           <Avatar name={p.name} size="sm" />
@@ -429,7 +495,7 @@ export function CommandPalette({
                         <Item
                           key={s.id}
                           value={`sample-${s.id}`}
-                          onSelect={() => go(`/laboratory/samples/${s.id}`)}
+                          onSelect={() => go(`/specimens/${s.id}`)}
                           icon={<TestTubeIcon />}
                           tone="violet"
                           meta={
@@ -459,9 +525,7 @@ export function CommandPalette({
                         <Item
                           key={o.id}
                           value={`order-${o.id}`}
-                          onSelect={() =>
-                            go(`/laboratory/orders?order=${o.id}`)
-                          }
+                          onSelect={() => go(`/orders?order=${o.id}`)}
                           icon={<ClipboardListIcon />}
                           tone="sky"
                         >
@@ -484,9 +548,7 @@ export function CommandPalette({
                         <Item
                           key={test.id}
                           value={`test-${test.id}`}
-                          onSelect={() =>
-                            go(`/laboratory/test-catalog?test=${test.id}`)
-                          }
+                          onSelect={() => go(`/test-catalog?test=${test.id}`)}
                           icon={<FlaskConicalIcon />}
                           tone="orange"
                         >
@@ -511,7 +573,7 @@ export function CommandPalette({
                         <Item
                           key={r.id}
                           value={`report-${r.id}`}
-                          onSelect={() => go(`/laboratory/reports/${r.id}`)}
+                          onSelect={() => go(`/reports/${r.id}`)}
                           icon={<FileTextIcon />}
                           tone="teal"
                           meta={
@@ -538,9 +600,7 @@ export function CommandPalette({
                           key={c.id}
                           value={`critical-${c.id}`}
                           onSelect={() =>
-                            go(
-                              `/laboratory/critical-values?status=all&alert=${c.id}`,
-                            )
+                            go(`/critical-results?status=all&alert=${c.id}`)
                           }
                           icon={<BellRingIcon />}
                           tone="red"
@@ -570,9 +630,7 @@ export function CommandPalette({
                         <Item
                           key={eq.id}
                           value={`equipment-${eq.id}`}
-                          onSelect={() =>
-                            go(`/laboratory/equipment?equipment=${eq.id}`)
-                          }
+                          onSelect={() => go(`/equipment?equipment=${eq.id}`)}
                           icon={<WrenchIcon />}
                           tone="slate"
                           meta={
@@ -607,8 +665,8 @@ export function CommandPalette({
                           onSelect={() =>
                             go(
                               r.lotId
-                                ? `/laboratory/reagents?lot=${r.lotId}`
-                                : `/laboratory/reagents?reagent=${r.id}`,
+                                ? `/reagents?lot=${r.lotId}`
+                                : `/reagents?reagent=${r.id}`,
                             )
                           }
                           icon={<FlaskConicalIcon />}

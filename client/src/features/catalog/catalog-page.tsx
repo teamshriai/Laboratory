@@ -17,7 +17,7 @@ import type { CatalogTest } from '@/services/lab-api'
 import { useCatalog } from '@/services/queries'
 import { ContainerChip } from '@/components/lab/sample'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { GuardedButton } from '@/components/lab/guarded-button'
 import { Card } from '@/components/ui/card'
 import { DataTable, type Column } from '@/components/ui/data-table'
 import { IconGlyph } from '@/components/ui/icon-tile'
@@ -177,10 +177,14 @@ export function Component() {
         title={t('title')}
         actions={
           <>
-            <Button variant="primary" onClick={() => setCreating(true)}>
+            <GuardedButton
+              permission="catalog.edit"
+              variant="primary"
+              onClick={() => setCreating(true)}
+            >
               <PlusIcon strokeWidth={2.5} />
               {t('newTest')}
-            </Button>
+            </GuardedButton>
           </>
         }
       />

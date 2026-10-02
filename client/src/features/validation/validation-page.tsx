@@ -10,12 +10,19 @@ import {
   UserIcon,
   TriangleAlertIcon,
   ScanSearchIcon,
+  FlaskConicalIcon,
+  RotateCcwIcon,
 } from 'lucide-react'
 import { PageHeader } from '@/app/layout/page-header'
 import { useDeferredValue, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import { usePreferences } from '@/app/preferences/context'
+import { usePermissions } from '@/hooks/use-permission'
+import { PatientBanner } from '@/components/lab/patient-banner'
+import { RecordLink } from '@/components/lab/record-link'
+import { RerunDialog } from '@/components/lab/rerun-dialog'
+import { SigningAs } from '@/components/lab/signing-as'
 import { useEnum, useT } from '@/i18n/context'
 import { useFormat } from '@/i18n/format'
 import { cn } from '@/lib/cn'
@@ -23,12 +30,10 @@ import { labApi, type ValidationRow } from '@/services/lab-api'
 import { useLabMutation } from '@/services/mutations'
 import {
   useLabSettings,
-  useReference,
   useValidationQueue,
   useValidationStages,
 } from '@/services/queries'
 import { useSearchParam } from '@/hooks/use-search-param'
-import { AgeSex } from '@/components/lab/patient'
 import {
   RangeText,
   ResultFlag,
@@ -43,12 +48,11 @@ import {
 import { TatIndicator } from '@/components/lab/tat'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { GuardedButton } from '@/components/lab/guarded-button'
 import { Card } from '@/components/ui/card'
 import { Dialog } from '@/components/ui/dialog'
 import { Field } from '@/components/ui/field'
 import { SearchInput, Textarea } from '@/components/ui/input'
-import { Avatar } from '@/components/ui/misc'
-import { Select } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState, ErrorState } from '@/components/ui/states'
 import { Checkbox, FilterTabs, Segmented } from '@/components/ui/toggles'
@@ -97,33 +101,34 @@ type Stage = 'review' | 'authorise'
 function Detail({
   row,
   stage,
-  signerId,
   signerCanAuthorise,
   independentReview,
 }: {
   row: ValidationRow
   stage: Stage
-  signerId: string
-  /** The signer is a pathologist or microbiologist. */
+  /** The acting user may authorise (pathologist or microbiologist). */
   signerCanAuthorise: boolean
   /** Lab policy: the analyst may not review their own results. */
   independentReview: boolean
 }) {
-  const validatorId = signerId
   const t = useT('validation')
   const tc = useT('common')
   const e = useEnum()
   const f = useFormat()
+  const { actorId } = usePreferences()
   const text = useResultText()
   const navigate = useNavigate()
   const [dialog, setDialog] = useState<'back' | 'hold' | null>(null)
+  const [rerunOpen, setRerunOpen] = useState(false)
+  const rerunReason = row.analytes.find((a) => a.firstRun?.reason)?.firstRun
+    ?.reason
   const [reason, setReason] = useState('')
   const [comment, setComment] = useState('')
   const [visibility, setVisibility] = useState<'internal' | 'report'>(
     'internal',
   )
   const validate = useLabMutation(
-    (ids: string[]) => labApi.validation.validate(ids, validatorId),
+    (ids: string[]) => labApi.validation.validate(ids),
     {
       success: (r) => t('validated', { count: r.validated }),
       onSuccess: (r) => {
@@ -131,18 +136,18 @@ function Detail({
           toast.success(t('reportReady', { report: rep.reportNo }), {
             action: {
               label: t('openReport'),
-              onClick: () => void navigate(`/laboratory/reports/${rep.id}`),
+              onClick: () => void navigate(`/reports/${rep.id}`),
             },
           })
       },
     },
   )
   const review = useLabMutation(
-    (ids: string[]) => labApi.validation.review(ids, validatorId),
+    (ids: string[]) => labApi.validation.review(ids),
     { success: (r) => t('reviewedToast', { count: r.reviewed }) },
   )
   const back = useLabMutation(
-    () => labApi.validation.sendBack(row.itemId, reason.trim(), validatorId),
+    () => labApi.validation.sendBack(row.itemId, reason.trim()),
     {
       success: () => t('sentBack', { test: row.shortName }),
       onSuccess: () => {
@@ -152,7 +157,7 @@ function Detail({
     },
   )
   const hold = useLabMutation(
-    () => labApi.validation.hold(row.itemId, reason.trim(), validatorId),
+    () => labApi.validation.hold(row.itemId, reason.trim()),
     {
       success: () => t('heldToast', { test: row.shortName }),
       onSuccess: () => {
@@ -174,35 +179,36 @@ function Detail({
 
   return (
     <Card className="flex min-h-0 flex-col overflow-hidden">
-      <div className="flex flex-wrap items-center gap-4 border-b border-line px-5 py-4">
-        <Avatar name={row.patient.name} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-base font-semibold text-fg">
-            {row.testName}{' '}
-            <span className="font-mono text-xs font-normal text-fg-subtle">
-              {row.accessionNo}
-            </span>
-          </p>
-          <p className="flex flex-wrap gap-x-2 text-meta text-fg-muted">
-            <Link
-              to={`/laboratory/patients/${row.patient.id}`}
-              className="inline-block py-0.5 font-medium text-fg hover:text-accent-text"
-            >
-              {row.patient.name}
-            </Link>
-            <span className="font-mono">{row.patient.uhid}</span>
-            <AgeSex dob={row.patient.dob} sex={row.patient.sex} />
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+      <div className="border-b border-line px-5 pt-4 pb-3">
+        <p className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="text-base font-semibold text-fg">
+            {row.testName}
+          </span>
           <PriorityBadge priority={row.priority} hideRoutine />
           <ResultStatusBadge status={row.status} />
           <TatIndicator tat={row.tat} compact />
-        </div>
+        </p>
+        <PatientBanner
+          patient={row.patient}
+          sticky={false}
+          className="mb-0"
+          extra={
+            <span className="flex items-baseline gap-1.5">
+              <span className="text-fg-muted">{tc('sampleId')}</span>
+              <RecordLink
+                kind="specimen"
+                id={row.sampleId}
+                className="font-semibold text-fg"
+              >
+                {row.accessionNo}
+              </RecordLink>
+            </span>
+          }
+        />
       </div>
       {openAlert ? (
         <Link
-          to={`/laboratory/critical-values?alert=${openAlert.id}`}
+          to={`/critical-results?alert=${openAlert.id}`}
           className="flex items-center gap-2 border-b border-danger/25 bg-danger-soft/70 px-5 py-2.5 text-meta font-medium text-danger-text hover:bg-danger-soft"
         >
           <BellRingIcon strokeWidth={2.2} className="size-4" />
@@ -227,7 +233,38 @@ function Detail({
           {t('onHoldBanner')}
         </p>
       ) : null}
-      {row.enteredById === validatorId ? (
+      {row.qcHold ? (
+        <p
+          role="status"
+          className="flex flex-wrap items-center gap-2 border-b border-danger/25 bg-danger-soft/60 px-5 py-2.5 text-meta text-danger-text"
+        >
+          <FlaskConicalIcon className="size-4 shrink-0" aria-hidden />
+          <span className="min-w-0 flex-1">
+            {t('qcHoldBanner', {
+              equipment: row.qcHold.equipment,
+              analyte: row.qcHold.analyte,
+            })}
+          </span>
+          <Link
+            to="/quality-control"
+            className="py-0.5 font-medium underline underline-offset-2"
+          >
+            {t('qcHoldLink')}
+          </Link>
+        </p>
+      ) : null}
+      {rerunReason ? (
+        <p className="flex items-start gap-2 border-b border-info/20 bg-info-soft/60 px-5 py-2.5 text-meta text-info-text">
+          <RotateCcwIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <span>
+            {t('rerunBanner', { reason: rerunReason })}
+            {row.rerunCount && row.rerunCount > 1
+              ? ` (${t('repeated', { count: row.rerunCount })})`
+              : ''}
+          </span>
+        </p>
+      ) : null}
+      {row.enteredById === actorId ? (
         <p className="flex items-center gap-2 border-b border-warning/30 bg-warning-soft/60 px-5 py-2.5 text-meta text-warning-text">
           <TriangleAlertIcon className="size-4" aria-hidden />
           {stage === 'review' && independentReview
@@ -248,7 +285,9 @@ function Detail({
               <th scope="col" className="px-3 py-2.5 font-medium">
                 {t('range')}
               </th>
-              <th scope="col" className="px-3 py-2.5 font-medium" />
+              <th scope="col" className="px-3 py-2.5 font-medium">
+                <span className="sr-only">{tc('flag')}</span>
+              </th>
               <th scope="col" className="px-3 py-2.5 text-right font-medium">
                 {t('previous')}
               </th>
@@ -278,6 +317,16 @@ function Detail({
                         {t('remarks', { text: a.remarks })}
                       </span>
                     ) : null}
+                    {a.firstRun ? (
+                      <span
+                        className={cn(
+                          'block text-xs tabular-nums',
+                          valueTone(a.firstRun.flag),
+                        )}
+                      >
+                        {t('firstRun', { value: text(a.firstRun.value, a) })}
+                      </span>
+                    ) : null}
                   </td>
                   <td
                     className={cn(
@@ -289,6 +338,11 @@ function Detail({
                     <span className="text-xs font-normal text-fg-subtle">
                       {a.unit}
                     </span>
+                    {a.dilution ? (
+                      <span className="block text-2xs font-normal text-fg-subtle">
+                        {t('dilutionOf', { n: a.dilution })}
+                      </span>
+                    ) : null}
                   </td>
                   <td className="px-3 py-2.5 text-xs">
                     <div className="flex items-center gap-2">
@@ -427,6 +481,17 @@ function Detail({
             </span>
           ) : null}
         </span>
+        {row.status !== 'held' ? (
+          <GuardedButton
+            permission="result.rerun"
+            variant="ghost"
+            disabled={row.sampleOnHold}
+            onClick={() => setRerunOpen(true)}
+          >
+            <RotateCcwIcon />
+            {t('rerun')}
+          </GuardedButton>
+        ) : null}
         <Button
           variant="ghost"
           className="text-danger-text hover:bg-danger-soft hover:text-danger-text"
@@ -442,17 +507,19 @@ function Detail({
           </Button>
         ) : null}
         {stage === 'review' && signerCanAuthorise ? (
-          <Button
-            disabled={row.sampleOnHold}
+          <GuardedButton
+            permission="result.authorise"
+            disabled={row.sampleOnHold || Boolean(row.qcHold)}
             loading={validate.isPending}
             onClick={() => validate.mutate([row.itemId])}
           >
             <BadgeCheckIcon />
             {t('reviewAndAuthorise')}
-          </Button>
+          </GuardedButton>
         ) : null}
         {stage === 'review' ? (
-          <Button
+          <GuardedButton
+            permission="result.verify"
             variant="primary"
             disabled={row.sampleOnHold}
             loading={review.isPending}
@@ -460,11 +527,13 @@ function Detail({
           >
             <ScanSearchIcon />
             {t('markReviewed')}
-          </Button>
+          </GuardedButton>
         ) : (
           <Button
             variant="primary"
-            disabled={row.sampleOnHold || !signerCanAuthorise}
+            disabled={
+              row.sampleOnHold || Boolean(row.qcHold) || !signerCanAuthorise
+            }
             loading={validate.isPending}
             onClick={() => validate.mutate([row.itemId])}
           >
@@ -511,6 +580,11 @@ function Detail({
           />
         </Field>
       </Dialog>
+      <RerunDialog
+        item={{ itemId: row.itemId, name: row.testName }}
+        open={rerunOpen}
+        onOpenChange={setRerunOpen}
+      />
       <span className="sr-only">{e('department', row.department)}</span>
     </Card>
   )
@@ -518,27 +592,19 @@ function Detail({
 
 const STAGES = ['review', 'authorise'] as const
 const FILTERS = ['all', 'critical', 'abnormal', 'normal', 'held'] as const
-/** Technical review may be done by lab staff; authorisation by doctors. */
-const REVIEWER_ROLES = [
-  'technician',
-  'lab-manager',
-  'pathologist',
-  'microbiologist',
-]
-const VALIDATOR_ROLES = ['pathologist', 'microbiologist']
 
 export function Component() {
   const t = useT('validation')
   const tc = useT('common')
   const e = useEnum()
   const navigate = useNavigate()
-  const { department, actorId } = usePreferences()
-  const { data: reference } = useReference()
+  const { department } = usePreferences()
   const { data: settings } = useLabSettings()
-  const actorRole = reference?.staff.find((s) => s.id === actorId)?.role
+  const { can } = usePermissions()
+  const signerCanAuthorise = can('result.authorise')
   const [stage, setStage] = useSearchParam<Stage>(
     'stage',
-    actorRole && VALIDATOR_ROLES.includes(actorRole) ? 'authorise' : 'review',
+    signerCanAuthorise ? 'authorise' : 'review',
     STAGES,
   )
   const [filter, setFilter] = useSearchParam<Filter>('filter', 'all', FILTERS)
@@ -546,20 +612,6 @@ export function Component() {
   const [query, setQuery] = useState('')
   const q = useDeferredValue(query)
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const signers = (reference?.staff ?? []).filter((s) =>
-    (stage === 'review' ? REVIEWER_ROLES : VALIDATOR_ROLES).includes(s.role),
-  )
-  const [signerChoice, setSignerChoice] = useState<string | undefined>()
-  const signerId =
-    signerChoice && signers.some((s) => s.id === signerChoice)
-      ? signerChoice
-      : signers.some((s) => s.id === actorId)
-        ? actorId
-        : (signers[0]?.id ?? '')
-  const signerRole = signers.find((s) => s.id === signerId)?.role
-  const signerCanAuthorise = Boolean(
-    signerRole && VALIDATOR_ROLES.includes(signerRole),
-  )
   const stages = useValidationStages(department ? { department } : {})
   const { data, isPending, isError, refetch } = useValidationQueue({
     q,
@@ -585,20 +637,19 @@ export function Component() {
       r.abnormalCount === 0 &&
       r.criticalCount === 0 &&
       r.deltaFlags === 0 &&
-      !r.sampleOnHold,
+      !r.sampleOnHold &&
+      !(stage === 'authorise' && r.qcHold),
   )
 
   const bulk = useLabMutation(
     (ids: string[]) =>
       stage === 'review'
-        ? labApi.validation.review(ids, signerId).then((r) => ({
+        ? labApi.validation.review(ids).then((r) => ({
             reviewed: r.reviewed,
             validated: 0,
             readyReports: [],
           }))
-        : labApi.validation
-            .validate(ids, signerId)
-            .then((r) => ({ ...r, reviewed: 0 })),
+        : labApi.validation.validate(ids).then((r) => ({ ...r, reviewed: 0 })),
     {
       success: (r) =>
         stage === 'review'
@@ -610,7 +661,7 @@ export function Component() {
           toast.success(t('reportReady', { report: rep.reportNo }), {
             action: {
               label: t('openReport'),
-              onClick: () => void navigate(`/laboratory/reports/${rep.id}`),
+              onClick: () => void navigate(`/reports/${rep.id}`),
             },
           })
       },
@@ -643,21 +694,12 @@ export function Component() {
           </span>
         }
         actions={
-          <div className="flex items-center gap-2">
-            <span className="text-meta text-fg-muted">{t('validator')}</span>
-            <Select
-              size="sm"
-              className="w-56"
-              value={signerId || undefined}
-              onValueChange={setSignerChoice}
-              aria-label={t('validator')}
-              options={signers.map((v) => ({
-                value: v.id,
-                label: v.name,
-                description: e('staffRole', v.role),
-              }))}
-            />
-          </div>
+          <SigningAs
+            compact
+            permission={
+              stage === 'review' ? 'result.verify' : 'result.authorise'
+            }
+          />
         }
       />
       <div className="mb-4 border-b border-line">
@@ -843,6 +885,21 @@ export function Component() {
                               {t('deltaFlag')}
                             </span>
                           ) : null}
+                          {r.qcHold ? (
+                            <span className="inline-flex items-center gap-1 font-medium text-danger-text">
+                              <FlaskConicalIcon
+                                className="size-3"
+                                aria-hidden
+                              />
+                              {t('qcHoldShort')}
+                            </span>
+                          ) : null}
+                          {r.rerunCount ? (
+                            <span className="inline-flex items-center gap-1 font-medium text-info-text">
+                              <RotateCcwIcon className="size-3" aria-hidden />
+                              {t('repeated', { count: r.rerunCount })}
+                            </span>
+                          ) : null}
                           {r.sampleOnHold ? (
                             <span className="inline-flex items-center gap-1 font-medium text-warning-text">
                               <CirclePauseIcon className="size-3" aria-hidden />
@@ -866,7 +923,6 @@ export function Component() {
               key={active.itemId}
               row={active}
               stage={stage}
-              signerId={signerId}
               signerCanAuthorise={signerCanAuthorise}
               independentReview={settings?.requireIndependentReview ?? true}
             />

@@ -8,21 +8,28 @@
   display: none;
 }
 
+/* The report adds its running header, footer and "Page x of y" to the margin
+   boxes while it is on screen (usePageRules in report-sheet.tsx). */
 @page {
   size: A4;
-  margin: 12mm 12mm 14mm;
-  /* Page numbers on every printed page; browsers without margin boxes
-     simply leave them out. */
-  @bottom-right {
-    content: 'Page ' counter(page) ' of ' counter(pages);
-    font-size: 7.5pt;
-    color: #5b6670;
-  }
+  margin: 14mm 12mm 14mm;
 }
 
 @page label {
   size: 50mm 25mm;
   margin: 0;
+  @top-left {
+    content: none;
+  }
+  @top-right {
+    content: none;
+  }
+  @bottom-left {
+    content: none;
+  }
+  @bottom-right {
+    content: none;
+  }
 }
 
 @media print {

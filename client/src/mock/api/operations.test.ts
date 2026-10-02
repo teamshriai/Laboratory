@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { DAY } from '@/domain/time'
 import { startMemoryDb } from '../db/store'
 import { labApi } from './index'
+import { actingAs, STAFF } from './testing'
+
+const manager = actingAs(STAFF.manager)
 import { setActor } from './runtime'
 
 describe('laboratory operations', () => {
@@ -132,7 +135,7 @@ describe('laboratory operations', () => {
   it('assigns samples and filters the work queue', async () => {
     const list = await labApi.workQueue.list({ bucket: 'received' })
     const sample = list.rows[0]!
-    await labApi.samples.assign([sample.id], 'st_deepa')
+    await manager.samples.assign([sample.id], 'st_deepa')
     const mine = await labApi.workQueue.list({ assignee: 'st_deepa' })
     expect(mine.rows.some((r) => r.id === sample.id)).toBe(true)
     expect(list.counts.all).toBeGreaterThan(list.counts.received)
@@ -146,10 +149,10 @@ describe('laboratory operations', () => {
         preset === 'today' || preset === 'yesterday' ? 'hour' : 'day',
       )
     }
-    await labApi.system.updateSettings({ samplePrefix: 'SHL' })
+    await manager.system.updateSettings({ samplePrefix: 'SHL' })
     expect((await labApi.system.settings()).samplePrefix).toBe('SHL')
     await expect(
-      labApi.system.updateSettings({ samplePrefix: 'x1' }),
+      manager.system.updateSettings({ samplePrefix: 'x1' }),
     ).rejects.toThrow()
   })
 })

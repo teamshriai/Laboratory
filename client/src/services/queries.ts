@@ -11,6 +11,7 @@ import {
   type PatientFilters,
   type QcFilters,
   type ReportFilters,
+  type AuditFilters,
   type SampleFilters,
   type AnalyticsRange,
   type InventoryItemFilters,
@@ -289,3 +290,9 @@ export const useLabSettings = () =>
   })
 export const useDbStats = () =>
   useQuery({ queryKey: ['lab', 'db-stats'], queryFn: labApi.system.stats })
+export const useAuditLog = (filters: AuditFilters) =>
+  useQuery({
+    queryKey: ['lab', 'audit', filters],
+    queryFn: () => labApi.admin.audit(filters),
+    ...keep,
+  })

@@ -25,6 +25,7 @@ import type {
   TatTestRow,
 } from '@/services/lab-api'
 import { PatientCell } from '@/components/lab/patient'
+import { RecordLink } from '@/components/lab/record-link'
 import { ContainerChip } from '@/components/lab/sample'
 import {
   EquipmentBadge,
@@ -42,6 +43,7 @@ import { Avatar, Meter } from '@/components/ui/misc'
 import { EmptyState } from '@/components/ui/states'
 import { FilterTabs } from '@/components/ui/toggles'
 import { TAT_TARGET_PCT } from './workload'
+import { focusWhenScrollable } from '@/lib/scroll-focus'
 
 const QUEUE_STATUSES = [
   'collected',
@@ -88,14 +90,19 @@ export function QueueCard({
           const at = r.receivedAt ?? r.collectedAt
           return (
             <div className="min-w-0">
-              <p
-                className={cn(
-                  'text-meta font-semibold whitespace-nowrap',
-                  r.accessionNo ? 'font-mono text-fg' : 'text-fg-subtle',
-                )}
-              >
-                {r.accessionNo ?? t('notLabelled')}
-              </p>
+              {r.accessionNo ? (
+                <RecordLink
+                  kind="specimen"
+                  id={r.id}
+                  className="text-meta font-semibold whitespace-nowrap text-fg"
+                >
+                  {r.accessionNo}
+                </RecordLink>
+              ) : (
+                <p className="text-meta font-semibold whitespace-nowrap text-fg-subtle">
+                  {t('notLabelled')}
+                </p>
+              )}
               <p className="mt-0.5 flex items-center gap-2 text-xs whitespace-nowrap text-fg-muted">
                 <ContainerChip
                   container={r.container}
@@ -321,7 +328,7 @@ export function EquipmentCard({ rows }: { rows: EquipmentRow[] }) {
         title={t('equipmentTitle')}
         action={
           <ViewLink
-            to={`/laboratory/equipment?department=${department}`}
+            to={`/equipment?department=${department}`}
             label={t('viewEquipment')}
           />
         }
@@ -388,7 +395,7 @@ export function QcTodayCard({ runs }: { runs: QcRow[] }) {
         title={t('qcTitle')}
         action={
           <ViewLink
-            to={`/laboratory/quality-control?department=${department}`}
+            to={`/quality-control?department=${department}`}
             label={t('viewQc')}
           />
         }
@@ -422,7 +429,10 @@ export function QcTodayCard({ runs }: { runs: QcRow[] }) {
                 </div>
               ))}
             </dl>
-            <ul className="mt-3 max-h-80 scrollbar-thin divide-y divide-line/70 overflow-y-auto">
+            <ul
+              ref={focusWhenScrollable}
+              className="focus-ring mt-3 max-h-80 scrollbar-thin divide-y divide-line/70 overflow-y-auto"
+            >
               {sorted.map((r) => (
                 <li key={r.id} className="flex items-center gap-3 py-2.5">
                   <div className="min-w-0 flex-1">
@@ -479,10 +489,7 @@ export function TatByTestCard({
         icon={<TimerIcon />}
         title={t('tatTitle')}
         action={
-          <ViewLink
-            to={`/laboratory/tat?department=${department}`}
-            label={t('viewTat')}
-          />
+          <ViewLink to={`/tat?department=${department}`} label={t('viewTat')} />
         }
       />
       <CardBody className="flex flex-1 flex-col pt-1">
@@ -667,7 +674,7 @@ export function TestsCard({ tests }: { tests: DepartmentTest[] }) {
         title={t('testsTitle')}
         action={
           <ViewLink
-            to={`/laboratory/test-catalog?department=${department}`}
+            to={`/test-catalog?department=${department}`}
             label={t('openCatalog')}
           />
         }
@@ -679,9 +686,7 @@ export function TestsCard({ tests }: { tests: DepartmentTest[] }) {
           rows={tests}
           getRowId={(r) => r.id}
           rowLabel={(r) => r.name}
-          onRowClick={(r) =>
-            void navigate(`/laboratory/test-catalog?test=${r.id}`)
-          }
+          onRowClick={(r) => void navigate(`/test-catalog?test=${r.id}`)}
           pageSize={8}
           minWidth={620}
           empty={

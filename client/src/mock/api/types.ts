@@ -29,6 +29,8 @@ import type {
   LabTest,
   LocalName,
   NotifyAttempt,
+  NotifyMethod,
+  NotifyRole,
   PendingAmendment,
   OrderStatus,
   Priority,
@@ -65,6 +67,8 @@ import type {
   HoldReason,
   LotState,
   CollectionSite,
+  AuditEntity,
+  AuditEntry,
 } from '@/domain/types'
 
 export interface PatientSummary {
@@ -102,6 +106,8 @@ export interface TestChip {
   department: DepartmentId
   status: ResultStatus
   active: boolean
+  /** Sent for repeat analysis and waiting for the repeat value. */
+  rerun?: boolean
 }
 
 // ---------- Orders ----------
@@ -284,6 +290,8 @@ export interface ResultView {
   range: RangeSnapshot | null
   critical: boolean
   remarks?: string
+  /** Dilution factor of a repeat analysis (10 = 1:10). */
+  dilution?: number
   revisions: ResultRevision[]
 }
 
@@ -338,6 +346,15 @@ export interface ValidationAnalyte {
   previous: PreviousResult | null
   delta: DeltaCheck | null
   remarks?: string
+  /** Dilution factor of this (repeat) measurement. */
+  dilution?: number
+  /** The value before the latest repeat analysis. */
+  firstRun?: {
+    value: string
+    flag: Flag | null
+    reason?: string
+    dilution?: number
+  }
 }
 
 export interface ValidationRow {
@@ -355,6 +372,10 @@ export interface ValidationRow {
   reviewedById?: string
   /** The sample is on hold: it must be resumed before validation. */
   sampleOnHold?: boolean
+  /** An open QC failure on the analyzer: authorisation waits for QC. */
+  qcHold?: { equipment: string; analyte: string }
+  /** How many times the test has been repeated. */
+  rerunCount?: number
   heldReason?: string
   comments: ItemComment[]
   sampleId: string
@@ -429,6 +450,8 @@ export interface ReportSection {
   status: ResultStatus
   validatedAt?: number
   validatedBy?: string
+  /** On the current released version (a preliminary report may omit it). */
+  released?: boolean
   rows: ReportResultRow[]
   comments: string[]
 }
@@ -474,10 +497,31 @@ export interface ReportDetail {
     status: SampleStatus
   }[]
   sections: ReportSection[]
+  /** Who signed the current version (the releasing pathologist). */
   pathologist: { name: string; qualification?: string } | null
+  /** Who medically authorised the results (ISO 15189 7.4.1.6 j). */
+  authorisers: { name: string; qualification?: string; at: number }[]
+  reviewers: { name: string; qualification?: string; at: number }[]
   enteredBy: string[]
   /** Technical reviewers of the reported results. */
   reviewedBy: string[]
+  /** Tests on this report, and how many are authorised. */
+  testCount: number
+  authorisedCount: number
+  withdrawn?: { at: number; byName: string; reason: string }
+  /** Critical values on this report and how each was communicated. */
+  criticals: {
+    itemId: string
+    analyteName: string
+    value: string
+    unit: string
+    state: CriticalState
+    notifiedTo?: string
+    notifiedRole?: NotifyRole
+    method?: NotifyMethod
+    notifiedAt?: number
+    readBack?: boolean
+  }[]
   /** When the last result on the report was authorised. */
   authorisedAt?: number
   previousReports: {
@@ -757,7 +801,17 @@ export interface WorkQueueView {
 
 // ---------- Search & notifications ----------
 
+export interface SearchExact {
+  kind: 'specimen' | 'order' | 'patient' | 'report'
+  id: string
+  /** The identifier as recorded. */
+  label: string
+  patientName: string
+}
+
 export interface SearchResults {
+  /** The record whose number matches the search exactly. */
+  exact: SearchExact | null
   patients: PatientSummary[]
   orders: {
     id: string
@@ -854,6 +908,15 @@ export interface TatTestRow {
   currentMaxMin: number | null
 }
 
+export type TatSegment = 'transport' | 'bench-wait' | 'analysis' | 'release'
+
+export interface TatPhases {
+  segments: { key: TatSegment; medianMin: number | null; count: number }[]
+  /** Collection to release. */
+  totalMedianMin: number | null
+  count: number
+}
+
 export interface TatView {
   summary: {
     onTimePct: number | null
@@ -864,6 +927,8 @@ export interface TatView {
     approachingNow: number
   }
   tests: TatTestRow[]
+  /** Median minutes per phase of completed tests, STAT kept separate. */
+  phases: Record<'stat' | 'other', TatPhases>
   atRisk: {
     itemId: string
     sampleId: string
@@ -1061,6 +1126,9 @@ export const WORK_BUCKETS = [
   'awaiting-review',
   'awaiting-authorisation',
   'critical',
+  'stat',
+  'transit-delayed',
+  'recollection',
   'at-risk',
   'overdue',
   'rejected',
@@ -1239,6 +1307,8 @@ export interface AnalyticsReport {
   byDepartment: {
     department: DepartmentId
     tests: number
+    /** Completed tests the TAT figures are measured from. */
+    tatCount: number
     tatAvgMin: number | null
     onTimePct: number | null
   }[]
@@ -1260,3 +1330,27 @@ export interface AnalyticsReport {
 }
 
 export type { LabSettings }
+
+// ---------- Administration ----------
+
+export interface AuditFilters {
+  entity?: AuditEntity
+  action?: string
+  by?: string
+  date?: DatePreset
+  q?: string
+}
+
+export interface AuditRow extends AuditEntry {
+  byName: string
+  /** What the entry is about, with a link to it when it still exists. */
+  record: { label: string; link?: string }
+}
+
+export interface AuditList {
+  rows: AuditRow[]
+  /** Entries kept in this browser (the log is capped by storage). */
+  total: number
+  entities: AuditEntity[]
+  actions: string[]
+}

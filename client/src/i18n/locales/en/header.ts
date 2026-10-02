@@ -1,13 +1,10 @@
 export default {
   breadcrumb: 'Breadcrumb',
-  searchPlaceholder: 'Search patient, UHID, sample ID, order ID...',
+  searchPlaceholder: 'Search patient, UHID, accession number, order ID...',
   searchShort: 'Search',
   notifications: 'Notifications',
   notificationsUnread_one: '{count} unread notification',
   notificationsUnread_other: '{count} unread notifications',
-  criticalPill_one: '{count} critical',
-  criticalPill_other: '{count} critical',
-  criticalPillLabel: 'Critical results awaiting action',
   theme: 'Theme',
   darkMode: 'Dark mode',
   language: 'Language',
@@ -22,6 +19,7 @@ export default {
   actingAsHint:
     'Recorded on the actions you take. There is no login in this prototype.',
   settings: 'Settings and preferences',
-  resetDemo: 'Reset demo data',
-  shift: 'Morning shift',
+  demoNotice:
+    'Demo system: data is stored only in this browser and is not for clinical use.',
+  demoNoticeMore: 'What this means',
 } as const

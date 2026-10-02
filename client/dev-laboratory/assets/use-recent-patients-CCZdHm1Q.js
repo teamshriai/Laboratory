@@ -1,1 +1,0 @@
-import{r as e}from"./rolldown-runtime-hePW80VL.js";import{i as t}from"./react-CR5VJ85Q.js";import{t as n}from"./use-persistent-state--Pfq9Zgs.js";var r=e(t(),1);function i(){let[e,t]=n(`recent-patients`,[]);return{recent:e,remember:(0,r.useCallback)(e=>t(t=>[e,...t.filter(t=>t.id!==e.id)].slice(0,6)),[t])}}export{i as t};

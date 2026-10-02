@@ -1,1 +1,0 @@
-import{t as e}from"./react-CR5VJ85Q.js";import{lt as t}from"./skeleton-BnfMu90_.js";var n=e();function r({alt:e=``,className:r}){return(0,n.jsx)(`img`,{src:`/favicon-192.png`,alt:e,width:192,height:192,decoding:`async`,className:t(`size-8 shrink-0 object-contain`,r)})}export{r as t};

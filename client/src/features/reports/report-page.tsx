@@ -1,4 +1,6 @@
 import {
+  BanIcon,
+  HourglassIcon,
   ArrowLeftIcon,
   BellRingIcon,
   HistoryIcon,
@@ -22,18 +24,23 @@ import {
   type CorrectionReason,
   type ShareChannel,
 } from '@/domain/types'
-import { usePreferences } from '@/app/preferences/context'
+import { usePermissions } from '@/hooks/use-permission'
+import { PatientBanner } from '@/components/lab/patient-banner'
+import { RecordLink } from '@/components/lab/record-link'
+import { SigningAs } from '@/components/lab/signing-as'
 import { useNow } from '@/hooks/use-now'
 import { useEnum, useLanguage, useT } from '@/i18n/context'
 import { LANGUAGE_NAMES } from '@/i18n/core'
 import { useFormat } from '@/i18n/format'
 import { isLabApiError, labApi, type ReportDetail } from '@/services/lab-api'
 import { useLabMutation } from '@/services/mutations'
-import { useLabSettings, useReference, useReport } from '@/services/queries'
+import { useLabSettings, useReport } from '@/services/queries'
 import { ReportStatusBadge } from '@/components/lab/status'
 import { Button, buttonVariants } from '@/components/ui/button'
+import { GuardedButton } from '@/components/lab/guarded-button'
 import { Card } from '@/components/ui/card'
 import { Dialog } from '@/components/ui/dialog'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Field } from '@/components/ui/field'
 import { Input, Textarea } from '@/components/ui/input'
 import { usePrint, usePrintable } from '@/components/ui/print-context'
@@ -43,6 +50,7 @@ import { EmptyState, ErrorState } from '@/components/ui/states'
 import { Segmented } from '@/components/ui/toggles'
 import { FormErrorSummary } from '@/components/ui/form-errors'
 import { ReportSheet } from './report-sheet'
+import { focusWhenScrollable } from '@/lib/scroll-focus'
 
 function Block({
   title,
@@ -141,67 +149,47 @@ function ShareDialog({
   )
 }
 
-/** Pathologists and microbiologists who can sign a report. */
-function useSignatories() {
-  const { actorId } = usePreferences()
-  const { data: reference } = useReference()
-  const signatories = (reference?.staff ?? []).filter(
-    (s) => s.role === 'pathologist' || s.role === 'microbiologist',
-  )
-  const defaultId = signatories.some((p) => p.id === actorId)
-    ? actorId
-    : (signatories[0]?.id ?? '')
-  return { signatories, defaultId, actorId }
-}
-
-function SignatorySelect({
-  value,
-  onChange,
-}: {
-  value: string
-  onChange: (id: string) => void
-}) {
-  const t = useT('reports')
-  const e = useEnum()
-  const { signatories } = useSignatories()
-  return (
-    <Field label={t('signatory')} required hint={t('signatoryHint')}>
-      <Select
-        value={value || undefined}
-        onValueChange={onChange}
-        options={signatories.map((s) => ({
-          value: s.id,
-          label: s.name,
-          description: e('staffRole', s.role),
-        }))}
-      />
-    </Field>
-  )
-}
-
 /** Signing and releasing is clinically significant: confirm who signs. */
 function ReleaseDialog({
   report,
+  preliminary,
   onClose,
 }: {
   report: ReportDetail
+  /** Release the authorised tests now; the final report follows. */
+  preliminary: boolean
   onClose: () => void
 }) {
   const t = useT('reports')
   const tc = useT('common')
-  const { defaultId } = useSignatories()
-  const [by, setBy] = useState(defaultId)
-  const release = useLabMutation(() => labApi.reports.release(report.id, by), {
-    success: () => t('released', { report: report.reportNo }),
-    onSuccess: onClose,
-  })
+  const { can } = usePermissions()
+  const release = useLabMutation(
+    () => labApi.reports.release(report.id, { preliminary }),
+    {
+      success: () =>
+        t(preliminary ? 'releasedPreliminary' : 'released', {
+          report: report.reportNo,
+          doctor: report.order.doctor.name,
+        }),
+      onSuccess: onClose,
+    },
+  )
   return (
     <Dialog
       open
       size="sm"
       onOpenChange={(o) => !o && onClose()}
-      title={t('releaseTitle', { report: report.reportNo })}
-      description={t('releaseBody', { patient: report.patient.name })}
+      title={t(preliminary ? 'releasePreliminaryTitle' : 'releaseTitle', {
+        report: report.reportNo,
+      })}
+      description={
+        preliminary
+          ? t('releasePreliminaryBody', {
+              authorised: report.authorisedCount,
+              total: report.testCount,
+            })
+          : t('releaseBody', { patient: report.patient.name })
+      }
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
@@ -209,18 +197,77 @@ function ReleaseDialog({
           </Button>
           <Button
             variant="primary"
-            disabled={!by}
+            disabled={!can('report.release')}
             loading={release.isPending}
             onClick={() => release.mutate()}
           >
             <BadgeCheckIcon />
-            {t('signAndRelease')}
+            {t(preliminary ? 'signAndReleasePreliminary' : 'signAndRelease')}
           </Button>
         </>
       }
     >
-      <SignatorySelect value={by} onChange={setBy} />
+      <div className="grid gap-3">
+        {report.openCriticals > 0 ? (
+          <p className="flex items-start gap-2 rounded-lg bg-danger-soft p-2.5 text-xs text-danger-text">
+            <BellRingIcon strokeWidth={2.2} className="mt-px size-4 shrink-0" />
+            {t('releaseWarnCritical')}
+          </p>
+        ) : null}
+        <SigningAs permission="report.release" />
+      </div>
     </Dialog>
+  )
+}
+
+/** Withdraws a released report, with a reason that is printed on it. */
+function WithdrawDialog({
+  report,
+  onClose,
+}: {
+  report: ReportDetail
+  onClose: () => void
+}) {
+  const t = useT('reports')
+  const [reason, setReason] = useState('')
+  const [tried, setTried] = useState(false)
+  const withdraw = useLabMutation(
+    () => labApi.reports.withdraw(report.id, reason),
+    {
+      success: () => t('withdrawnToast', { report: report.reportNo }),
+      onSuccess: onClose,
+    },
+  )
+  return (
+    <ConfirmDialog
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title={t('withdrawTitle', { report: report.reportNo })}
+      description={t('withdrawBody', { doctor: report.order.doctor.name })}
+      confirmLabel={t('withdraw')}
+      tone="danger"
+      loading={withdraw.isPending}
+      onConfirm={() => {
+        setTried(true)
+        if (reason.trim()) withdraw.mutate()
+      }}
+    >
+      <div className="grid gap-3">
+        <Field
+          label={t('withdrawReason')}
+          required
+          error={tried && !reason.trim() ? 'forms.required' : undefined}
+        >
+          <Textarea
+            value={reason}
+            onChange={(ev) => setReason(ev.target.value)}
+            rows={3}
+            placeholder={t('withdrawReasonPlaceholder')}
+          />
+        </Field>
+        <SigningAs permission="report.withdraw" />
+      </div>
+    </ConfirmDialog>
   )
 }
 
@@ -238,7 +285,6 @@ function CorrectDialog({
   const t = useT('reports')
   const tc = useT('common')
   const e = useEnum()
-  const { actorId } = usePreferences()
   const rows = report.sections.flatMap((s) =>
     s.rows.filter((r) => r.resultType !== 'antibiogram' && r.value !== null),
   )
@@ -258,11 +304,11 @@ function CorrectDialog({
     )
   const request = useLabMutation(
     () =>
-      labApi.reports.requestCorrection(
-        report.id,
-        { corrections: changes, reason: reason!, comments },
-        actorId,
-      ),
+      labApi.reports.requestCorrection(report.id, {
+        corrections: changes,
+        reason: reason!,
+        comments,
+      }),
     { success: () => t('correctionRequested'), onSuccess: onClose },
   )
   const errors = {
@@ -283,7 +329,8 @@ function CorrectDialog({
           <Button variant="ghost" onClick={onClose}>
             {tc('cancel')}
           </Button>
-          <Button
+          <GuardedButton
+            permission="report.amend.request"
             variant="primary"
             loading={request.isPending}
             onClick={() => {
@@ -292,7 +339,7 @@ function CorrectDialog({
             }}
           >
             {t('requestCorrection')}
-          </Button>
+          </GuardedButton>
         </>
       }
     >
@@ -393,13 +440,12 @@ function PendingAmendmentBlock({ report }: { report: ReportDetail }) {
   const tc = useT('common')
   const e = useEnum()
   const f = useFormat()
-  const { defaultId } = useSignatories()
-  const [by, setBy] = useState(defaultId)
+  const { can } = usePermissions()
   const [declining, setDeclining] = useState(false)
   const [reason, setReason] = useState('')
   const pending = report.pendingAmendment
   const authorise = useLabMutation(
-    () => labApi.reports.authoriseCorrection(report.id, by),
+    () => labApi.reports.authoriseCorrection(report.id),
     {
       success: (r) => t('corrected', { version: r.version }),
       onSuccess: (r) => {
@@ -408,7 +454,7 @@ function PendingAmendmentBlock({ report }: { report: ReportDetail }) {
     },
   )
   const decline = useLabMutation(
-    () => labApi.reports.declineCorrection(report.id, reason, by),
+    () => labApi.reports.declineCorrection(report.id, reason),
     {
       success: () => t('correctionDeclined'),
       onSuccess: () => setDeclining(false),
@@ -450,12 +496,17 @@ function PendingAmendmentBlock({ report }: { report: ReportDetail }) {
       <p className="text-xs text-fg-muted">
         {e('correctionReason', pending.reason)}: {pending.comments}
       </p>
-      <SignatorySelect value={by} onChange={setBy} />
+      <SigningAs permission="report.amend.authorise" />
       <div className="grid grid-cols-2 gap-2">
-        <Button onClick={() => setDeclining(true)}>{t('decline')}</Button>
+        <Button
+          disabled={!can('report.amend.authorise')}
+          onClick={() => setDeclining(true)}
+        >
+          {t('decline')}
+        </Button>
         <Button
           variant="primary"
-          disabled={!by}
+          disabled={!can('report.amend.authorise')}
           loading={authorise.isPending}
           onClick={() => authorise.mutate()}
         >
@@ -515,12 +566,28 @@ function Panel({
   const { print } = usePrint()
   const [sharing, setSharing] = useState(false)
   const [correcting, setCorrecting] = useState(false)
-  const [releasing, setReleasing] = useState(false)
+  const [releasing, setReleasing] = useState<'final' | 'preliminary' | null>(
+    null,
+  )
+  const [withdrawing, setWithdrawing] = useState(false)
+  const { data: settings } = useLabSettings()
   const [interp, setInterp] = useState(report.interpretation ?? '')
+  // Final or amended: released in full (corrections and withdrawal apply).
   const released =
     report.status === 'released' ||
     report.status === 'corrected' ||
     report.status === 'amendment-pending'
+  const withdrawn = report.status === 'withdrawn'
+  const allAuthorised =
+    report.testCount > 0 && report.authorisedCount === report.testCount
+  const canFinal = !released && allAuthorised
+  const canPreliminary =
+    !released &&
+    !withdrawn &&
+    report.authorisedCount > 0 &&
+    report.authorisedCount < report.testCount
+  const heldForCritical =
+    Boolean(settings?.holdReleaseForCriticals) && report.openCriticals > 0
   const saveInterp = useLabMutation(
     () => labApi.reports.setInterpretation(report.id, interp),
     { success: () => t('interpretationSaved') },
@@ -546,20 +613,39 @@ function Panel({
   return (
     <div className="grid content-start gap-4">
       <Card className="grid gap-2 p-4">
+        {withdrawn && report.withdrawn ? (
+          <p className="flex items-start gap-2 rounded-lg bg-danger-soft p-2.5 text-xs text-danger-text">
+            <BanIcon className="mt-px size-4 shrink-0" aria-hidden />
+            {t('withdrawnBanner', {
+              time: f.dateTime(report.withdrawn.at),
+              name: report.withdrawn.byName,
+              reason: report.withdrawn.reason,
+            })}
+          </p>
+        ) : null}
         {!released ? (
           <>
-            <Button
+            <GuardedButton
+              permission="report.release"
               variant="primary"
               size="lg"
-              disabled={
-                report.status !== 'validated' || report.openCriticals > 0
-              }
-              onClick={() => setReleasing(true)}
+              disabled={!canFinal || heldForCritical}
+              onClick={() => setReleasing('final')}
             >
               <BadgeCheckIcon />
-              {t('release')}
-            </Button>
-            {report.openCriticals > 0 ? (
+              {withdrawn ? t('reissue') : t('releaseFinal')}
+            </GuardedButton>
+            {canPreliminary ? (
+              <GuardedButton
+                permission="report.release"
+                disabled={heldForCritical}
+                onClick={() => setReleasing('preliminary')}
+              >
+                <HourglassIcon />
+                {t('releasePreliminary')}
+              </GuardedButton>
+            ) : null}
+            {heldForCritical ? (
               <p className="flex items-start gap-2 rounded-lg bg-danger-soft p-2.5 text-xs text-danger-text">
                 <BellRingIcon
                   strokeWidth={2.2}
@@ -567,10 +653,15 @@ function Panel({
                 />
                 {t('releaseBlocked')}
               </p>
-            ) : report.status !== 'validated' ? (
+            ) : !allAuthorised ? (
               <p className="flex items-start gap-2 rounded-lg bg-surface-2 p-2.5 text-xs text-fg-muted">
                 <TriangleAlertIcon className="mt-px size-4 shrink-0" />
-                {t('releaseNotReady')}
+                {report.authorisedCount > 0
+                  ? t('preliminaryHint', {
+                      authorised: report.authorisedCount,
+                      total: report.testCount,
+                    })
+                  : t('releaseNotReady')}
               </p>
             ) : null}
           </>
@@ -585,13 +676,24 @@ function Panel({
               <Share2Icon />
               {t('share')}
             </Button>
-            <Button
+            <GuardedButton
+              permission="report.amend.request"
               disabled={Boolean(report.pendingAmendment)}
               onClick={() => setCorrecting(true)}
             >
               <PencilIcon />
               {t('correct')}
-            </Button>
+            </GuardedButton>
+            <GuardedButton
+              permission="report.withdraw"
+              variant="danger-soft"
+              className="col-span-2"
+              disabled={Boolean(report.pendingAmendment)}
+              onClick={() => setWithdrawing(true)}
+            >
+              <BanIcon />
+              {t('withdraw')}
+            </GuardedButton>
           </div>
         ) : null}
       </Card>
@@ -651,6 +753,13 @@ function Panel({
                       time: f.dateTime(v.releasedAt),
                       by: v.releasedByName,
                     })}
+                  </p>
+                  <p className="text-xs text-fg-subtle">
+                    {v.kind === 'preliminary'
+                      ? t('kindPreliminary')
+                      : v.kind === 'amended' || (!v.kind && v.version > 1)
+                        ? t('kindAmended')
+                        : t('kindFinal')}
                   </p>
                   {v.correctionReason ? (
                     <p className="text-xs text-warning-text">
@@ -713,7 +822,7 @@ function Panel({
             {report.previousReports.map((r) => (
               <li key={r.id}>
                 <Link
-                  to={`/laboratory/reports/${r.id}`}
+                  to={`/reports/${r.id}`}
                   className="-mx-2 flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-surface-2"
                 >
                   <span className="min-w-0 text-meta">
@@ -736,8 +845,15 @@ function Panel({
       {correcting ? (
         <CorrectDialog report={report} onClose={() => setCorrecting(false)} />
       ) : null}
+      {withdrawing ? (
+        <WithdrawDialog report={report} onClose={() => setWithdrawing(false)} />
+      ) : null}
       {releasing ? (
-        <ReleaseDialog report={report} onClose={() => setReleasing(false)} />
+        <ReleaseDialog
+          report={report}
+          preliminary={releasing === 'preliminary'}
+          onClose={() => setReleasing(null)}
+        />
       ) : null}
     </div>
   )
@@ -746,6 +862,7 @@ function Panel({
 export function Component() {
   const { reportId } = useParams()
   const t = useT('reports')
+  const tc = useT('common')
   const now = useNow()
   const { data: labSettings } = useLabSettings()
   const { language } = useLanguage()
@@ -773,7 +890,7 @@ export function Component() {
             title={t('notFound')}
             action={
               <Link
-                to="/laboratory/reports"
+                to="/reports"
                 className={buttonVariants({ variant: 'primary' })}
               >
                 <ArrowLeftIcon />
@@ -789,21 +906,31 @@ export function Component() {
   return (
     <>
       <PageHeader
-        back={{ to: '/laboratory/reports', label: t('title') }}
+        back={{ to: '/reports', label: t('title') }}
         title={<span className="font-mono">{report.reportNo}</span>}
         documentTitle={report.reportNo}
         titleExtra={<ReportStatusBadge status={report.status} />}
-        meta={
-          <Link
-            to={`/laboratory/patients/${report.patient.id}`}
-            className="font-medium text-fg-muted hover:text-fg hover:underline"
-          >
-            {report.patient.name} · {report.patient.uhid}
-          </Link>
+      />
+      <PatientBanner
+        patient={report.patient}
+        extra={
+          <span className="flex items-baseline gap-1.5">
+            <span className="text-fg-muted">{tc('orderNo')}</span>
+            <RecordLink
+              kind="order"
+              id={report.order.id}
+              className="font-semibold text-fg"
+            >
+              {report.order.orderNo}
+            </RecordLink>
+          </span>
         }
       />
       <div className="grid items-start gap-5 xl:grid-cols-[1fr_20rem]">
-        <div className="overflow-x-auto rounded-xl bg-surface-3/70 p-4 sm:p-8">
+        <div
+          ref={focusWhenScrollable}
+          className="focus-ring overflow-x-auto rounded-xl bg-surface-3/70 p-4 sm:p-8"
+        >
           <ReportSheet
             report={report}
             lang={sheetLang === 'en' ? 'en' : language}

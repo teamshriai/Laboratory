@@ -103,6 +103,10 @@ function trackScrollEdges(el: HTMLDivElement | null) {
     const max = el.scrollWidth - el.clientWidth
     el.toggleAttribute('data-scrolled', el.scrollLeft > 1)
     el.toggleAttribute('data-more-end', el.scrollLeft < max - 1)
+    // Only a table that actually scrolls takes a tab stop, so keyboard users
+    // can reach the hidden columns (WCAG 2.1.1).
+    if (max > 1) el.tabIndex = 0
+    else el.removeAttribute('tabindex')
   }
   update()
   el.addEventListener('scroll', update, { passive: true })
@@ -338,7 +342,9 @@ export function DataTable<T>({
       <div
         ref={trackScrollEdges}
         className={cn(
-          'group/scroll isolate scrollbar-thin overflow-auto',
+          // Positioned, so visually hidden text in a cell stays inside the
+          // scroll box instead of widening the page.
+          'group/scroll focus-ring relative isolate scrollbar-thin overflow-auto',
           layout && primary && 'max-md:hidden',
         )}
         style={maxHeight ? { maxHeight } : undefined}

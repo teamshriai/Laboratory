@@ -46,6 +46,7 @@ import {
 } from '@/components/charts/theme'
 import { Card, CardHeader } from '@/components/ui/card'
 import { IconGlyph } from '@/components/ui/icon-tile'
+import { focusWhenScrollable } from '@/lib/scroll-focus'
 
 type Report = AnalyticsReport
 type Bucket = Report['buckets'][number]
@@ -208,7 +209,10 @@ export function DepartmentCard({ report }: { report: Report }) {
         tone="indigo"
         title={t('departments')}
       />
-      <div className="scrollbar-thin overflow-x-auto px-5 pb-4">
+      <div
+        ref={focusWhenScrollable}
+        className="focus-ring scrollbar-thin overflow-x-auto px-5 pb-4"
+      >
         <table className="w-full min-w-[480px] text-meta">
           <thead>
             <tr className="text-left text-xs text-fg-muted">
@@ -262,6 +266,11 @@ export function DepartmentCard({ report }: { report: Report }) {
             ))}
           </tbody>
         </table>
+        <p className="mt-2 text-xs text-fg-subtle">
+          {t('departmentTatNote', {
+            count: rows.reduce((n, r) => n + r.tatCount, 0),
+          })}
+        </p>
       </div>
     </Card>
   )
@@ -476,7 +485,7 @@ export function InventoryCard({ report }: { report: Report }) {
         title={t('inventory')}
         action={
           <Link
-            to="/laboratory/inventory"
+            to="/inventory"
             className="tap-reach text-xs font-medium text-accent-text hover:underline"
           >
             {t('viewInventory')}

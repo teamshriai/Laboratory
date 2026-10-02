@@ -274,16 +274,28 @@ export const patientsApi = {
         }))
         .toSorted((a, b) => b.points.length - a.points.length)
       const timeline: PatientDetail['timeline'] = []
+      // Enum values travel as "enum:group.value" and are shown translated.
+      const enumParam = (group: string, value: unknown) =>
+        typeof value === 'string' && value ? `enum:${group}.${value}` : ''
       for (const o of orders) {
-        for (const h of o.history)
+        for (const h of o.history) {
+          // The specimen's own entry records rejections (with the reason).
+          if (h.type === 'rejection-recorded') continue
           timeline.push({
             id: h.id,
             at: h.at,
             type: `order-${h.type}`,
-            params: { orderNo: o.orderNo ?? '', ...h.params },
+            params: {
+              orderNo: o.orderNo ?? '',
+              ...h.params,
+              ...(h.type === 'cancelled'
+                ? { reason: enumParam('cancelReason', h.params?.reason) }
+                : {}),
+            },
             byName: staffName(db, h.by),
-            link: `/laboratory/orders?order=${o.id}`,
+            link: `/orders?order=${o.id}`,
           })
+        }
       }
       for (const s of samples) {
         for (const h of s.history) {
@@ -293,6 +305,7 @@ export const patientsApi = {
               'received',
               'rejected',
               'results-entered',
+              'rerun-requested',
               'completed',
             ].includes(h.type)
           )
@@ -301,22 +314,93 @@ export const patientsApi = {
             id: h.id,
             at: h.at,
             type: `sample-${h.type}`,
-            params: { accession: s.accessionNo ?? '', ...h.params },
+            params: {
+              accession: s.accessionNo ?? '',
+              ...h.params,
+              ...(h.type === 'rejected'
+                ? { reason: enumParam('rejectionReason', h.params?.reason) }
+                : {}),
+            },
             byName: staffName(db, h.by),
-            link: `/laboratory/samples/${s.id}`,
+            link: `/specimens/${s.id}`,
           })
         }
       }
       for (const r of Object.values(db.reports)) {
         if (r.patientId !== id) continue
+        const link = `/reports/${r.id}`
         for (const v of r.versions)
           timeline.push({
             id: `${r.id}_v${v.version}`,
             at: v.releasedAt,
-            type: v.version > 1 ? 'report-corrected' : 'report-released',
-            params: { report: r.reportNo, version: v.version },
+            type:
+              v.kind === 'preliminary'
+                ? 'report-preliminary'
+                : v.kind === 'amended' || (!v.kind && v.version > 1)
+                  ? 'report-corrected'
+                  : 'report-released',
+            params: {
+              report: r.reportNo,
+              version: v.version,
+              ...(v.correctionReason
+                ? { reason: enumParam('correctionReason', v.correctionReason) }
+                : {}),
+            },
             byName: staffName(db, v.releasedBy),
-            link: `/laboratory/reports/${r.id}`,
+            link,
+          })
+        if (r.pendingAmendment)
+          timeline.push({
+            id: `${r.id}_amend`,
+            at: r.pendingAmendment.requestedAt,
+            type: 'report-amendment-requested',
+            params: {
+              report: r.reportNo,
+              reason: enumParam('correctionReason', r.pendingAmendment.reason),
+            },
+            byName: staffName(db, r.pendingAmendment.requestedBy),
+            link,
+          })
+        if (r.withdrawn)
+          timeline.push({
+            id: `${r.id}_withdrawn`,
+            at: r.withdrawn.at,
+            type: 'report-withdrawn',
+            params: { report: r.reportNo, reason: r.withdrawn.reason },
+            byName: staffName(db, r.withdrawn.by),
+            link,
+          })
+      }
+      for (const c of Object.values(db.criticals)) {
+        if (c.patientId !== id || c.status === 'voided') continue
+        const analyte = db.analytes[c.analyteId]
+        const what = `${analyte?.name ?? c.analyteId} ${c.value}${analyte?.unit ? ` ${analyte.unit}` : ''}`
+        const link = `/critical-results?status=all&q=${encodeURIComponent(db.samples[c.sampleId]?.accessionNo ?? '')}`
+        timeline.push({
+          id: `${c.id}_detected`,
+          at: c.detectedAt,
+          type: 'critical-value-detected',
+          params: { what },
+          byName: '',
+          link,
+        })
+        if (c.acknowledgedAt && c.notifiedTo)
+          timeline.push({
+            id: `${c.id}_ack`,
+            at: c.acknowledgedAt,
+            type: 'critical-value-communicated',
+            params: { what, to: c.notifiedTo },
+            byName: staffName(db, c.notifiedBy),
+            link,
+          })
+        if (c.escalatedAt && c.escalatedTo)
+          timeline.push({
+            id: `${c.id}_esc`,
+            at: c.escalatedAt,
+            type: 'critical-escalated',
+            params: { to: c.escalatedTo, reason: c.escalationReason ?? '' },
+            byName: staffName(db, c.escalatedBy),
+            link,
           })
       }
       timeline.sort((a, b) => b.at - a.at)

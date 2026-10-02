@@ -2,7 +2,7 @@ import { ExternalLinkIcon, EllipsisIcon } from 'lucide-react'
 import { Link } from 'react-router'
 import { useEnum, useT } from '@/i18n/context'
 import { useSample } from '@/services/queries'
-import { PatientCell } from '@/components/lab/patient'
+import { PatientBanner } from '@/components/lab/patient-banner'
 import { SamplePipeline } from '@/components/lab/sample'
 import { PriorityBadge, SampleStatusBadge } from '@/components/lab/status'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -83,7 +83,7 @@ export default function SampleDrawer({
         sample ? (
           <>
             <Link
-              to={`/laboratory/samples/${sample.id}`}
+              to={`/specimens/${sample.id}`}
               className={buttonVariants({
                 variant: 'ghost',
                 className: 'mr-auto',
@@ -139,6 +139,11 @@ export default function SampleDrawer({
         )
       ) : (
         <div className="grid gap-6">
+          <PatientBanner
+            patient={sample.patient}
+            sticky={false}
+            className="mb-0"
+          />
           <SampleAlerts sample={sample} />
           <div className="rounded-xl border border-line p-4">
             <SamplePipeline
@@ -146,11 +151,6 @@ export default function SampleDrawer({
               rejected={sample.status === 'rejected'}
             />
           </div>
-          <Section title={t('sectionPatient')}>
-            <div className="rounded-xl border border-line p-4">
-              <PatientCell patient={sample.patient} />
-            </div>
-          </Section>
           <Section title={t('sectionTests')}>
             <SampleTests sample={sample} />
           </Section>

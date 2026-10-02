@@ -177,9 +177,10 @@ export function RangeEditorDialog({
     analyte.criticalHigh?.toString() ?? '',
   )
   const [error, setError] = useState<string | null>(null)
+  const [reason, setReason] = useState('')
   const save = useLabMutation(
     (input: Parameters<typeof labApi.catalog.saveRanges>[1]) =>
-      labApi.catalog.saveRanges(analyte.id, input),
+      labApi.catalog.saveRanges(analyte.id, input, reason),
     {
       success: () => ({
         title: t('rangesSaved', { analyte: analyte.name }),
@@ -195,6 +196,7 @@ export function RangeEditorDialog({
     const hi = num(critHigh)
     if (lo !== null && hi !== null && lo >= hi)
       return setError(t('criticalOrder'))
+    if (!reason.trim()) return setError(t('changeReasonRequired'))
     setError(null)
     save.mutate({ ranges, criticalLow: lo, criticalHigh: hi })
   }
@@ -222,6 +224,13 @@ export function RangeEditorDialog({
     >
       <div className="grid gap-5">
         <RangeRows rows={rows} onChange={setRows} specimens={specimens} />
+        <Field label={t('changeReason')} required>
+          <Input
+            value={reason}
+            onChange={(ev) => setReason(ev.target.value)}
+            placeholder={t('changeReasonPlaceholder')}
+          />
+        </Field>
         <section className="rounded-xl border border-line p-4">
           <h3 className="text-sm font-semibold text-fg">
             {t('sectionCritical')}

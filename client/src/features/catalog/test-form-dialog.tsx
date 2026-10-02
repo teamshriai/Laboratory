@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { ArrowDownIcon, ArrowUpIcon, PlusIcon, XIcon } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
-import { z } from 'zod'
+import { z } from '@/features/shared/zod'
 import {
   CONTAINERS,
   DEPARTMENTS,
@@ -20,6 +20,7 @@ import {
 import { useLabMutation } from '@/services/mutations'
 import { useAnalytes } from '@/services/queries'
 import { Button } from '@/components/ui/button'
+import { GuardedButton } from '@/components/lab/guarded-button'
 import { Combobox } from '@/components/ui/combobox'
 import { Dialog } from '@/components/ui/dialog'
 import { Field } from '@/components/ui/field'
@@ -30,6 +31,9 @@ import { Checkbox, Switch } from '@/components/ui/toggles'
 import { useFormMessage } from './catalog-helpers'
 import { RangeRows } from './range-editor'
 import { rangesFromRows, type RangeRow } from './range-rows'
+import { FormErrorSummary } from '@/components/ui/form-errors'
+import { focusFirstInvalid } from '@/lib/focus'
+import { countFieldErrors, focusInvalid } from '@/lib/form-errors'
 
 const numberText = (
   msg: string,
@@ -66,6 +70,11 @@ const schema = z
     department: z.enum(DEPARTMENTS, { message: 'forms.selectOne' }),
     category: z.string().trim().max(60, 'forms.tooLong'),
     method: z.string().trim().max(80, 'catalog.methodTooLong'),
+    loinc: z
+      .string()
+      .trim()
+      .regex(/^(\d{1,7}-\d)?$/, 'catalog.loincFormat'),
+    changeReason: z.string().trim().max(200, 'forms.tooLong'),
     description: z.string().trim().max(400, 'forms.tooLong'),
     specimen: z.enum(SPECIMENS, { message: 'forms.selectOne' }),
     container: z.enum(CONTAINERS, { message: 'forms.selectOne' }),
@@ -152,6 +161,8 @@ export function TestFormDialog({
       department: test?.department ?? 'biochemistry',
       category: test?.category ?? '',
       method: test?.method ?? '',
+      loinc: test?.loinc ?? '',
+      changeReason: '',
       description: test?.description ?? '',
       specimen: test?.specimen ?? 'serum',
       container: test?.container ?? 'sst',
@@ -195,6 +206,7 @@ export function TestFormDialog({
         analyteIds: v.analyteIds,
         storage: v.storage,
         ...(v.method ? { method: v.method } : {}),
+        ...(v.loinc ? { loinc: v.loinc } : {}),
         ...(v.category ? { category: v.category } : {}),
         ...(v.description ? { description: v.description } : {}),
         ...(num(v.minVolumeMl) !== undefined
@@ -221,7 +233,9 @@ export function TestFormDialog({
           }
         : undefined
       return test
-        ? labApi.catalog.update(test.id, input, extra).then(() => test.id)
+        ? labApi.catalog
+            .update(test.id, input, v.changeReason, extra)
+            .then(() => test.id)
         : labApi.catalog.create(input, extra)
     },
     {
@@ -243,6 +257,14 @@ export function TestFormDialog({
   )
 
   const submit = (v: FormOut) => {
+    // Every change to an existing test is audited with its reason.
+    if (test && !v.changeReason) {
+      form.setError('changeReason', {
+        message: 'catalog.changeReasonRequired',
+      })
+      document.getElementById('tf-change-reason')?.focus()
+      return
+    }
     if (newParam) {
       if (newParam.name.trim().length < 2)
         return setParamError(t('nameTooShort'))
@@ -272,6 +294,7 @@ export function TestFormDialog({
     document
       .getElementById(`tf-${target}`)
       ?.scrollIntoView({ behavior: 'smooth' })
+    focusInvalid()
   }
 
   const byId = new Map((analytes ?? []).map((a) => [a.id, a]))
@@ -294,21 +317,37 @@ export function TestFormDialog({
     <Dialog
       open
       onOpenChange={(o) => !o && onClose()}
+      dirty={formState.isDirty && !formState.isSubmitSuccessful}
       size="xl"
       title={test ? t('formEditTitle', { test: test.name }) : t('formNewTitle')}
       description={test ? t('formEditDescription') : undefined}
       footer={
         <>
+          {test ? (
+            <Field
+              label={t('changeReason')}
+              required
+              error={err('changeReason')}
+              className="mr-auto w-full sm:max-w-sm"
+            >
+              <Input
+                id="tf-change-reason"
+                {...register('changeReason')}
+                placeholder={t('changeReasonPlaceholder')}
+              />
+            </Field>
+          ) : null}
           <Button variant="ghost" onClick={onClose}>
             {tc('cancel')}
           </Button>
-          <Button
+          <GuardedButton
+            permission="catalog.edit"
             variant="primary"
             loading={save.isPending}
             onClick={() => void handleSubmit(submit, onInvalid)()}
           >
             {test ? t('saveTest') : t('createTest')}
-          </Button>
+          </GuardedButton>
         </>
       }
     >
@@ -343,6 +382,12 @@ export function TestFormDialog({
           noValidate
           onSubmit={(ev) => void handleSubmit(submit, onInvalid)(ev)}
         >
+          <FormErrorSummary
+            count={
+              formState.submitCount ? countFieldErrors(formState.errors) : 0
+            }
+            onFocusFirst={() => focusFirstInvalid()}
+          />
           <Group id="tf-general" title={sectionLabel.general}>
             <Field
               label={t('nameLabel')}
@@ -413,6 +458,18 @@ export function TestFormDialog({
               <Input
                 {...register('method')}
                 placeholder={t('methodPlaceholder')}
+              />
+            </Field>
+            <Field
+              label={t('loincLabel')}
+              optionalLabel={tc('optional')}
+              hint={t('loincHint')}
+              error={err('loinc')}
+            >
+              <Input
+                {...register('loinc')}
+                inputMode="numeric"
+                placeholder="718-7"
               />
             </Field>
             <Field

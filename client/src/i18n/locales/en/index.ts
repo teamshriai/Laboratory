@@ -1,4 +1,5 @@
 import activity from './activity'
+import admin from './admin'
 import analytics from './analytics'
 import catalog from './catalog'
 import collection from './collection'
@@ -29,6 +30,7 @@ import workQueue from './workQueue'
 
 export const en = {
   activity,
+  admin,
   analytics,
   catalog,
   collection,

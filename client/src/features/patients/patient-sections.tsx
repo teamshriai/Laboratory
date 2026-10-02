@@ -1,5 +1,6 @@
 import {
   ClipboardListIcon,
+  BellRingIcon,
   FileTextIcon,
   NotebookPenIcon,
   ActivityIcon,
@@ -8,7 +9,8 @@ import {
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { useNow } from '@/hooks/use-now'
-import { useEnum, useT } from '@/i18n/context'
+import { useEnum, useLanguage, useT } from '@/i18n/context'
+import { localiseParams } from '@/i18n/params'
 import { useFormat } from '@/i18n/format'
 import { cn } from '@/lib/cn'
 import type {} from '@/lib/icon-tones'
@@ -37,6 +39,7 @@ import { Textarea } from '@/components/ui/input'
 import { Avatar, Timeline, type TimelineEntry } from '@/components/ui/misc'
 import { EmptyState } from '@/components/ui/states'
 import { FilterTabs } from '@/components/ui/toggles'
+import { focusWhenScrollable } from '@/lib/scroll-focus'
 
 export function OrderList({
   orders,
@@ -54,7 +57,7 @@ export function OrderList({
       {orders.map((o) => (
         <li key={o.id}>
           <Link
-            to={`/laboratory/orders?order=${o.id}`}
+            to={`/orders?order=${o.id}`}
             className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3 hover:bg-surface-2"
           >
             <div className="min-w-44 flex-1">
@@ -97,7 +100,7 @@ export function SampleList({
       {samples.map((s) => (
         <li key={s.id}>
           <Link
-            to={`/laboratory/samples/${s.id}`}
+            to={`/specimens/${s.id}`}
             className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3 hover:bg-surface-2"
           >
             <div className="min-w-48 flex-1">
@@ -138,7 +141,7 @@ export function ReportList({
       {reports.map((r) => (
         <li key={r.id}>
           <Link
-            to={`/laboratory/reports/${r.id}`}
+            to={`/reports/${r.id}`}
             className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3 hover:bg-surface-2"
           >
             <div className="min-w-48 flex-1">
@@ -239,7 +242,10 @@ export function ResultsTable({
       {rows.length === 0 ? (
         <EmptyState compact icon={<ActivityIcon />} title={t('noFlagged')} />
       ) : (
-        <div className="relative scrollbar-thin overflow-x-auto">
+        <div
+          ref={focusWhenScrollable}
+          className="focus-ring relative scrollbar-thin overflow-x-auto"
+        >
           <table className="w-full min-w-[720px] text-meta">
             <thead>
               <tr className="border-y border-line bg-surface-2/60 text-left text-xs text-fg-muted">
@@ -382,13 +388,20 @@ const TIMELINE_TONE: Record<string, TimelineEntry['tone']> = {
   'sample-results-entered': 'neutral',
   'sample-completed': 'success',
   'report-released': 'success',
+  'report-preliminary': 'warning',
   'report-corrected': 'warning',
+  'report-amendment-requested': 'warning',
+  'report-withdrawn': 'danger',
+  'critical-value-detected': 'danger',
+  'critical-value-communicated': 'success',
+  'critical-escalated': 'warning',
 }
 
 const TIMELINE_ICON: Record<string, React.ReactNode> = {
   order: <ClipboardListIcon />,
   sample: <TestTubeIcon />,
   report: <FileTextIcon />,
+  critical: <BellRingIcon />,
 }
 
 export function PatientTimeline({
@@ -398,18 +411,25 @@ export function PatientTimeline({
 }) {
   const th = useT('history')
   const f = useFormat()
-  const items: TimelineEntry[] = timeline.slice(0, 40).map((x) => ({
-    id: x.id,
-    title: x.link ? (
-      <Link to={x.link} className="hover:text-accent-text hover:underline">
-        {th(x.type as Parameters<typeof th>[0], x.params)}
-      </Link>
-    ) : (
-      th(x.type as Parameters<typeof th>[0], x.params)
-    ),
-    meta: `${f.dateTime(x.at)}${x.byName ? ` · ${x.byName}` : ''}`,
-    icon: TIMELINE_ICON[x.type.split('-')[0] ?? ''],
-    tone: TIMELINE_TONE[x.type] ?? 'neutral',
-  }))
+  const { language } = useLanguage()
+  const items: TimelineEntry[] = timeline.slice(0, 40).map((x) => {
+    const title = th(
+      x.type as Parameters<typeof th>[0],
+      localiseParams(language, x.params),
+    )
+    return {
+      id: x.id,
+      title: x.link ? (
+        <Link to={x.link} className="hover:text-accent-text hover:underline">
+          {title}
+        </Link>
+      ) : (
+        title
+      ),
+      meta: `${f.dateTime(x.at)}${x.byName ? ` · ${x.byName}` : ''}`,
+      icon: TIMELINE_ICON[x.type.split('-')[0] ?? ''],
+      tone: TIMELINE_TONE[x.type] ?? 'neutral',
+    }
+  })
   return <Timeline items={items} className="px-5 pb-5" />
 }

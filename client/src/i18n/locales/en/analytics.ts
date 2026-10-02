@@ -14,7 +14,7 @@ export default {
   vsPreviousDay: 'vs previous day',
   noPrevious: 'No earlier period',
   // Metrics
-  samples: 'Samples received',
+  samples: 'Specimens received',
   tests: 'Tests processed',
   released: 'Reports released',
   rejectionRate: 'Rejection rate',
@@ -24,11 +24,11 @@ export default {
   // Workload
   workload: 'Daily workload',
   workloadHourly: 'Workload by hour',
-  seriesReceived: 'Samples received',
+  seriesReceived: 'Specimens received',
   seriesTests: 'Tests ordered',
-  seriesReleased: 'Tests validated',
+  seriesReleased: 'Tests authorised',
   seriesPending: 'Tests pending',
-  seriesRejected: 'Samples rejected',
+  seriesRejected: 'Specimens rejected',
   colDay: 'Day',
   colHour: 'Hour',
   hourLabel: '{hour}:00',
@@ -44,14 +44,14 @@ export default {
   colTest: 'Test',
   colOrdered: 'Ordered',
   colAbnormal: 'Abnormal results',
-  abnormalNote: 'Share of validated results with at least one abnormal flag.',
+  abnormalNote: 'Share of authorised results with at least one abnormal flag.',
   // Rejection
-  rejections: 'Sample rejection',
+  rejections: 'Specimen rejection',
   rejectedCount: '{count} rejected',
-  ofSamples: 'of {count} samples',
+  ofSamples: 'of {count} specimens',
   colReason: 'Reason',
   colCount: 'Count',
-  noRejections: 'No samples rejected in this period.',
+  noRejections: 'No specimens rejected in this period.',
   // Critical
   criticalTitle: 'Critical values',
   detected: 'Detected',
@@ -68,6 +68,12 @@ export default {
   expiring: 'Expiring or expired',
   viewInventory: 'Open inventory',
   // Encounter
-  encounterMix: 'Samples by encounter',
+  encounterMix: 'Specimens by encounter',
   colEncounter: 'Encounter',
+  departmentTatNote_one:
+    'TAT is measured from {count} test on record (receipt to authorisation).',
+  departmentTatNote_other:
+    'TAT is measured from {count} tests on record (receipt to authorisation).',
+  historyNote:
+    'Demo data: daily volumes before today are generated history for this demonstration. Today and the TAT figures come from the records in this browser.',
 } as const

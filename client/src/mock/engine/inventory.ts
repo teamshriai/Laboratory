@@ -14,6 +14,7 @@ import {
   must,
   notify,
   type EngineCtx,
+  requirePermission,
 } from './core'
 
 function txn(
@@ -37,6 +38,7 @@ export interface ReceiveLotInput {
 }
 
 export function receiveLot(db: LabDb, input: ReceiveLotInput, ctx: EngineCtx) {
+  requirePermission(db, ctx, 'inventory.manage')
   const reagent = must(db.reagents, input.reagentId, 'reagent')
   const lotNumber = input.lotNumber.trim()
   if (!lotNumber || input.quantity <= 0)
@@ -75,7 +77,7 @@ export function receiveLot(db: LabDb, input: ReceiveLotInput, ctx: EngineCtx) {
       ctx,
       'stock-received',
       { item: reagent.name, lot: lotNumber, quantity: input.quantity },
-      '/laboratory/reagents',
+      '/reagents',
     )
     return existing
   }
@@ -116,7 +118,7 @@ export function receiveLot(db: LabDb, input: ReceiveLotInput, ctx: EngineCtx) {
     ctx,
     'stock-received',
     { item: reagent.name, lot: lotNumber, quantity: input.quantity },
-    '/laboratory/reagents',
+    '/reagents',
   )
   return lot
 }
@@ -127,6 +129,7 @@ export function adjustLot(
   input: { delta: number; reason: AdjustReason; note?: string },
   ctx: EngineCtx,
 ) {
+  requirePermission(db, ctx, 'inventory.manage')
   const lot = must(db.lots, lotId, 'lot')
   if (lot.state !== 'active' && lot.state !== 'depleted')
     throw new LabApiError('lot-not-usable', {
@@ -163,6 +166,7 @@ export function quarantineLot(
   note: string,
   ctx: EngineCtx,
 ) {
+  requirePermission(db, ctx, 'inventory.manage')
   const lot = must(db.lots, lotId, 'lot')
   if (lot.state !== 'active')
     throw new LabApiError('invalid-transition', { from: lot.state })
@@ -181,7 +185,7 @@ export function quarantineLot(
     'lot-quarantined',
     'warning',
     { item: reagent?.name ?? '', lot: lot.lotNumber },
-    '/laboratory/reagents',
+    '/reagents',
   )
   return lot
 }
@@ -192,6 +196,7 @@ export function releaseLot(
   note: string,
   ctx: EngineCtx,
 ) {
+  requirePermission(db, ctx, 'inventory.manage')
   const lot = must(db.lots, lotId, 'lot')
   if (lot.state !== 'quarantined')
     throw new LabApiError('invalid-transition', { from: lot.state })
@@ -211,6 +216,7 @@ export function releaseLot(
 
 /** Marks a lot expired and writes off the remaining quantity. */
 export function markLotExpired(db: LabDb, lotId: string, ctx: EngineCtx) {
+  requirePermission(db, ctx, 'inventory.manage')
   const lot = must(db.lots, lotId, 'lot')
   if (lot.state === 'expired' || lot.state === 'disposed')
     throw new LabApiError('invalid-transition', { from: lot.state })
@@ -232,6 +238,7 @@ export function receiveConsumable(
   input: { quantity: number; expiresAt?: number; note?: string },
   ctx: EngineCtx,
 ) {
+  requirePermission(db, ctx, 'inventory.manage')
   const item = must(db.consumables, id, 'consumable')
   if (input.quantity <= 0)
     throw new LabApiError('validation-failed', { field: 'quantity' })
@@ -245,12 +252,15 @@ export function receiveConsumable(
       ...(input.note ? { note: input.note } : {}),
     }),
   )
+  audit(db, ctx, 'consumable', item.id, 'received', {
+    detail: { item: item.name, quantity: input.quantity },
+  })
   logActivity(
     db,
     ctx,
     'stock-received',
     { item: item.name, lot: '', quantity: input.quantity },
-    '/laboratory/consumables',
+    '/consumables',
   )
   return item
 }
@@ -261,6 +271,7 @@ export function adjustConsumable(
   input: { delta: number; reason: AdjustReason; note?: string },
   ctx: EngineCtx,
 ) {
+  requirePermission(db, ctx, 'inventory.manage')
   const item = must(db.consumables, id, 'consumable')
   if (input.delta === 0)
     throw new LabApiError('validation-failed', { field: 'delta' })
@@ -299,6 +310,7 @@ export function transferStock(
   },
   ctx: EngineCtx,
 ) {
+  requirePermission(db, ctx, 'inventory.manage')
   const to = must(db.locations, input.toLocationId, 'location')
   if (!(input.quantity > 0))
     throw new LabApiError('validation-failed', { field: 'quantity' })
@@ -370,6 +382,7 @@ export function disposeLot(
   note: string,
   ctx: EngineCtx,
 ) {
+  requirePermission(db, ctx, 'inventory.manage')
   const lot = must(db.lots, lotId, 'lot')
   if (lot.state === 'disposed' || lot.state === 'depleted')
     throw new LabApiError('invalid-transition', { from: lot.state })
@@ -390,6 +403,7 @@ export function disposeLot(
 
 /** Records when a reagent pack was opened (in-use stability starts here). */
 export function openLot(db: LabDb, lotId: string, ctx: EngineCtx) {
+  requirePermission(db, ctx, 'inventory.manage')
   const lot = must(db.lots, lotId, 'lot')
   if (lot.state !== 'active' || lot.openedAt)
     throw new LabApiError('invalid-transition', { from: lot.state })

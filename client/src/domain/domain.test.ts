@@ -216,38 +216,119 @@ describe('order status', () => {
     const pending = sample()
     const collected = sample({ status: 'collected' })
     const inLab = sample({ status: 'processing' })
-    expect(deriveOrderStatus(order, [item()], samples(pending))).toBe('new')
+    expect(deriveOrderStatus(order, [item()], samples(pending), {})).toBe('new')
     expect(
       deriveOrderStatus(
         order,
         [item(), item({ id: 'it2', sampleId: 's2' })],
         samples(pending, { ...collected, id: 's2' }),
+        {},
       ),
     ).toBe('partially-collected')
-    expect(deriveOrderStatus(order, [item()], samples(collected))).toBe(
+    expect(deriveOrderStatus(order, [item()], samples(collected), {})).toBe(
       'collected',
     )
-    expect(deriveOrderStatus(order, [item()], samples(inLab))).toBe(
+    expect(deriveOrderStatus(order, [item()], samples(inLab), {})).toBe(
       'processing',
     )
     expect(
-      deriveOrderStatus(order, [item({ status: 'entered' })], samples(inLab)),
+      deriveOrderStatus(
+        order,
+        [item({ status: 'entered' })],
+        samples(inLab),
+        {},
+      ),
     ).toBe('awaiting-review')
     expect(
-      deriveOrderStatus(order, [item({ status: 'reviewed' })], samples(inLab)),
+      deriveOrderStatus(
+        order,
+        [item({ status: 'reviewed' })],
+        samples(inLab),
+        {},
+      ),
     ).toBe('awaiting-validation')
+    // Authorised but not released is not completed (audit D1).
     expect(
-      deriveOrderStatus(order, [item({ status: 'validated' })], samples(inLab)),
+      deriveOrderStatus(
+        order,
+        [item({ status: 'validated' })],
+        samples(inLab),
+        {},
+      ),
+    ).toBe('awaiting-release')
+  })
+
+  it('completes only when every test is on a final report', () => {
+    const inLab = sample({ status: 'completed' })
+    const both = [
+      item({ status: 'validated' }),
+      item({ id: 'it2', status: 'validated', reportId: 'r2' }),
+    ]
+    const released = (id: string, itemIds: string[], kind = 'final') => ({
+      id,
+      reportNo: id,
+      orderId: 'o1',
+      patientId: 'p1',
+      department: 'hematology' as const,
+      createdAt: NOW,
+      shareLog: [],
+      printCount: 0,
+      versions: [
+        {
+          version: 1,
+          kind: kind as 'final' | 'preliminary',
+          itemIds,
+          releasedAt: NOW,
+          releasedBy: 'st_kavitha',
+        },
+      ],
+    })
+    expect(
+      deriveOrderStatus(order, both, samples(inLab), {
+        r1: released('r1', ['it1']),
+      }),
+    ).toBe('partially-reported')
+    expect(
+      deriveOrderStatus(order, both, samples(inLab), {
+        r1: released('r1', ['it1']),
+        r2: released('r2', ['it2'], 'preliminary'),
+      }),
+    ).toBe('partially-reported')
+    expect(
+      deriveOrderStatus(order, both, samples(inLab), {
+        r1: released('r1', ['it1']),
+        r2: released('r2', ['it2']),
+      }),
     ).toBe('completed')
+    // A withdrawn report no longer counts as released.
+    expect(
+      deriveOrderStatus(order, both, samples(inLab), {
+        r1: {
+          ...released('r1', ['it1']),
+          withdrawn: { at: NOW, by: 'x', reason: 'wrong patient' },
+        },
+        r2: released('r2', ['it2']),
+      }),
+    ).toBe('partially-reported')
   })
 
   it('closes as rejected when every test was voided by rejection', () => {
     const rejected = sample({ status: 'rejected' })
     expect(
-      deriveOrderStatus(order, [item({ status: 'void' })], samples(rejected)),
+      deriveOrderStatus(
+        order,
+        [item({ status: 'void' })],
+        samples(rejected),
+        {},
+      ),
     ).toBe('rejected')
     expect(
-      deriveOrderStatus(order, [item({ active: false })], samples(sample())),
+      deriveOrderStatus(
+        order,
+        [item({ active: false })],
+        samples(sample()),
+        {},
+      ),
     ).toBe('cancelled')
   })
 

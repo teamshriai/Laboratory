@@ -1,13 +1,10 @@
 export default {
   breadcrumb: 'ബ്രെഡ്ക്രംബ്',
-  searchPlaceholder: 'രോഗി, UHID, സാമ്പിൾ ID, ഓർഡർ ID തിരയുക...',
+  searchPlaceholder: 'രോഗി, UHID, അക്സഷൻ നമ്പർ, ഓർഡർ ID തിരയുക...',
   searchShort: 'തിരയുക',
   notifications: 'അറിയിപ്പുകൾ',
   notificationsUnread_one: 'വായിക്കാത്ത {count} അറിയിപ്പ്',
   notificationsUnread_other: 'വായിക്കാത്ത {count} അറിയിപ്പുകൾ',
-  criticalPill_one: '{count} ക്രിട്ടിക്കൽ',
-  criticalPill_other: '{count} ക്രിട്ടിക്കൽ',
-  criticalPillLabel: 'നടപടി കാത്തിരിക്കുന്ന ക്രിട്ടിക്കൽ ഫലങ്ങൾ',
   theme: 'തീം',
   darkMode: 'ഡാർക്ക് മോഡ്',
   language: 'ഭാഷ',
@@ -22,6 +19,7 @@ export default {
   actingAsHint:
     'നിങ്ങൾ ചെയ്യുന്ന പ്രവർത്തനങ്ങളിൽ ഇത് രേഖപ്പെടുത്തും. ഈ പ്രോട്ടോടൈപ്പിൽ ലോഗിൻ ഇല്ല.',
   settings: 'ക്രമീകരണങ്ങളും മുൻഗണനകളും',
-  resetDemo: 'ഡെമോ ഡാറ്റ പുനഃസജ്ജമാക്കുക',
-  shift: 'രാവിലെ ഷിഫ്റ്റ്',
+  demoNotice:
+    'ഡെമോ സിസ്റ്റം: ഡാറ്റ ഈ ബ്രൗസറിൽ മാത്രമാണ് സൂക്ഷിക്കുന്നത്, ഇത് ക്ലിനിക്കൽ ഉപയോഗത്തിനുള്ളതല്ല.',
+  demoNoticeMore: 'ഇതിന്റെ അർത്ഥം',
 } as const

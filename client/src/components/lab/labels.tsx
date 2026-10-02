@@ -12,6 +12,8 @@ import { Barcode } from '../ui/misc'
 import { usePrint } from '../ui/print-context'
 import { AgeSex } from './patient'
 import { ContainerChip } from './sample'
+import { cn } from '@/lib/cn'
+import { TUBE_CLASS } from '@/lib/tube-colors'
 
 type LabelSample = Pick<
   SampleRow,
@@ -26,7 +28,12 @@ type LabelSample = Pick<
   | 'collectedAt'
 >
 
-/** One 50 x 25 mm tube label. */
+/**
+ * One 50 x 25 mm tube label: patient name, UHID, age/sex and DOB (two
+ * identifiers), the Code 128 accession with its number in readable type,
+ * the container's cap colour as a bar, and the collection time (written by
+ * hand when the label is printed before the draw).
+ */
 export function SampleLabel({
   sample,
   accessionNo,
@@ -36,36 +43,56 @@ export function SampleLabel({
   accessionNo: string
   printedAt: number
 }) {
+  const t = useT('orders')
   const e = useEnum()
   const f = useFormat()
   return (
-    <div className="print-label flex h-[25mm] w-[50mm] flex-col justify-between overflow-hidden bg-[#ffffff] px-[2mm] py-[1.5mm] text-[7pt] leading-tight text-[#000000]">
-      <div className="flex items-start justify-between gap-1">
-        <div className="min-w-0">
-          <p className="truncate text-[8pt] font-bold">{sample.patient.name}</p>
-          <p className="truncate">
-            {sample.patient.uhid} ·{' '}
-            <AgeSex dob={sample.patient.dob} sex={sample.patient.sex} />
+    <div className="print-label flex h-[25mm] w-[50mm] overflow-hidden bg-[#ffffff] text-[6.5pt] leading-tight text-[#000000]">
+      <span
+        aria-hidden
+        className={cn(
+          'w-[2mm] shrink-0 border-r border-[#000000]/30',
+          TUBE_CLASS[sample.container],
+        )}
+      />
+      <div className="flex min-w-0 flex-1 flex-col justify-between px-[1.5mm] py-[1.2mm]">
+        <div className="flex items-start justify-between gap-1">
+          <div className="min-w-0">
+            <p className="truncate text-[8pt] font-bold">
+              {sample.patient.name}
+            </p>
+            <p className="truncate">
+              {sample.patient.uhid} ·{' '}
+              <AgeSex dob={sample.patient.dob} sex={sample.patient.sex} /> ·{' '}
+              {t('labelDob', { date: f.date(Date.parse(sample.patient.dob)) })}
+            </p>
+          </div>
+          {sample.priority !== 'routine' ? (
+            <span className="rounded-sm border border-[#000000] px-1 text-[6.5pt] font-bold">
+              {e('priority', sample.priority)}
+            </span>
+          ) : null}
+        </div>
+        <Barcode value={accessionNo} height={24} className="h-[7mm] w-full" />
+        <div className="flex items-end justify-between gap-1">
+          <p className="font-mono text-[8pt] font-bold tracking-wide">
+            {accessionNo}
+          </p>
+          <p className="truncate text-right">
+            {e('containerShort', sample.container)} ·{' '}
+            {sample.tests
+              .filter((x) => x.active)
+              .map((x) => x.shortName)
+              .join(', ')}
           </p>
         </div>
-        {sample.priority !== 'routine' ? (
-          <span className="rounded-sm border border-[#000000] px-1 text-[6.5pt] font-bold">
-            {e('priority', sample.priority)}
-          </span>
-        ) : null}
-      </div>
-      <Barcode value={accessionNo} height={26} className="h-[8mm] w-full" />
-      <div className="flex items-end justify-between gap-1">
-        <p className="font-mono text-[7.5pt] font-bold">{accessionNo}</p>
-        <p className="truncate text-right">
-          {e('containerShort', sample.container)} ·{' '}
-          {sample.tests
-            .filter((x) => x.active)
-            .map((x) => x.shortName)
-            .join(', ')}
+        <p className="truncate">
+          {sample.collectedAt
+            ? t('labelCollected', { time: f.dateTime(sample.collectedAt) })
+            : t('labelCollectedBlank')}
         </p>
+        <p className="sr-only">{f.dateTime(printedAt)}</p>
       </div>
-      <p className="sr-only">{f.dateTime(printedAt)}</p>
     </div>
   )
 }

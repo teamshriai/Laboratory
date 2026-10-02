@@ -7,7 +7,6 @@ import {
   PrinterIcon,
   BanIcon,
   Trash2Icon,
-  UserIcon,
 } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
@@ -23,7 +22,7 @@ import { useLabMutation } from '@/services/mutations'
 import { useOrder, useOrderableTests } from '@/services/queries'
 import { HistoryTimeline } from '@/components/lab/history'
 import { LabelPrintDialog } from '@/components/lab/labels'
-import { PatientCell } from '@/components/lab/patient'
+import { PatientBanner } from '@/components/lab/patient-banner'
 import { ReasonDialog } from '@/components/lab/reason-dialog'
 import { ContainerChip, SamplePipeline } from '@/components/lab/sample'
 import {
@@ -85,50 +84,24 @@ function OrderBody({ order }: { order: OrderDetail }) {
   const editable = order.status !== 'cancelled'
   return (
     <>
-      <Section
-        title={t('sectionPatient')}
-        action={
-          <Link
-            to={`/laboratory/patients/${order.patient.id}`}
-            className="inline-flex items-center gap-1 text-xs font-medium text-accent-text hover:underline"
-          >
-            <UserIcon className="size-3.5" />
-            {t('openPatient')}
-          </Link>
-        }
-      >
-        <div className="rounded-xl border border-line bg-surface-2/50 p-4">
-          <div className="flex items-start justify-between gap-3">
-            <PatientCell patient={order.patient} />
-            <span className="text-right">
-              <span className="block text-xs text-fg-muted">
-                {t('totalAmount')}
-              </span>
-              <span className="text-sm font-semibold text-fg tabular-nums">
-                {f.currency(order.total)}
-              </span>
+      <PatientBanner
+        patient={order.patient}
+        sticky={false}
+        className="mb-0"
+        location={`${e('encounter', order.encounter)} · ${e('clinicalDepartment', order.clinicalDepartment)}${
+          order.ward
+            ? ` · ${order.bed ? tc('wardBed', { ward: order.ward, bed: order.bed }) : order.ward}`
+            : ''
+        }`}
+        extra={
+          <span className="flex items-baseline gap-1.5">
+            <span className="text-fg-muted">{t('totalAmount')}</span>
+            <span className="font-semibold text-fg tabular-nums">
+              {f.currency(order.total)}
             </span>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            <Badge tone="neutral">{e('encounter', order.encounter)}</Badge>
-            <Badge tone="neutral">
-              {e('clinicalDepartment', order.clinicalDepartment)}
-            </Badge>
-            {order.ward ? (
-              <Badge tone="neutral">
-                {order.bed
-                  ? tc('wardBed', { ward: order.ward, bed: order.bed })
-                  : order.ward}
-              </Badge>
-            ) : null}
-            {order.patient.allergies.map((a) => (
-              <Badge key={a} tone="danger">
-                {tc('allergies')}: {a}
-              </Badge>
-            ))}
-          </div>
-        </div>
-      </Section>
+          </span>
+        }
+      />
 
       <Section title={t('sectionClinical')}>
         <p className="rounded-xl border border-line px-4 py-3 text-sm leading-relaxed text-fg">
@@ -167,7 +140,7 @@ function OrderBody({ order }: { order: OrderDetail }) {
                     />
                     {item.sampleId && item.accessionNo ? (
                       <Link
-                        to={`/laboratory/samples/${item.sampleId}`}
+                        to={`/specimens/${item.sampleId}`}
                         className="font-mono text-accent-text hover:underline"
                       >
                         {item.accessionNo}
@@ -214,7 +187,7 @@ function OrderBody({ order }: { order: OrderDetail }) {
           {order.samples.map((s) => (
             <li key={s.id}>
               <Link
-                to={`/laboratory/samples/${s.id}`}
+                to={`/specimens/${s.id}`}
                 className="block rounded-xl border border-line p-3.5 transition-colors hover:border-line-strong hover:bg-surface-2/50"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -253,7 +226,7 @@ function OrderBody({ order }: { order: OrderDetail }) {
             {order.reports.map((r) => (
               <li key={r.id}>
                 <Link
-                  to={`/laboratory/reports/${r.id}`}
+                  to={`/reports/${r.id}`}
                   className="inline-flex items-center gap-2.5 rounded-xl border border-line px-3 py-2 text-meta hover:border-line-strong hover:bg-surface-2/50"
                 >
                   <FileTextIcon className="size-4 text-fg-subtle" />
@@ -446,7 +419,7 @@ export default function OrderDrawer({
                   {t('discardDraft')}
                 </Button>
                 <Button asChild variant="primary">
-                  <Link to={`/laboratory/orders/new?draft=${order.id}`}>
+                  <Link to={`/orders/new?draft=${order.id}`}>
                     {t('continueDraft')}
                   </Link>
                 </Button>

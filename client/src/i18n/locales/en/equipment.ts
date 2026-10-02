@@ -76,7 +76,7 @@ export default {
   engineer: 'Engineer or vendor',
   work: 'Work performed',
   workPlaceholder:
-    'e.g. Replaced sample probe, cleaned optics, ran daily checks',
+    'e.g. Replaced specimen probe, cleaned optics, ran daily checks',
   downtime: 'Downtime (minutes)',
   nextDueDate: 'Next due',
   certificateNo: 'Certificate or reference number',
@@ -103,13 +103,13 @@ export default {
   takeOfflineTitle: 'Take {name} offline',
   bringOnlineTitle: 'Bring {name} back online',
   takeOfflineBody_one:
-    'No new samples can start on it. {count} sample is running on it now: hold it or move it to another analyzer.',
+    'No new specimens can start on it. {count} specimen is running on it now: hold it or move it to another analyzer.',
   takeOfflineBody_other:
-    'No new samples can start on it. {count} samples are running on it now: hold them or move them to another analyzer.',
-  bringOnlineBody: 'Samples can be started on it again.',
+    'No new specimens can start on it. {count} specimens are running on it now: hold them or move them to another analyzer.',
+  bringOnlineBody: 'Specimens can be started on it again.',
   connectionReason: 'Reason',
   offlinePlaceholder: 'For example: LIS interface not responding',
-  onlinePlaceholder: 'For example: interface restarted, test sample passed',
+  onlinePlaceholder: 'For example: interface restarted, test specimen passed',
   offlineToast: '{name} is offline',
   onlineToast: '{name} is back online',
 } as const

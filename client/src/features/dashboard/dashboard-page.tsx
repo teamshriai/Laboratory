@@ -21,16 +21,15 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ErrorState } from '@/components/ui/states'
+import { ActionQueues } from './action-queues'
 import { HourlyChart } from './hourly-chart'
 import { PipelineFlow } from './pipeline-flow'
 import {
   AnalyzersPanel,
   CriticalSection,
   KpiRow,
-  MixPanel,
   OverTatSection,
   RecentActivity,
-  Snapshot,
   StockPanel,
   TatPanel,
   WorkloadPanel,
@@ -53,34 +52,34 @@ const CELLS: {
   render: (data: DashboardView) => ReactNode
 }[] = [
   {
-    key: 'snapshot',
-    span: 'sm:col-span-2 md:col-span-4 xl:col-span-2 xl:row-span-2',
-    skeleton: 'h-72',
-    render: (d) => <Snapshot data={d} />,
+    key: 'queues',
+    span: FULL,
+    skeleton: 'h-40',
+    render: () => <ActionQueues />,
   },
   {
     key: 'criticals',
-    span: 'sm:col-span-2 md:col-span-4 xl:col-span-4',
+    span: 'sm:col-span-2 md:col-span-4 xl:col-span-3',
     skeleton: 'h-56',
     render: (d) => <CriticalSection criticals={d.criticals} />,
   },
   {
     key: 'over-tat',
-    span: 'sm:col-span-2 md:col-span-4 xl:col-span-4',
+    span: 'sm:col-span-2 md:col-span-4 xl:col-span-3',
     skeleton: 'h-56',
     render: (d) => <OverTatSection tat={d.tat} />,
-  },
-  {
-    key: 'kpis',
-    span: FULL,
-    skeleton: 'h-40',
-    render: (d) => <KpiRow data={d} />,
   },
   {
     key: 'pipeline',
     span: FULL,
     skeleton: 'h-44',
     render: (d) => <PipelineFlow pipeline={d.pipeline} />,
+  },
+  {
+    key: 'kpis',
+    span: FULL,
+    skeleton: 'h-40',
+    render: (d) => <KpiRow data={d} />,
   },
   {
     key: 'hourly',
@@ -101,22 +100,16 @@ const CELLS: {
     render: (d) => <WorkloadPanel workload={d.workload} />,
   },
   {
-    key: 'mix',
+    key: 'stock',
     span: 'sm:col-span-2 md:col-span-4 xl:col-span-2',
     skeleton: 'h-80',
-    render: (d) => <MixPanel data={d} />,
+    render: (d) => <StockPanel alerts={d.stockAlerts} />,
   },
   {
     key: 'analyzers',
-    span: 'sm:col-span-2 md:col-span-2 xl:col-span-3',
-    skeleton: 'h-80',
+    span: FULL,
+    skeleton: 'h-64',
     render: (d) => <AnalyzersPanel data={d} />,
-  },
-  {
-    key: 'stock',
-    span: 'sm:col-span-2 md:col-span-2 xl:col-span-3',
-    skeleton: 'h-80',
-    render: (d) => <StockPanel alerts={d.stockAlerts} />,
   },
   {
     key: 'activity',
@@ -132,27 +125,27 @@ function QuickActions() {
   const navigate = useNavigate()
   const actions = [
     {
-      to: '/laboratory/collection',
+      to: '/collection',
       label: t('actionCollect'),
       icon: <SyringeIcon />,
     },
     {
-      to: '/laboratory/samples?status=collected',
+      to: '/reception?status=collected',
       label: t('actionReceive'),
       icon: <TestTubeIcon />,
     },
     {
-      to: '/laboratory/results',
+      to: '/worklists',
       label: t('actionEnter'),
       icon: <PencilLineIcon />,
     },
     {
-      to: '/laboratory/validation',
+      to: '/verification',
       label: t('actionValidate'),
       icon: <BadgeCheckIcon />,
     },
     {
-      to: '/laboratory/reports?status=validated',
+      to: '/reports?status=validated',
       label: t('actionRelease'),
       icon: <FileTextIcon />,
     },
@@ -210,7 +203,7 @@ export function Component() {
           <>
             <QuickActions />
             <Button asChild variant="primary">
-              <Link to="/laboratory/orders/new">
+              <Link to="/orders/new">
                 <PlusIcon strokeWidth={2.5} aria-hidden />
                 {t('actionNewOrder')}
               </Link>

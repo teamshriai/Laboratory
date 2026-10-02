@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { InfoIcon } from 'lucide-react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
-import { z } from 'zod'
+import { z } from '@/features/shared/zod'
 import { DAY, istDay } from '@/domain/time'
 import { QC_LOT_STATUSES } from '@/domain/types'
 import { useNow } from '@/hooks/use-now'
@@ -20,6 +20,9 @@ import { Select } from '@/components/ui/select'
 import { ChoiceCards } from '@/components/ui/toggles'
 import { dateInputToMs, isFutureDateInput, roundQty } from './stock'
 import { StorageLabel } from './stock-widgets'
+import { FormErrorSummary } from '@/components/ui/form-errors'
+import { focusFirstInvalid } from '@/lib/focus'
+import { countFieldErrors, focusInvalid } from '@/lib/form-errors'
 
 const schema = z.object({
   reagentId: z.string().min(1, 'forms.selectOne'),
@@ -121,6 +124,7 @@ export function ReceiveLotDialog({
     <Dialog
       open
       onOpenChange={(o) => !o && onClose()}
+      dirty={formState.isDirty && !formState.isSubmitSuccessful}
       size="lg"
       title={t('receiveLotTitle')}
       description={t('receiveLotDescription')}
@@ -132,7 +136,7 @@ export function ReceiveLotDialog({
           <Button
             variant="primary"
             loading={mutation.isPending}
-            onClick={() => void handleSubmit(submit)()}
+            onClick={() => void handleSubmit(submit, focusInvalid)()}
           >
             {t('receiveConfirm')}
           </Button>
@@ -141,9 +145,13 @@ export function ReceiveLotDialog({
     >
       <form
         className="grid gap-4 sm:grid-cols-2"
-        onSubmit={(ev) => void handleSubmit(submit)(ev)}
+        onSubmit={(ev) => void handleSubmit(submit, focusInvalid)(ev)}
         noValidate
       >
+        <FormErrorSummary
+          count={formState.submitCount ? countFieldErrors(formState.errors) : 0}
+          onFocusFirst={() => focusFirstInvalid()}
+        />
         <Field
           label={t('reagent')}
           required

@@ -72,7 +72,7 @@ export function Component() {
         title={t('notFound')}
         action={
           <Button asChild variant="secondary">
-            <Link to="/laboratory/patients">{t('back')}</Link>
+            <Link to="/patients">{t('back')}</Link>
           </Button>
         }
       />
@@ -94,7 +94,7 @@ export function Component() {
   return (
     <>
       <Link
-        to="/laboratory/patients"
+        to="/patients"
         className="tap-reach mb-3 inline-flex items-center gap-1.5 text-meta font-medium text-fg-muted hover:text-fg"
       >
         <ArrowLeftIcon aria-hidden />
@@ -175,14 +175,12 @@ export function Component() {
             {t('editDetails')}
           </Button>
           <Button asChild variant="secondary" size="sm">
-            <Link
-              to={`/laboratory/reports?q=${encodeURIComponent(p.uhid)}&date=all`}
-            >
+            <Link to={`/reports?q=${encodeURIComponent(p.uhid)}&date=all`}>
               {t('viewReports')}
             </Link>
           </Button>
           <Button asChild variant="primary" size="sm">
-            <Link to={`/laboratory/orders/new?patient=${p.id}`}>
+            <Link to={`/orders/new?patient=${p.id}`}>
               <PlusIcon strokeWidth={2.5} aria-hidden />
               {t('newOrder')}
             </Link>
@@ -302,7 +300,7 @@ export function Component() {
         </TabsContent>
         <TabsContent value="samples">
           <Card className="overflow-hidden">
-            <SampleList samples={data.samples} empty={t('noOrders')} />
+            <SampleList samples={data.samples} empty={t('noSamples')} />
           </Card>
         </TabsContent>
         <TabsContent value="results">

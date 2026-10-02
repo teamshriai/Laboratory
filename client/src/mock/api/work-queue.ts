@@ -43,9 +43,16 @@ function queueRow(
   switch (sample.status) {
     case 'pending_collection':
       buckets.push('awaiting-collection')
+      if (sample.recollectionOfId) buckets.push('recollection')
       break
     case 'collected':
       buckets.push('collected')
+      // Collected but not received within the lab's threshold.
+      if (
+        sample.collectedAt !== undefined &&
+        now - sample.collectedAt > db.settings.transitAlertMin * 60_000
+      )
+        buckets.push('transit-delayed')
       break
     case 'received':
       buckets.push('received')
@@ -67,6 +74,13 @@ function queueRow(
       break
   }
   if (openCriticals > 0) buckets.push('critical')
+  // STAT work with results still to enter (the oldest is shown first).
+  if (
+    order.priority === 'stat' &&
+    !DONE.has(sample.status) &&
+    entered < items.length
+  )
+    buckets.push('stat')
   if (row.tat?.state === 'breached') buckets.push('overdue')
   else if (row.tat?.state === 'approaching') buckets.push('at-risk')
   return {

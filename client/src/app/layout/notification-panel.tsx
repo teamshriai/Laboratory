@@ -58,6 +58,10 @@ const TYPE_ICON: Record<NotificationType, { icon: ReactNode; tone: IconTone }> =
       icon: <FileTextIcon />,
       tone: 'teal',
     },
+    'report-withdrawn': {
+      icon: <FileTextIcon />,
+      tone: 'teal',
+    },
     'qc-failed': { icon: <GaugeIcon />, tone: 'rose' },
     'equipment-down': {
       icon: <WrenchIcon />,

@@ -1,15 +1,11 @@
 import {
   ArrowRightIcon,
-  BadgeCheckIcon,
   BanIcon,
   BellRingIcon,
   CircleCheckIcon,
-  ClockIcon,
   FileTextIcon,
   GaugeIcon,
-  LayoutGridIcon,
   PackageIcon,
-  TestTubeIcon,
   TimerIcon,
   TriangleAlertIcon,
   UsersRoundIcon,
@@ -18,7 +14,7 @@ import {
 } from 'lucide-react'
 import { useId, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { CRITICAL_NOTIFY_LIMIT_MIN, ENCOUNTER_TYPES } from '@/domain/types'
+import { CRITICAL_NOTIFY_LIMIT_MIN } from '@/domain/types'
 import { DAY } from '@/domain/time'
 import { useNow } from '@/hooks/use-now'
 import { useEnum, useT } from '@/i18n/context'
@@ -28,19 +24,14 @@ import { NAV_TONES } from '@/lib/icon-tones'
 import type { DashboardView } from '@/services/lab-api'
 import { TAT_TARGET_PCT } from '@/features/departments/workload'
 import { ChartLegend } from '@/components/charts/chart-kit'
-import {
-  CountdownRing,
-  Donut,
-  Ring,
-  TrendLine,
-} from '@/components/charts/micro'
-import { KpiCard, SnapshotTile } from '@/components/lab/kpi-tile'
+import { CountdownRing, Ring } from '@/components/charts/micro'
+import { KpiCard } from '@/components/lab/kpi-tile'
 import { EquipmentBadge, QcBadge, StockBadge } from '@/components/lab/status'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader } from '@/components/ui/card'
-import { SoftIconTile } from '@/components/ui/icon-tile'
 import { Change } from '@/components/ui/metric-strip'
 import { initials } from '@/components/ui/misc'
+import { focusWhenScrollable } from '@/lib/scroll-focus'
 
 type View = DashboardView
 
@@ -83,78 +74,6 @@ function useTrendLabel() {
       : undefined
 }
 
-/* ── 1. Snapshot: four solid tiles ─────────────────────────────────────── */
-
-export function Snapshot({ data }: { data: View }) {
-  const t = useT('dashboard')
-  const f = useFormat()
-  const trendLabel = useTrendLabel()
-  const id = useId()
-  const k = data.kpis
-  return (
-    <section aria-labelledby={id} className="flex h-full flex-col">
-      <h2
-        id={id}
-        className="flex min-h-11 min-w-0 items-center gap-2.5 text-sm font-semibold text-fg"
-      >
-        <SoftIconTile icon={<LayoutGridIcon />} tone="blue" size="md" />
-        {t('snapshotTitle')}
-      </h2>
-      <div className="mt-3 grid flex-1 grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-2">
-        <SnapshotTile
-          to="/laboratory/samples"
-          tone="blue"
-          icon={<TestTubeIcon />}
-          label={t('samplesToday')}
-          value={f.number(k.samplesToday.value)}
-          change={
-            <Change
-              inverse
-              current={k.samplesToday.value}
-              previous={k.samplesToday.yesterday}
-            />
-          }
-          trend={data.trend.samples}
-          trendLabel={trendLabel(data.trend.samples)}
-        />
-        <SnapshotTile
-          to="/laboratory/work-queue"
-          tone="teal"
-          icon={<ClockIcon />}
-          label={t('pendingTests')}
-          value={f.number(k.pendingTests.value)}
-          detail={t('statDetail', { count: k.pendingTests.detail?.value ?? 0 })}
-        />
-        <SnapshotTile
-          to="/laboratory/validation"
-          tone="violet"
-          icon={<BadgeCheckIcon />}
-          label={t('awaitingValidation')}
-          value={f.number(k.awaitingValidation.value)}
-          detail={t('withCritical', {
-            count: k.awaitingValidation.detail?.value ?? 0,
-          })}
-        />
-        <SnapshotTile
-          to="/laboratory/tat"
-          tone="amber"
-          icon={<TimerIcon />}
-          label={t('delayed')}
-          value={f.number(k.delayedTests.value)}
-          detail={t('breachedNow', {
-            count: k.delayedTests.detail?.value ?? 0,
-          })}
-          trend={data.trend.delayedPct}
-          trendLabel={trendLabel(data.trend.delayedPct, (v) =>
-            f.percent(v / 100),
-          )}
-        />
-      </div>
-      <p className="mt-2 text-xs text-fg-subtle">{t('snapshotCaption')}</p>
-    </section>
-  )
-}
-
 /* ── 2. Critical values ────────────────────────────────────────────────── */
 
 export function CriticalSection({
@@ -185,9 +104,7 @@ export function CriticalSection({
                 minutes: criticals[0]?.limitMin ?? CRITICAL_NOTIFY_LIMIT_MIN,
               })
         }
-        action={
-          <ViewAll to="/laboratory/critical-values" label={t('viewAll')} />
-        }
+        action={<ViewAll to="/critical-results" label={t('viewAll')} />}
       />
       {open.length === 0 ? (
         <AllClear>{t('allCommunicated')}</AllClear>
@@ -205,7 +122,7 @@ export function CriticalSection({
                 <div className="min-w-0 flex-1 basis-48">
                   <p className="truncate text-sm">
                     <Link
-                      to={`/laboratory/patients/${c.patient.id}`}
+                      to={`/patients/${c.patient.id}`}
                       className="inline-block py-0.5 font-semibold text-fg hover:underline"
                     >
                       {c.patient.name}
@@ -241,7 +158,7 @@ export function CriticalSection({
                   size="xs"
                   variant={c.status === 'open' ? 'danger' : 'secondary'}
                 >
-                  <Link to={`/laboratory/critical-values?alert=${c.id}`}>
+                  <Link to={`/critical-results?alert=${c.id}`}>
                     {t('record')}
                   </Link>
                 </Button>
@@ -270,7 +187,7 @@ export function OverTatSection({ tat }: { tat: View['tat'] }) {
           breached: tat.breached,
           approaching: tat.approaching,
         })}
-        action={<ViewAll to="/laboratory/tat" label={t('viewAll')} />}
+        action={<ViewAll to="/tat" label={t('viewAll')} />}
       />
       {rows.length === 0 ? (
         <AllClear>{t('noneOverTat')}</AllClear>
@@ -333,7 +250,7 @@ export function KpiRow({ data }: { data: View }) {
   return (
     <div className="grid h-full grid-cols-1 gap-4 min-[420px]:grid-cols-2 sm:gap-5 lg:grid-cols-4">
       <KpiCard
-        to="/laboratory/critical-values"
+        to="/critical-results"
         tone="red"
         icon={<BellRingIcon />}
         label={t('criticalResults')}
@@ -351,7 +268,7 @@ export function KpiRow({ data }: { data: View }) {
         trendLabel={trendLabel(data.trend.criticals)}
       />
       <KpiCard
-        to="/laboratory/reports?status=validated"
+        to="/reports?status=validated"
         tone="green"
         icon={<CircleCheckIcon />}
         label={t('validatedTests')}
@@ -367,7 +284,7 @@ export function KpiRow({ data }: { data: View }) {
         trendLabel={trendLabel(data.trend.completed)}
       />
       <KpiCard
-        to="/laboratory/samples?status=rejected"
+        to="/reception?status=rejected"
         tone="orange"
         icon={<BanIcon />}
         label={t('rejectedSamples')}
@@ -386,7 +303,7 @@ export function KpiRow({ data }: { data: View }) {
         trendLabel={trendLabel(data.trend.rejected)}
       />
       <KpiCard
-        to="/laboratory/reports?status=released"
+        to="/reports?status=released"
         tone="indigo"
         icon={<FileTextIcon />}
         label={t('reportsReleased')}
@@ -427,7 +344,7 @@ export function TatPanel({
         icon={<GaugeIcon />}
         tone={NAV_TONES.tat}
         title={t('tatPanel')}
-        action={<ViewAll to="/laboratory/tat" label={t('viewAll')} />}
+        action={<ViewAll to="/tat" label={t('viewAll')} />}
       />
       <div className="flex flex-wrap items-center gap-5 px-4 sm:px-5">
         <Ring
@@ -581,7 +498,10 @@ export function WorkloadPanel({ workload }: { workload: View['workload'] }) {
           />
         }
       />
-      <div className="relative scrollbar-thin overflow-x-auto">
+      <div
+        ref={focusWhenScrollable}
+        className="focus-ring relative scrollbar-thin overflow-x-auto"
+      >
         <table className="w-full text-sm">
           <caption className="sr-only">{t('wip')}</caption>
           <thead>
@@ -619,7 +539,7 @@ export function WorkloadPanel({ workload }: { workload: View['workload'] }) {
                     className="py-2 pr-3 pl-4 text-left font-medium sm:pl-5"
                   >
                     <Link
-                      to={`/laboratory/departments/${w.department}`}
+                      to={`/departments/${w.department}`}
                       className="inline-block py-0.5 text-fg hover:underline"
                     >
                       {e('department', w.department)}
@@ -665,109 +585,6 @@ export function WorkloadPanel({ workload }: { workload: View['workload'] }) {
   )
 }
 
-/* ── 9. Patient mix and billing ────────────────────────────────────────── */
-
-export function MixPanel({ data }: { data: View }) {
-  const t = useT('dashboard')
-  const e = useEnum()
-  const f = useFormat()
-  const colors = [
-    'var(--chart-1)',
-    'var(--chart-2)',
-    'var(--chart-3)',
-    'var(--chart-4)',
-    'var(--chart-5)',
-  ]
-  const segments = ENCOUNTER_TYPES.map((k, i) => ({
-    key: k,
-    label: e('encounter', k),
-    value: data.encounterMix[k],
-    color: colors[i]!,
-  }))
-  const total = segments.reduce((n, s) => n + s.value, 0)
-  return (
-    <Card className="flex h-full min-w-0 flex-col">
-      <CardHeader
-        icon={<UsersRoundIcon />}
-        tone={NAV_TONES.patients}
-        title={t('mix')}
-        action={<ViewAll to="/laboratory/analytics" label={t('viewAll')} />}
-      />
-      <div className="px-4 sm:px-5">
-        {total === 0 ? (
-          <p className="pb-4 text-sm text-fg-muted">{t('noEncounters')}</p>
-        ) : (
-          <div className="flex flex-wrap items-center gap-5">
-            <Donut
-              size={124}
-              thickness={18}
-              segments={segments}
-              label={t('mixLabel', {
-                summary: segments
-                  .map((s) => `${s.label} ${s.value}`)
-                  .join(', '),
-              })}
-              formatValue={(v, share) => `${f.number(v)} · ${f.percent(share)}`}
-            >
-              <span>
-                <span className="block text-xl leading-none font-semibold text-fg tabular-nums">
-                  {f.number(total)}
-                </span>
-                <span className="mt-1 block text-2xs text-fg-subtle">
-                  {t('samples')}
-                </span>
-              </span>
-            </Donut>
-            <ul className="grid min-w-0 flex-1 basis-40 gap-1.5 text-xs">
-              {segments.map((s) => (
-                <li key={s.key} className="flex items-center gap-2">
-                  <span
-                    aria-hidden
-                    className="size-2.5 shrink-0 rounded-sm"
-                    style={{ background: s.color }}
-                  />
-                  <span className="min-w-0 flex-1 truncate text-fg-muted">
-                    {s.label}
-                  </span>
-                  <span className="font-semibold text-fg tabular-nums">
-                    {f.number(s.value)}
-                  </span>
-                  <span className="w-11 text-right text-fg-subtle tabular-nums">
-                    {f.percent(total ? s.value / total : 0)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
-      <div className="mt-auto border-t border-line px-4 pt-3 pb-4 sm:px-5">
-        <div className="flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <p className="text-xs font-medium text-fg-subtle">
-              {t('billedToday')}
-            </p>
-            <p className="mt-1 text-2xl leading-none font-semibold tracking-tight text-fg tabular-nums">
-              {f.currency(data.revenue.today)}
-            </p>
-          </div>
-          <span className="text-xs">
-            <Change
-              current={data.revenue.today}
-              previous={data.revenue.yesterday}
-              label={t('vsYesterday')}
-            />
-          </span>
-        </div>
-        <div className="mt-3 text-chart-3">
-          <TrendLine values={data.trend.revenue} height={34} />
-        </div>
-        <p className="mt-1 text-2xs text-fg-subtle">{t('revenueTrend')}</p>
-      </div>
-    </Card>
-  )
-}
-
 /* ── 10. Analyzers ─────────────────────────────────────────────────────── */
 
 const QC_DOT = {
@@ -801,7 +618,7 @@ export function AnalyzersPanel({ data }: { data: View }) {
           up,
           total: data.analyzers.length,
         })}
-        action={<ViewAll to="/laboratory/equipment" label={t('viewAll')} />}
+        action={<ViewAll to="/equipment" label={t('viewAll')} />}
       />
       <div className="px-4 pb-3 sm:px-5">
         <p className="mb-1.5 text-xs text-fg-muted">
@@ -829,7 +646,7 @@ export function AnalyzersPanel({ data }: { data: View }) {
         {rows.map((a) => (
           <li key={a.id}>
             <Link
-              to={`/laboratory/equipment?equipment=${a.id}`}
+              to={`/equipment?equipment=${a.id}`}
               className="focus-ring grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-4 py-2.5 transition-colors hover:bg-surface-2 sm:grid-cols-[minmax(0,1fr)_6rem_auto] sm:px-5"
             >
               <span className="min-w-0">
@@ -893,9 +710,7 @@ export function StockPanel({ alerts }: { alerts: View['stockAlerts'] }) {
         icon={<PackageIcon />}
         tone={NAV_TONES.inventory}
         title={t('stockTitle')}
-        action={
-          <ViewAll to="/laboratory/inventory?tab=expiry" label={t('viewAll')} />
-        }
+        action={<ViewAll to="/inventory?tab=expiry" label={t('viewAll')} />}
       />
       {stock.length === 0 ? (
         <AllClear>{t('stockClear')}</AllClear>

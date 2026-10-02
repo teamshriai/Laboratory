@@ -24,9 +24,11 @@ import {
   type ReactNode,
 } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
-import { useBlocker, useNavigate, useSearchParams } from 'react-router'
+import { useNavigate, useSearchParams } from 'react-router'
+import { useUnsavedChanges } from '@/hooks/use-unsaved-changes'
+import { UnsavedChangesDialog } from '@/components/ui/unsaved-dialog'
 import { toast } from 'sonner'
-import { z } from 'zod'
+import { z } from '@/features/shared/zod'
 import { groupTestsIntoSamples } from '@/domain/grouping'
 import { tatHoursFor } from '@/domain/tat'
 import {
@@ -63,7 +65,6 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardBody, CardHeader } from '@/components/ui/card'
 import { Combobox } from '@/components/ui/combobox'
-import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Field } from '@/components/ui/field'
 import { Input, SearchInput, Textarea } from '@/components/ui/input'
 import { Avatar, Stepper } from '@/components/ui/misc'
@@ -74,6 +75,7 @@ import { EmptyState } from '@/components/ui/states'
 import { ChoiceCards } from '@/components/ui/toggles'
 import { RegisterPatientDialog } from '../patients/register-patient-dialog'
 import { COMMON_PANELS } from './panels'
+import { focusInvalid } from '@/lib/form-errors'
 
 const schema = z.object({
   patientId: z.string().min(1, 'forms.required'),
@@ -481,12 +483,7 @@ export function Component() {
   const groups = groupTestsIntoSamples(selectedTests as unknown as LabTest[])
   const doctor = reference?.doctors.find((d) => d.id === values.doctorId)
 
-  const blocker = useBlocker(
-    ({ currentLocation, nextLocation }) =>
-      !submitted.current &&
-      formState.isDirty &&
-      currentLocation.pathname !== nextLocation.pathname,
-  )
+  const blocker = useUnsavedChanges(formState.isDirty, () => submitted.current)
 
   const toggleTest = (id: string) => {
     const current = getValues('testIds') ?? []
@@ -500,6 +497,7 @@ export function Component() {
   const next = async () => {
     const ok = await trigger(STEP_FIELDS[step])
     if (ok) setStep((s) => Math.min(4, s + 1))
+    else focusInvalid()
   }
 
   const input = (v: FormOut) => ({
@@ -527,7 +525,7 @@ export function Component() {
           description: t('orderCreatedBody', { count: res.sampleIds.length }),
           action: {
             label: t('viewInCollection'),
-            onClick: () => void navigate('/laboratory/collection'),
+            onClick: () => void navigate('/collection'),
           },
         })
         if (v.print) {
@@ -537,7 +535,7 @@ export function Component() {
               setPrintSamples({ orderId: res.id, samples: order.samples }),
             )
         } else {
-          void navigate(`/laboratory/orders?order=${res.id}`)
+          void navigate(`/orders?order=${res.id}`)
         }
       },
     },
@@ -548,7 +546,7 @@ export function Component() {
       success: () => t('draftSaved'),
       onSuccess: () => {
         submitted.current = true
-        void navigate('/laboratory/orders')
+        void navigate('/orders')
       },
     },
   )
@@ -569,7 +567,7 @@ export function Component() {
   return (
     <>
       <PageHeader
-        back={{ to: '/laboratory/orders', label: t('title') }}
+        back={{ to: '/orders', label: t('title') }}
         title={draftId ? `${t('continueDraft')}` : t('wizardTitle')}
       />
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
@@ -922,7 +920,9 @@ export function Component() {
             ) : null}
             <span className="ml-auto" />
             <Button
-              onClick={() => void handleSubmit((v) => saveDraft.mutate(v))()}
+              onClick={() =>
+                void handleSubmit((v) => saveDraft.mutate(v), focusInvalid)()
+              }
               loading={saveDraft.isPending}
               disabled={
                 !values.patientId || testIds.length === 0 || !values.doctorId
@@ -940,8 +940,9 @@ export function Component() {
               <>
                 <Button
                   onClick={() =>
-                    void handleSubmit((v) =>
-                      create.mutate({ form: v, print: true }),
+                    void handleSubmit(
+                      (v) => create.mutate({ form: v, print: true }),
+                      focusInvalid,
                     )()
                   }
                   loading={create.isPending && create.variables?.print === true}
@@ -952,8 +953,9 @@ export function Component() {
                 <Button
                   variant="primary"
                   onClick={() =>
-                    void handleSubmit((v) =>
-                      create.mutate({ form: v, print: false }),
+                    void handleSubmit(
+                      (v) => create.mutate({ form: v, print: false }),
+                      focusInvalid,
                     )()
                   }
                   loading={
@@ -1047,20 +1049,12 @@ export function Component() {
             if (!o) {
               const id = printSamples.orderId
               setPrintSamples(null)
-              void navigate(`/laboratory/orders?order=${id}`)
+              void navigate(`/orders?order=${id}`)
             }
           }}
         />
       ) : null}
-      <ConfirmDialog
-        open={blocker.state === 'blocked'}
-        onOpenChange={(o) => !o && blocker.reset?.()}
-        title={tc('unsavedTitle')}
-        description={tc('unsavedBody')}
-        confirmLabel={tc('unsavedLeave')}
-        tone="danger"
-        onConfirm={() => blocker.proceed?.()}
-      />
+      <UnsavedChangesDialog blocker={blocker} />
     </>
   )
 }

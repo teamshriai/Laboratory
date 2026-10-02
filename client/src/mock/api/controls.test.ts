@@ -2,13 +2,16 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { DAY } from '@/domain/time'
 import { getDb, startMemoryDb } from '../db/store'
 import { labApi } from './index'
-import { setActor } from './runtime'
+import { actingAs, STAFF } from './testing'
 
-const PATHOLOGIST = 'st_kavitha'
+const reception = actingAs(STAFF.reception)
+const manager = actingAs(STAFF.manager)
+const pathologist = actingAs(STAFF.pathologist)
+import { setActor } from './runtime'
 
 /** An order for one test, collected and received, ready to process. */
 async function receivedSample(testId: string) {
-  const { id: orderId, sampleIds } = await labApi.orders.create({
+  const { id: orderId, sampleIds } = await reception.orders.create({
     patientId: 'pat_002184',
     doctorId: 'dr_ramesh',
     department: 'general-medicine',
@@ -20,7 +23,6 @@ async function receivedSample(testId: string) {
   const sampleId = sampleIds[0]!
   await labApi.samples.collect(sampleId, {
     collectedAt: Date.now(),
-    collectedBy: 'st_kavya',
     site: 'left-antecubital',
   })
   const accession = (await labApi.samples.get(sampleId)).accessionNo!
@@ -145,25 +147,17 @@ describe('workflow controls', () => {
     const next = String(Number(row.value) + 1)
 
     await expect(
-      labApi.reports.requestCorrection(
-        report.id,
-        {
-          corrections: [{ resultId: row.resultId, value: next }],
-          reason: 'transcription-error',
-          comments: ' ',
-        },
-        'st_anjali',
-      ),
-    ).rejects.toMatchObject({ code: 'reason-required' })
-    await labApi.reports.requestCorrection(
-      report.id,
-      {
+      labApi.reports.requestCorrection(report.id, {
         corrections: [{ resultId: row.resultId, value: next }],
         reason: 'transcription-error',
-        comments: 'Entered from the wrong tube.',
-      },
-      'st_anjali',
-    )
+        comments: ' ',
+      }),
+    ).rejects.toMatchObject({ code: 'reason-required' })
+    await labApi.reports.requestCorrection(report.id, {
+      corrections: [{ resultId: row.resultId, value: next }],
+      reason: 'transcription-error',
+      comments: 'Entered from the wrong tube.',
+    })
     let detail = await labApi.reports.get(report.id)
     expect(detail.status).toBe('amendment-pending')
     expect(detail.version).toBe(report.version)
@@ -174,9 +168,9 @@ describe('workflow controls', () => {
     ).toBe(row.value)
 
     await expect(
-      labApi.reports.authoriseCorrection(report.id, 'st_anjali'),
-    ).rejects.toMatchObject({ code: 'not-authorized-releaser' })
-    await labApi.reports.authoriseCorrection(report.id, PATHOLOGIST)
+      labApi.reports.authoriseCorrection(report.id),
+    ).rejects.toMatchObject({ code: 'not-permitted' })
+    await pathologist.reports.authoriseCorrection(report.id)
     detail = await labApi.reports.get(report.id)
     expect(detail.version).toBe(report.version + 1)
     expect(detail.pendingAmendment).toBeUndefined()
@@ -192,10 +186,8 @@ describe('workflow controls', () => {
       await labApi.reports.list({ status: 'validated', date: 'all' })
     ).rows.find((r) => r.criticalCount === 0)
     if (!ready) return
-    await expect(
-      labApi.reports.release(ready.id, 'st_anjali'),
-    ).rejects.toMatchObject({
-      code: 'not-authorized-releaser',
+    await expect(labApi.reports.release(ready.id)).rejects.toMatchObject({
+      code: 'not-permitted',
     })
   })
 
@@ -211,7 +203,10 @@ describe('workflow controls', () => {
     const order = await labApi.orders.get(orderId)
     expect(order.status).toBe('rejected')
     await expect(
-      labApi.orders.cancel(orderId, { reason: 'other' }),
+      reception.orders.cancel(orderId, {
+        reason: 'other',
+        remarks: 'Doctor asked to stop',
+      }),
     ).rejects.toMatchObject({ code: 'order-closed' })
   })
 
@@ -219,13 +214,13 @@ describe('workflow controls', () => {
     const { sampleId } = await receivedSample('cbc')
     await labApi.samples.start(sampleId, 'eq_xn1000')
     const itemIds = await enterAll(sampleId)
-    await labApi.validation.review(itemIds, 'st_ganesh')
+    await manager.validation.review(itemIds)
     await labApi.samples.hold(sampleId, { reason: 'repeat-testing' })
     await expect(
-      labApi.validation.validate(itemIds, PATHOLOGIST),
+      pathologist.validation.validate(itemIds),
     ).rejects.toMatchObject({ code: 'sample-on-hold' })
     await labApi.samples.resume(sampleId)
-    await labApi.validation.validate(itemIds, PATHOLOGIST)
+    await pathologist.validation.validate(itemIds)
     expect((await labApi.samples.get(sampleId)).status).toBe('completed')
   })
 
@@ -298,9 +293,9 @@ describe('workflow controls', () => {
   })
 
   it('applies the lab TAT warning threshold everywhere', async () => {
-    await labApi.system.updateSettings({ tatWarnPct: 50 })
+    await manager.system.updateSettings({ tatWarnPct: 50 })
     const risk = (await labApi.tat.get('today')).summary.approachingNow
-    await labApi.system.updateSettings({ tatWarnPct: 95 })
+    await manager.system.updateSettings({ tatWarnPct: 95 })
     const fewer = (await labApi.tat.get('today')).summary.approachingNow
     expect(risk).toBeGreaterThanOrEqual(fewer)
   })

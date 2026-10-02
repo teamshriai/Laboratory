@@ -41,7 +41,7 @@ import {
 } from '@/services/lab-api'
 import { useLabMutation } from '@/services/mutations'
 import { useDbStats, useLabSettings, useReference } from '@/services/queries'
-import { Button } from '@/components/ui/button'
+import { GuardedButton } from '@/components/lab/guarded-button'
 import { Card } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Field } from '@/components/ui/field'
@@ -243,7 +243,28 @@ function LaboratoryForm({ initial }: { initial: LabSettings }) {
               />
             }
           />
+          <Row
+            title={t('holdRelease')}
+            hint={t('holdReleaseHint')}
+            control={
+              <Switch
+                checked={v.holdReleaseForCriticals}
+                onCheckedChange={(x) => set('holdReleaseForCriticals', x)}
+                label={t('holdRelease')}
+              />
+            }
+          />
         </div>
+        <Field label={t('transitAlert')} hint={t('transitAlertHint')}>
+          <Select
+            value={String(v.transitAlertMin)}
+            onValueChange={(x) => set('transitAlertMin', Number(x))}
+            options={[30, 45, 60, 90, 120].map((n) => ({
+              value: String(n),
+              label: t('minutesValue', { value: n }),
+            }))}
+          />
+        </Field>
         <Field label={t('criticalNotify')} hint={t('criticalNotifyHint')}>
           <Select
             value={String(v.criticalNotifyMin)}
@@ -315,9 +336,14 @@ function LaboratoryForm({ initial }: { initial: LabSettings }) {
           />
         </Field>
         <div className="flex items-end justify-end sm:col-span-2">
-          <Button type="submit" variant="primary" loading={save.isPending}>
+          <GuardedButton
+            permission="settings.edit"
+            type="submit"
+            variant="primary"
+            loading={save.isPending}
+          >
             {t('saveLab')}
-          </Button>
+          </GuardedButton>
         </div>
       </form>
       <div>
@@ -727,15 +753,28 @@ export function Component() {
                     {t('resetBody')}
                   </p>
                 </div>
-                <Button variant="danger" onClick={() => setResetOpen(true)}>
+                <GuardedButton
+                  permission="data.reset"
+                  variant="danger"
+                  onClick={() => setResetOpen(true)}
+                >
                   {t('resetButton')}
-                </Button>
+                </GuardedButton>
               </div>
             </div>
           </Panel>
 
           <Panel id="about" title={label.about}>
             <p className="mb-4 text-meta text-fg-muted">{t('aboutBody')}</p>
+            <div className="mb-4 grid gap-2 rounded-lg bg-info-soft p-4 text-meta text-info-text">
+              <p className="font-semibold">{t('demoLimitsTitle')}</p>
+              <ul className="grid list-disc gap-1 pl-5">
+                <li>{t('demoLimitStorage')}</li>
+                <li>{t('demoLimitRoles')}</li>
+                <li>{t('demoLimitAudit')}</li>
+                <li>{t('demoLimitClinical')}</li>
+              </ul>
+            </div>
             <dl className="grid gap-3 text-meta sm:grid-cols-3">
               <div>
                 <dt className="text-xs text-fg-muted">{t('version')}</dt>

@@ -52,6 +52,8 @@ const ORDER: Record<OrderStatus, Spec> = {
   'pending-result': { tone: 'warning', icon: <HourglassIcon /> },
   'awaiting-review': { tone: 'warning', icon: <ScanSearchIcon /> },
   'awaiting-validation': { tone: 'warning', icon: <BadgeCheckIcon /> },
+  'awaiting-release': { tone: 'info', icon: <FileTextIcon /> },
+  'partially-reported': { tone: 'info', icon: <FileTextIcon /> },
   completed: { tone: 'success', icon: <CircleCheckIcon /> },
   cancelled: { tone: 'outline', icon: <BanIcon /> },
   rejected: { tone: 'danger', icon: <CircleXIcon /> },
@@ -83,9 +85,11 @@ const REPORT: Record<ReportStatus, Spec> = {
   draft: { tone: 'outline', icon: <PencilIcon /> },
   'pending-validation': { tone: 'warning', icon: <HourglassIcon /> },
   validated: { tone: 'info', icon: <BadgeCheckIcon /> },
+  preliminary: { tone: 'info', icon: <HourglassIcon /> },
   released: { tone: 'success', icon: <FileTextIcon /> },
   'amendment-pending': { tone: 'warning', icon: <PencilIcon /> },
   corrected: { tone: 'accent', icon: <FileTextIcon /> },
+  withdrawn: { tone: 'danger', icon: <BanIcon /> },
 }
 
 const CRITICAL: Record<CriticalStatus, Spec> = {

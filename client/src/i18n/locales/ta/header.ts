@@ -1,13 +1,10 @@
 export default {
   breadcrumb: 'வழித்தடம்',
-  searchPlaceholder: 'நோயாளி, UHID, மாதிரி ID, ஆர்டர் ID தேடுக...',
+  searchPlaceholder: 'நோயாளி, UHID, அக்சஷன் எண், ஆர்டர் ID தேடுக...',
   searchShort: 'தேடு',
   notifications: 'அறிவிப்புகள்',
   notificationsUnread_one: '{count} படிக்காத அறிவிப்பு',
   notificationsUnread_other: '{count} படிக்காத அறிவிப்புகள்',
-  criticalPill_one: '{count} அவசரம்',
-  criticalPill_other: '{count} அவசரம்',
-  criticalPillLabel: 'நடவடிக்கைக்காகக் காத்திருக்கும் அவசர முடிவுகள்',
   theme: 'தீம்',
   darkMode: 'டார்க் மோட்',
   language: 'மொழி',
@@ -22,6 +19,7 @@ export default {
   actingAsHint:
     'நீங்கள் செய்யும் செயல்களில் பதிவு செய்யப்படும். இந்த முன்மாதிரியில் உள்நுழைவு இல்லை.',
   settings: 'அமைப்புகள் மற்றும் விருப்பங்கள்',
-  resetDemo: 'டெமோ தரவை மீட்டமை',
-  shift: 'காலை ஷிஃப்ட்',
+  demoNotice:
+    'டெமோ அமைப்பு: தரவு இந்த உலாவியில் மட்டுமே சேமிக்கப்படுகிறது, இது மருத்துவப் பயன்பாட்டுக்கு அல்ல.',
+  demoNoticeMore: 'இதன் பொருள் என்ன',
 } as const

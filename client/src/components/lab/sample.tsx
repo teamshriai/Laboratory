@@ -7,21 +7,7 @@ import {
 } from '@/domain/workflow'
 import { useEnum } from '@/i18n/context'
 import { cn } from '@/lib/cn'
-
-const TUBE: Record<ContainerId, string> = {
-  edta: 'bg-tube-edta',
-  sst: 'bg-tube-sst',
-  plain: 'bg-tube-plain',
-  citrate: 'bg-tube-citrate',
-  fluoride: 'bg-tube-fluoride',
-  heparin: 'bg-tube-heparin',
-  urine: 'bg-tube-sst',
-  stool: 'bg-tube-formalin',
-  'culture-bottle': 'bg-tube-culture',
-  sterile: 'bg-tube-sterile',
-  formalin: 'bg-tube-formalin',
-  slide: 'bg-tube-slide',
-}
+import { TUBE_CLASS } from '@/lib/tube-colors'
 
 export function TubeDot({
   container,
@@ -35,7 +21,7 @@ export function TubeDot({
       aria-hidden
       className={cn(
         'inline-block size-2.5 shrink-0 rounded-full ring-2 ring-surface outline outline-1 outline-line-strong',
-        TUBE[container],
+        TUBE_CLASS[container],
         className,
       )}
     />

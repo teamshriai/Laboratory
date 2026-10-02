@@ -27,3 +27,19 @@ export function isCriticalOverdue(
 ) {
   return alert.status === 'open' && now - alert.detectedAt > limitMin * 60_000
 }
+
+const TITLES = /^(dr|dr\.|sister|sr|sr\.|mr|mr\.|mrs|mrs\.|ms|ms\.|nurse)$/i
+
+/**
+ * A recipient recorded by full name (CAP COM.30000: a first name alone is
+ * not enough). Titles and a role in brackets are ignored when counting.
+ */
+export function isFullName(text: string) {
+  const words = text
+    .replace(/\(.*?\)/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w && !TITLES.test(w))
+  return (
+    words.filter((w) => w.replace(/[^\p{L}]/gu, '').length >= 1).length >= 2
+  )
+}

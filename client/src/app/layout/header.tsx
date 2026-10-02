@@ -1,5 +1,5 @@
 import {
-  BellRingIcon,
+  InfoIcon,
   BellIcon,
   ChevronRightIcon,
   ChevronDownIcon,
@@ -13,13 +13,15 @@ import {
   LanguagesIcon,
   XIcon,
 } from 'lucide-react'
-import { Fragment } from 'react'
+import { Fragment, useEffect, useRef } from 'react'
 import { Link, useMatches, useNavigate } from 'react-router'
 import { DEPARTMENTS, LANGUAGES, type StaffRole } from '@/domain/types'
 import { useEnum, useLanguage, useT } from '@/i18n/context'
 import { LANGUAGE_NAMES, type TKey } from '@/i18n/core'
+import { INDOSTATES } from '@/lib/brand'
 import { cn } from '@/lib/cn'
-import { useCriticals, useReference } from '@/services/queries'
+import { IndostatesLogo } from '@/components/ui/logo'
+import { useReference } from '@/services/queries'
 import { Avatar, Kbd } from '@/components/ui/misc'
 import { IconButton } from '@/components/ui/icon-button'
 import { Tooltip } from '@/components/ui/tooltip'
@@ -49,8 +51,11 @@ function Breadcrumbs() {
   const th = useT('header')
   const matches = useMatches()
   const crumbs = matches.flatMap((m) => {
-    const handle = m.handle as { crumb?: TKey<'nav'> } | undefined
-    return handle?.crumb ? [{ key: handle.crumb, to: m.pathname }] : []
+    const handle = m.handle as
+      { crumb?: TKey<'nav'>; crumbTo?: string } | undefined
+    return handle?.crumb
+      ? [{ key: handle.crumb, to: handle.crumbTo ?? m.pathname }]
+      : []
   })
   if (crumbs.length === 0) return null
   return (
@@ -59,43 +64,37 @@ function Breadcrumbs() {
       className="hidden min-w-0 items-center gap-1.5 text-sm md:flex"
     >
       {crumbs.map((c, i) => (
-        <Fragment key={c.to}>
+        <Fragment key={c.key}>
           {i > 0 ? (
-            <ChevronRightIcon className="size-3 shrink-0 text-fg-subtle" />
+            <ChevronRightIcon
+              className={cn(
+                'size-3 shrink-0 text-fg-subtle',
+                // The top level gives way first on narrower headers.
+                i === 1 && 'max-2xl:hidden',
+              )}
+            />
           ) : null}
           {i < crumbs.length - 1 ? (
             <Link
               to={c.to}
-              className="truncate py-1 text-fg-muted hover:text-fg"
+              className={cn(
+                'truncate py-1 text-fg-muted hover:text-fg',
+                i === 0 && 'max-2xl:hidden',
+              )}
             >
               {t(c.key)}
             </Link>
           ) : (
-            <span aria-current="page" className="truncate font-medium text-fg">
+            <span
+              aria-current="page"
+              className="min-w-0 truncate font-medium text-fg"
+            >
               {t(c.key)}
             </span>
           )}
         </Fragment>
       ))}
     </nav>
-  )
-}
-
-function CriticalPill() {
-  const t = useT('header')
-  const { data } = useCriticals({ status: 'pending' })
-  const count = data?.counts.pending ?? 0
-  if (count === 0) return null
-  return (
-    <Link
-      to="/laboratory/critical-values?status=pending"
-      aria-label={t('criticalPillLabel')}
-      className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-lg bg-danger px-3 text-sm font-semibold text-on-danger shadow-danger transition-opacity hover:opacity-90"
-    >
-      <BellRingIcon strokeWidth={2.2} className="size-4" aria-hidden />
-      <span className="hidden sm:inline">{t('criticalPill', { count })}</span>
-      <span className="sm:hidden">{count}</span>
-    </Link>
   )
 }
 
@@ -345,12 +344,35 @@ function ProfileMenu() {
         <MenuSeparator />
         <MenuItem
           icon={<SettingsIcon />}
-          onSelect={() => void navigate('/laboratory/settings')}
+          onSelect={() => void navigate('/settings')}
         >
           {t('settings')}
         </MenuItem>
       </MenuContent>
     </Menu>
+  )
+}
+
+/**
+ * Always visible, not dismissable: the data lives in this browser only, so
+ * nothing here is shared, backed up or secured like a clinical system.
+ */
+function DemoNotice() {
+  const t = useT('header')
+  return (
+    <p
+      role="note"
+      className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-t border-line bg-info-soft px-4 py-1.5 text-xs text-info-text md:px-6"
+    >
+      <InfoIcon className="size-3.5 shrink-0" aria-hidden />
+      <span>{t('demoNotice')}</span>
+      <Link
+        to="/settings?section=about"
+        className="tap-reach font-semibold underline underline-offset-2"
+      >
+        {t('demoNoticeMore')}
+      </Link>
+    </p>
   )
 }
 
@@ -363,51 +385,79 @@ export function Header({
 }) {
   const t = useT('header')
   const tn = useT('nav')
+  const tc = useT('common')
   const { department, setDepartment } = usePreferences()
   const e = useEnum()
+  const ref = useRef<HTMLElement>(null)
+  // Sticky content below the header (patient banners) sits under it; the
+  // header's height changes with the notice strips, so it is published.
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const root = document.documentElement
+    const update = () =>
+      root.style.setProperty('--header-h', `${el.offsetHeight}px`)
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
   return (
-    <header className="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur">
-      <div className="flex h-16 items-center gap-1.5 px-3 min-[360px]:gap-2.5 sm:px-4 md:px-6">
+    <header
+      ref={ref}
+      className="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur"
+    >
+      <div className="flex h-16 items-center gap-1.5 px-3 min-[360px]:gap-2.5 sm:px-3 md:px-4">
         <IconButton
           className="md:hidden"
           label={tn('openMenu')}
           icon={<MenuIcon className="size-5" />}
           onClick={onOpenNav}
         />
-        <div className="min-w-0 flex-1 lg:flex-none lg:basis-72 xl:basis-80">
+        <div className="min-w-0 flex-1 lg:flex-initial lg:shrink-0 lg:pr-3 xl:pr-10">
           <Breadcrumbs />
         </div>
         <button
           type="button"
           onClick={onOpenSearch}
-          className="focus-ring group hidden h-11 min-w-0 flex-1 items-center gap-2.5 rounded-xl border border-line bg-surface px-3.5 text-left text-sm text-fg-subtle transition-colors hover:border-line-strong md:flex lg:max-w-xl"
+          className="focus-ring group hidden h-11 min-w-0 shrink items-center gap-2.5 rounded-xl border border-line bg-surface px-3.5 text-left text-sm text-fg-subtle transition-colors hover:border-line-strong lg:flex lg:w-40 xl:w-[12.5rem] 2xl:w-[21.5rem]"
         >
           <SearchIcon className="size-4 shrink-0" />
           <span className="truncate">{t('searchPlaceholder')}</span>
-          <span className="ml-auto hidden items-center gap-1 lg:flex">
+          <span className="ml-auto hidden items-center gap-1 xl:flex">
             <Kbd>Ctrl</Kbd>
             <Kbd>K</Kbd>
           </span>
         </button>
-        <div className="ml-auto flex min-w-0 items-center gap-0.5 min-[360px]:gap-1.5">
+        <div className="flex min-w-0 shrink-0 items-center gap-0.5 max-md:ml-auto min-[360px]:gap-1.5 lg:ml-3 lg:gap-3">
           <IconButton
-            className="md:hidden"
+            className="lg:hidden"
             label={t('searchShort')}
             icon={<SearchIcon className="size-[18px]" />}
             onClick={onOpenSearch}
           />
-          <CriticalPill />
           <ErrorBoundary fallback={() => null}>
             <NotificationPanel trigger={<BellIcon className="size-[18px]" />} />
           </ErrorBoundary>
           <span aria-hidden className="mx-1 hidden h-6 w-px bg-line sm:block" />
-          <div className="hidden items-center gap-1.5 sm:flex">
+          <div className="hidden items-center gap-1.5 sm:flex lg:gap-3">
             <DepartmentMenu />
             <LanguageMenu />
             <ThemeSwitch />
           </div>
           <ProfileMenu />
         </div>
+        {/* The partner mark sits in the top-right corner (phones keep it in
+            the menu drawer, where there is room). */}
+        <a
+          href={INDOSTATES.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={tc('opensInNewTab', { name: INDOSTATES.name })}
+          className="focus-ring ml-auto hidden min-h-11 shrink-0 items-center rounded-md transition-opacity hover:opacity-85 md:inline-flex"
+        >
+          <IndostatesLogo className="h-7 rounded-md lg:h-8" />
+        </a>
       </div>
       {department ? (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line bg-primary-50 px-4 py-2 text-xs text-accent-text md:px-6">
@@ -425,6 +475,7 @@ export function Header({
           </button>
         </div>
       ) : null}
+      <DemoNotice />
     </header>
   )
 }

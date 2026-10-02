@@ -14,6 +14,7 @@ import {
   notify,
   staffName,
   type EngineCtx,
+  requirePermission,
 } from './core'
 
 export interface EquipmentLogInput {
@@ -29,6 +30,7 @@ export function logEquipment(
   input: EquipmentLogInput,
   ctx: EngineCtx,
 ) {
+  requirePermission(db, ctx, 'equipment.manage')
   const eq = must(db.equipment, id, 'equipment')
   const note = input.note.trim()
   if (!note) throw new LabApiError('validation-failed', { field: 'note' })
@@ -69,7 +71,7 @@ export function logEquipment(
       'equipment-down',
       'danger',
       { equipment: eq.name },
-      '/laboratory/equipment',
+      '/equipment',
     )
   audit(db, ctx, 'equipment', eq.id, input.type, {
     reason: note,
@@ -80,7 +82,7 @@ export function logEquipment(
     ctx,
     'equipment-logged',
     { equipment: eq.name, type: input.type },
-    '/laboratory/equipment',
+    '/equipment',
   )
   return eq
 }
@@ -96,6 +98,7 @@ export function scheduleMaintenance(
   },
   ctx: EngineCtx,
 ) {
+  requirePermission(db, ctx, 'equipment.manage')
   const eq = must(db.equipment, id, 'equipment')
   const title = input.title.trim()
   if (!title) throw new LabApiError('validation-failed', { field: 'title' })
@@ -121,6 +124,9 @@ export function scheduleMaintenance(
     type: 'note',
     note: title,
   })
+  audit(db, ctx, 'equipment', eq.id, 'maintenance-scheduled', {
+    detail: { task: title, kind: input.kind },
+  })
   return task
 }
 
@@ -141,6 +147,7 @@ export function completeMaintenance(
   input: CompleteMaintenanceInput,
   ctx: EngineCtx,
 ) {
+  requirePermission(db, ctx, 'equipment.manage')
   const eq = must(db.equipment, id, 'equipment')
   const work = input.work.trim()
   if (!work) throw new LabApiError('validation-failed', { field: 'work' })
@@ -183,7 +190,7 @@ export function completeMaintenance(
     ctx,
     'equipment-logged',
     { equipment: eq.name, type: 'maintenance' },
-    `/laboratory/equipment?equipment=${eq.id}`,
+    `/equipment?equipment=${eq.id}`,
   )
   return eq
 }
@@ -202,6 +209,7 @@ export function recordCalibration(
   input: CalibrationInput,
   ctx: EngineCtx,
 ) {
+  requirePermission(db, ctx, 'equipment.manage')
   const eq = must(db.equipment, id, 'equipment')
   const certificateNo = input.certificateNo.trim()
   if (!certificateNo)
@@ -246,7 +254,7 @@ export function recordCalibration(
     ctx,
     'equipment-logged',
     { equipment: eq.name, type: 'calibration' },
-    `/laboratory/equipment?equipment=${eq.id}`,
+    `/equipment?equipment=${eq.id}`,
   )
   return record
 }
@@ -262,6 +270,7 @@ export function setConnection(
   input: { connection: 'online' | 'offline'; reason: string },
   ctx: EngineCtx,
 ) {
+  requirePermission(db, ctx, 'equipment.manage')
   const eq = must(db.equipment, id, 'equipment')
   const reason = input.reason.trim()
   if (!reason) throw new LabApiError('reason-required')
@@ -291,14 +300,14 @@ export function setConnection(
       'equipment-down',
       'danger',
       { equipment: eq.name, reason, samples: running.length },
-      `/laboratory/equipment?equipment=${eq.id}`,
+      `/equipment?equipment=${eq.id}`,
     )
   logActivity(
     db,
     ctx,
     input.connection === 'offline' ? 'equipment-offline' : 'equipment-online',
     { equipment: eq.name },
-    `/laboratory/equipment?equipment=${eq.id}`,
+    `/equipment?equipment=${eq.id}`,
   )
   return { affected: running.length }
 }

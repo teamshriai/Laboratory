@@ -39,6 +39,7 @@ import {
 } from '@/services/queries'
 import { StockBadge } from '@/components/lab/status'
 import { Button } from '@/components/ui/button'
+import { GuardedButton } from '@/components/lab/guarded-button'
 import { Card } from '@/components/ui/card'
 import { DataTable, type Column } from '@/components/ui/data-table'
 import { SearchInput } from '@/components/ui/input'
@@ -229,11 +230,11 @@ export function Component() {
           <>
             <Menu>
               <MenuTrigger asChild>
-                <Button variant="primary">
+                <GuardedButton permission="inventory.manage" variant="primary">
                   <PackageIcon />
                   {t('receive')}
                   <ChevronDownIcon className="size-3.5" />
-                </Button>
+                </GuardedButton>
               </MenuTrigger>
               <MenuContent align="end">
                 <MenuItem
@@ -264,7 +265,7 @@ export function Component() {
             value: count(
               (r) => r.status === 'low-stock' || r.status === 'out-of-stock',
             ),
-            href: '/laboratory/inventory?tab=items',
+            href: '/inventory?tab=items',
           },
           {
             key: 'expiring',
@@ -272,7 +273,7 @@ export function Component() {
             value: (expiryRows.data ?? []).filter(
               (r) => r.window === '7d' || r.window === '30d',
             ).length,
-            href: '/laboratory/inventory?tab=expiry',
+            href: '/inventory?tab=expiry',
           },
           {
             key: 'expired',
@@ -280,7 +281,7 @@ export function Component() {
             value: (expiryRows.data ?? []).filter((r) => r.window === 'expired')
               .length,
             alert: (expiryRows.data ?? []).some((r) => r.window === 'expired'),
-            href: '/laboratory/inventory?tab=expiry',
+            href: '/inventory?tab=expiry',
           },
           {
             key: 'quarantined',
@@ -291,7 +292,7 @@ export function Component() {
             key: 'received',
             label: t('receivedRecent'),
             value: received7d,
-            href: '/laboratory/inventory?tab=movements',
+            href: '/inventory?tab=movements',
           },
         ]}
       />

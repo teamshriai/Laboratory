@@ -215,7 +215,7 @@ export function SampleOrderLinks({ sample }: { sample: SampleDetail }) {
     <div className="grid gap-2 text-meta">
       <p>
         <Link
-          to={`/laboratory/orders?order=${sample.orderId}`}
+          to={`/orders?order=${sample.orderId}`}
           className="font-mono font-medium text-accent-text hover:underline"
         >
           {sample.orderNo}
@@ -232,7 +232,7 @@ export function SampleOrderLinks({ sample }: { sample: SampleDetail }) {
           {sample.reportIds.map((id) => (
             <Link
               key={id}
-              to={`/laboratory/reports/${id}`}
+              to={`/reports/${id}`}
               className="text-xs font-medium text-accent-text hover:underline"
             >
               {t('sectionReports')}

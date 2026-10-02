@@ -17,7 +17,9 @@ import {
   type Priority,
 } from '@/domain/types'
 import { useUrlFilters } from '@/hooks/use-search-param'
+import { ExportButton } from '@/components/lab/export-button'
 import { FilterBar } from '@/components/lab/filter-bar'
+import { RecordLink } from '@/components/lab/record-link'
 import { Field } from '@/components/ui/field'
 import { useNow } from '@/hooks/use-now'
 import { useEnum, useT } from '@/i18n/context'
@@ -151,13 +153,19 @@ export function Component() {
       cell: (r) => (
         <div className="grid gap-1">
           <PriorityMark priority={r.priority} />
-          <span className="font-mono text-meta font-semibold whitespace-nowrap text-fg">
-            {r.accessionNo ?? (
-              <span className="font-sans font-normal text-fg-subtle">
-                {t('notCollected')}
-              </span>
-            )}
-          </span>
+          {r.accessionNo ? (
+            <RecordLink
+              kind="specimen"
+              id={r.id}
+              className="text-meta font-semibold whitespace-nowrap text-fg"
+            >
+              {r.accessionNo}
+            </RecordLink>
+          ) : (
+            <span className="text-meta text-fg-subtle">
+              {t('notCollected')}
+            </span>
+          )}
           <ContainerChip
             container={r.container}
             className="text-xs text-fg-muted"
@@ -292,6 +300,39 @@ export function Component() {
       : t('emptyBody')
   const activeFilters = filters.activeCount() - (bucket === 'all' ? 0 : 1)
 
+  // The "More filters" in use, each removable on its own.
+  const chipValue: Record<(typeof MORE)[number], (x: string) => string> = {
+    assignee: (x) =>
+      x === 'unassigned'
+        ? t('unassigned')
+        : (data?.technicians.find((s) => s.id === x)?.name ?? x),
+    date: (x) => e('datePreset', x as DatePreset),
+    container: (x) => e('container', x as (typeof CONTAINERS)[number]),
+    doctor: (x) => data?.doctors.find((d) => d.id === x)?.name ?? x,
+    encounter: (x) => e('encounter', x as (typeof ENCOUNTER_TYPES)[number]),
+    ward: (x) => x,
+    tat: (x) =>
+      x === 'on-track'
+        ? t('tatOnTrack')
+        : x === 'at-risk'
+          ? t('tatAtRisk')
+          : t('tatOverdue'),
+  }
+  const chipField: Record<(typeof MORE)[number], string> = {
+    assignee: t('colAssigned'),
+    date: t('filterCollected'),
+    container: t('filterSampleType'),
+    doctor: t('filterDoctor'),
+    encounter: t('filterEncounter'),
+    ward: t('filterWard'),
+    tat: t('filterTat'),
+  }
+  const chips = MORE.filter((k) => v[k] !== 'all').map((k) => ({
+    key: k,
+    label: `${chipField[k]}: ${chipValue[k](v[k])}`,
+    onRemove: () => filters.set({ [k]: 'all' }),
+  }))
+
   return (
     <>
       <PageHeader
@@ -300,6 +341,40 @@ export function Component() {
           dataUpdatedAt ? (
             <span>{t('updated', { time: f.time(dataUpdatedAt) })}</span>
           ) : null
+        }
+        actions={
+          <ExportButton
+            filename={t('exportFile')}
+            disabled={!data?.rows.length}
+            rows={() => [
+              [
+                t('colSample'),
+                t('colPatient'),
+                tc('uhid'),
+                t('colDepartment'),
+                t('colTests'),
+                t('colPriority'),
+                tc('status'),
+                tc('collectedAt'),
+                tc('receivedAt'),
+                tc('tat'),
+                t('colAssigned'),
+              ],
+              ...(data?.rows ?? []).map((r) => [
+                r.accessionNo,
+                r.patient.name,
+                r.patient.uhid,
+                e('department', r.department),
+                r.tests.map((x) => x.shortName).join('; '),
+                e('priority', r.priority),
+                e('sampleStatus', r.status),
+                r.collectedAt ? f.dateTime(r.collectedAt) : '',
+                r.receivedAt ? f.dateTime(r.receivedAt) : '',
+                r.tat ? e('tatState', r.tat.state) : '',
+                r.assignedName ?? '',
+              ]),
+            ]}
+          />
         }
       />
 
@@ -324,6 +399,7 @@ export function Component() {
           />
         </div>
         <FilterBar
+          chips={chips}
           canClear={activeFilters > 0 || query !== ''}
           onClear={() => {
             setQuery('')

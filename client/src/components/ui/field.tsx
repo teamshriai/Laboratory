@@ -47,7 +47,8 @@ export function Field({
 }: FieldProps) {
   const id = useId()
   const errorText = useErrorText(error)
-  const hintId = hint ? `${id}-hint` : undefined
+  // The hint gives way to the error, so only what is shown is referenced.
+  const hintId = hint && !errorText ? `${id}-hint` : undefined
   const errorId = errorText ? `${id}-error` : undefined
   const describedBy = [hintId, errorId].filter(Boolean).join(' ') || undefined
   const control = isValidElement(children)

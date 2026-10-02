@@ -15,11 +15,22 @@ import { useLabMutation } from '@/services/mutations'
 import { LabelPrintDialog } from '@/components/lab/labels'
 import { ReasonDialog } from '@/components/lab/reason-dialog'
 import { RejectSampleDialog } from '@/components/lab/reject-sample-dialog'
-import { Button } from '@/components/ui/button'
-import { IconButton } from '@/components/ui/icon-button'
+import type { Permission } from '@/domain/permissions'
+import { usePermissions } from '@/hooks/use-permission'
+import { GuardedButton } from '@/components/lab/guarded-button'
 import { StartDialog } from './start-dialog'
 
 type Dialogs = 'start' | 'hold' | 'reject' | 'label' | null
+
+export interface SecondaryAction {
+  key: string
+  label: string
+  icon: ReactNode
+  onSelect: () => void
+  danger?: boolean
+  disabled?: boolean
+  hint?: string
+}
 
 /** Contextual actions for a sample and the dialogs they open. */
 export function useSampleActions(
@@ -29,6 +40,7 @@ export function useSampleActions(
   const t = useT('processing')
   const e = useEnum()
   const navigate = useNavigate()
+  const { can, why } = usePermissions()
   const [open, setOpen] = useState<Dialogs>(null)
   const receive = useLabMutation((id: string) => labApi.samples.receive(id), {
     success: (r) => t('receivedToast', { accession: r.accessionNo ?? '' }),
@@ -48,13 +60,7 @@ export function useSampleActions(
   if (!sample)
     return {
       primary: null as ReactNode,
-      secondary: [] as {
-        key: string
-        label: string
-        icon: ReactNode
-        onSelect: () => void
-        danger?: boolean
-      }[],
+      secondary: [] as SecondaryAction[],
       dialogs: null as ReactNode,
     }
 
@@ -62,6 +68,7 @@ export function useSampleActions(
     label: string
     icon: ReactNode
     onClick: () => void
+    permission: Permission
     loading?: boolean
     variant?: 'primary' | 'secondary'
   } | null = null
@@ -71,6 +78,7 @@ export function useSampleActions(
         label: t('receive'),
         icon: <PackageIcon />,
         onClick: () => receive.mutate(sample.id),
+        permission: 'specimen.receive',
         loading: receive.isPending,
       }
       break
@@ -79,6 +87,7 @@ export function useSampleActions(
         label: t('startShort'),
         icon: <CirclePlayIcon />,
         onClick: () => setOpen('start'),
+        permission: 'specimen.process',
       }
       break
     case 'processing':
@@ -86,7 +95,8 @@ export function useSampleActions(
         lead = {
           label: t('enterResults'),
           icon: <PencilLineIcon />,
-          onClick: () => void navigate(`/laboratory/results/${sample.id}`),
+          onClick: () => void navigate(`/results/${sample.id}`),
+          permission: 'result.enter',
         }
       break
     case 'on_hold':
@@ -94,30 +104,27 @@ export function useSampleActions(
         label: t('resume'),
         icon: <CirclePlayIcon />,
         onClick: () => resume.mutate(sample.id),
+        permission: 'specimen.process',
         loading: resume.isPending,
         variant: 'secondary',
       }
       break
   }
-  const primary: ReactNode = !lead ? null : options.compact ? (
-    <IconButton
-      label={lead.label}
-      icon={lead.icon}
+  // The primary action names the next step in words (audit §11).
+  const primary: ReactNode = !lead ? null : (
+    <GuardedButton
+      permission={lead.permission}
       variant={lead.variant ?? 'primary'}
-      loading={lead.loading ?? false}
-      onClick={lead.onClick}
-    />
-  ) : (
-    <Button
-      variant={lead.variant ?? 'primary'}
-      size="sm"
+      size={options.compact ? 'xs' : 'sm'}
       loading={lead.loading ?? false}
       onClick={lead.onClick}
     >
       {lead.icon}
       {lead.label}
-    </Button>
+    </GuardedButton>
   )
+  const allowed = (permission: Permission) =>
+    can(permission) ? {} : { disabled: true, hint: why(permission) }
 
   const inLab = ['received', 'processing'].includes(sample.status)
   const rejectable = [
@@ -126,7 +133,7 @@ export function useSampleActions(
     'processing',
     'on_hold',
   ].includes(sample.status)
-  const secondary = [
+  const secondary: SecondaryAction[] = [
     ...(inLab
       ? [
           {
@@ -134,6 +141,7 @@ export function useSampleActions(
             label: t('hold'),
             icon: <CirclePauseIcon />,
             onSelect: () => setOpen('hold'),
+            ...allowed('specimen.process'),
           },
         ]
       : []),
@@ -144,6 +152,7 @@ export function useSampleActions(
             label: t('printLabel'),
             icon: <PrinterIcon />,
             onSelect: () => setOpen('label'),
+            ...allowed('label.print'),
           },
         ]
       : []),
@@ -155,6 +164,7 @@ export function useSampleActions(
             icon: <CircleXIcon />,
             onSelect: () => setOpen('reject'),
             danger: true,
+            ...allowed('specimen.reject'),
           },
         ]
       : []),

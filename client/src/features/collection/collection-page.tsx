@@ -15,8 +15,7 @@ import { useSearchParams } from 'react-router'
 import { PRIORITIES, type Priority } from '@/domain/types'
 import { usePreferences } from '@/app/preferences/context'
 import { useNow } from '@/hooks/use-now'
-import { oneOf } from '@/lib/storage'
-import { usePersistentState } from '@/hooks/use-persistent-state'
+import { useSearchParam } from '@/hooks/use-search-param'
 import { useEnum, useT } from '@/i18n/context'
 import { useFormat } from '@/i18n/format'
 import { labApi, type SampleRow } from '@/services/lab-api'
@@ -24,6 +23,7 @@ import { useLabMutation } from '@/services/mutations'
 import { useCollectionQueue } from '@/services/queries'
 import { PageHeader } from '@/app/layout/page-header'
 import { FilterBar } from '@/components/lab/filter-bar'
+import { RecordLink } from '@/components/lab/record-link'
 import { LabelPrintDialog } from '@/components/lab/labels'
 import { PatientCell } from '@/components/lab/patient'
 import { RejectSampleDialog } from '@/components/lab/reject-sample-dialog'
@@ -33,6 +33,7 @@ import { Waiting } from '@/components/lab/tat'
 import { TestChips } from '@/components/lab/test-chips'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { GuardedButton } from '@/components/lab/guarded-button'
 import { Card } from '@/components/ui/card'
 import { DataTable, type Column } from '@/components/ui/data-table'
 import { SearchInput } from '@/components/ui/input'
@@ -49,8 +50,8 @@ import { FilterTabs } from '@/components/ui/toggles'
 import { CollectDrawer } from './collect-drawer'
 
 type Tab = 'pending' | 'collected'
-const isTab = oneOf<Tab>(['pending', 'collected'])
-const isPriority = oneOf<Priority | 'all'>(['all', ...PRIORITIES])
+const TABS: readonly Tab[] = ['pending', 'collected']
+const PRIORITY_FILTERS: readonly (Priority | 'all')[] = ['all', ...PRIORITIES]
 
 export function Component() {
   const t = useT('collection')
@@ -60,17 +61,14 @@ export function Component() {
   const now = useNow()
   const { department } = usePreferences()
   const [params, setParams] = useSearchParams()
-  const [tab, setTab] = usePersistentState<Tab>(
-    'filters.collection.tab',
-    'pending',
-    isTab,
-  )
-  const [priority, setPriority] = usePersistentState<Priority | 'all'>(
-    'filters.collection.priority',
+  // Tab and filters live in the URL so a view can be linked and reloaded.
+  const [tab, setTab] = useSearchParam<Tab>('tab', 'pending', TABS)
+  const [priority, setPriority] = useSearchParam<Priority | 'all'>(
+    'priority',
     'all',
-    isPriority,
+    PRIORITY_FILTERS,
   )
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useSearchParam<string>('q', '')
   const q = useDeferredValue(query)
   const { data, isPending, isError, refetch } = useCollectionQueue({
     q,
@@ -128,9 +126,13 @@ export function Component() {
       header: t('colOrder'),
       cell: (r) => (
         <div>
-          <p className="font-mono text-meta font-medium whitespace-nowrap text-fg">
+          <RecordLink
+            kind="order"
+            id={r.orderId}
+            className="text-meta font-medium whitespace-nowrap text-fg"
+          >
             {r.orderNo}
-          </p>
+          </RecordLink>
           <p className="max-w-40 truncate text-xs text-fg-muted">
             {r.doctorName}
           </p>
@@ -253,9 +255,13 @@ export function Component() {
       sortValue: (r) => r.accessionNo ?? '',
       cell: (r) => (
         <div className="grid gap-1">
-          <span className="font-mono text-meta font-semibold whitespace-nowrap text-fg">
+          <RecordLink
+            kind="specimen"
+            id={r.id}
+            className="text-meta font-semibold whitespace-nowrap text-fg"
+          >
             {r.accessionNo}
-          </span>
+          </RecordLink>
           <ContainerChip container={r.container} className="text-xs" />
         </div>
       ),
@@ -319,14 +325,15 @@ export function Component() {
           className="flex items-center justify-end gap-1"
           onClick={(ev) => ev.stopPropagation()}
         >
-          <Button
+          <GuardedButton
+            permission="specimen.receive"
             size="xs"
             onClick={() => receive.mutate(r.id)}
             loading={receive.isPending && receive.variables === r.id}
           >
             <PackageIcon />
             {t('receive')}
-          </Button>
+          </GuardedButton>
           <Menu>
             <MenuTrigger asChild>
               <Button

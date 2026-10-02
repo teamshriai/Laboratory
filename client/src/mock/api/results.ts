@@ -10,10 +10,12 @@ import {
 import type { DepartmentId } from '@/domain/types'
 import type { LabDb } from '../db/schema'
 import { must } from '../engine/core'
+import { qcHoldFor } from '../engine/qc-gate'
 import {
   addItemComment,
   holdItem,
   returnItem,
+  requestRerun,
   saveResults,
   reviewItems,
   validateItems,
@@ -21,7 +23,7 @@ import {
 } from '../engine/results'
 import type { DbIndex } from './index-cache'
 import { read, write } from './runtime'
-import { byUrgency, equipmentOptions } from './samples'
+import { equipmentOptions } from './samples'
 import type {
   EntryItem,
   PreviousResult,
@@ -80,7 +82,12 @@ export const resultsApi = {
           continue
         rows.push(sampleRow(db, index, s, now))
       }
-      return rows.toSorted(byUrgency)
+      // STAT first, then the specimen that has waited longest since receipt.
+      return rows.toSorted(
+        (a, b) =>
+          PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] ||
+          (a.receivedAt ?? a.createdAt) - (b.receivedAt ?? b.createdAt),
+      )
     }),
 
   entry: (sampleId: string) =>
@@ -156,6 +163,10 @@ export const resultsApi = {
       )
       return { items: items.length, newCriticals: alerts.length }
     }),
+
+  /** Rerun on the same specimen: both values stay on record. */
+  rerun: (itemId: string, input: { reason: string; dilution?: number }) =>
+    write((db, ctx) => void requestRerun(db, itemId, input, ctx)),
 }
 
 function validationRow(
@@ -191,8 +202,21 @@ function validationRow(
             ? deltaCheck(r.value, previous?.value, analyte.deltaPct)
             : null,
         ...(r.remarks ? { remarks: r.remarks } : {}),
+        ...(r.dilution ? { dilution: r.dilution } : {}),
       }
-      return row
+      // The value before the latest repeat analysis, for comparison.
+      const firstRun = r.revisions.findLast((rev) => rev.rerun)
+      return firstRun
+        ? {
+            ...row,
+            firstRun: {
+              value: firstRun.value,
+              flag: firstRun.flag,
+              ...(firstRun.reason ? { reason: firstRun.reason } : {}),
+              ...(firstRun.dilution ? { dilution: firstRun.dilution } : {}),
+            },
+          }
+        : row
     })
     .filter((a) => a !== null)
   const tests = db.tests[item.testId]
@@ -231,6 +255,15 @@ function validationRow(
     row.reviewedById = item.reviewedBy
   }
   if (sample?.status === 'on_hold') row.sampleOnHold = true
+  // An open QC failure on the analyzer blocks authorisation (QC gating).
+  const qcAnalyte =
+    sample?.equipmentId && qcHoldFor(db, sample.id, sample.equipmentId)
+  if (qcAnalyte && sample?.equipmentId)
+    row.qcHold = {
+      equipment: db.equipment[sample.equipmentId]?.name ?? '',
+      analyte: qcAnalyte,
+    }
+  if (item.rerunCount) row.rerunCount = item.rerunCount
   return row
 }
 
@@ -271,9 +304,12 @@ export const validationApi = {
           continue
         rows.push(validationRow(db, index, item.id, now))
       }
+      // Critical first, then abnormal, then by priority and age.
       return rows.toSorted((a, b) => {
         if (b.criticalCount !== a.criticalCount)
           return b.criticalCount - a.criticalCount
+        const ab = Number(b.abnormalCount > 0) - Number(a.abnormalCount > 0)
+        if (ab !== 0) return ab
         const p = PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]
         if (p !== 0) return p
         return (a.enteredAt ?? 0) - (b.enteredAt ?? 0)
@@ -295,44 +331,36 @@ export const validationApi = {
       return { review, authorise }
     }),
 
-  review: (itemIds: string[], reviewerId: string) =>
-    write((db, ctx) => ({ reviewed: reviewItems(db, itemIds, ctx).length }), {
-      by: reviewerId,
+  // Verify, authorise, send back and hold are signed by the acting user.
+  review: (itemIds: string[]) =>
+    write((db, ctx) => ({ reviewed: reviewItems(db, itemIds, ctx).length })),
+
+  validate: (itemIds: string[]) =>
+    write((db, ctx) => {
+      const items = validateItems(db, itemIds, ctx)
+      // Reports that became ready for release with this validation.
+      const ready = new Set<string>()
+      for (const item of items) {
+        const siblings = Object.values(db.items).filter(
+          (i) => i.reportId === item.reportId && isItemLive(i),
+        )
+        if (siblings.every((i) => i.status === 'validated'))
+          ready.add(item.reportId)
+      }
+      return {
+        validated: items.length,
+        readyReports: [...ready].map((id) => ({
+          id,
+          reportNo: db.reports[id]!.reportNo,
+        })),
+      }
     }),
 
-  validate: (itemIds: string[], validatorId: string) =>
-    write(
-      (db, ctx) => {
-        const items = validateItems(db, itemIds, ctx)
-        // Reports that became ready for release with this validation.
-        const ready = new Set<string>()
-        for (const item of items) {
-          const siblings = Object.values(db.items).filter(
-            (i) => i.reportId === item.reportId && isItemLive(i),
-          )
-          if (siblings.every((i) => i.status === 'validated'))
-            ready.add(item.reportId)
-        }
-        return {
-          validated: items.length,
-          readyReports: [...ready].map((id) => ({
-            id,
-            reportNo: db.reports[id]!.reportNo,
-          })),
-        }
-      },
-      { by: validatorId },
-    ),
+  sendBack: (itemId: string, reason: string) =>
+    write((db, ctx) => void returnItem(db, itemId, reason, ctx)),
 
-  sendBack: (itemId: string, reason: string, validatorId: string) =>
-    write((db, ctx) => void returnItem(db, itemId, reason, ctx), {
-      by: validatorId,
-    }),
-
-  hold: (itemId: string, reason: string, validatorId: string) =>
-    write((db, ctx) => void holdItem(db, itemId, reason, ctx), {
-      by: validatorId,
-    }),
+  hold: (itemId: string, reason: string) =>
+    write((db, ctx) => void holdItem(db, itemId, reason, ctx)),
 
   comment: (itemId: string, text: string, visibility: 'internal' | 'report') =>
     write(

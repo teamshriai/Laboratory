@@ -18,7 +18,7 @@ import { usePatients } from '@/services/queries'
 import { PatientCell } from '@/components/lab/patient'
 import { OrderStatusBadge } from '@/components/lab/status'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { GuardedButton } from '@/components/lab/guarded-button'
 import { Card } from '@/components/ui/card'
 import { DataTable, type Column } from '@/components/ui/data-table'
 import { SearchInput } from '@/components/ui/input'
@@ -160,10 +160,14 @@ export function Component() {
         meta={<>{data ? <Badge tone="neutral">{data.length}</Badge> : null}</>}
         actions={
           <>
-            <Button variant="primary" onClick={() => setRegistering(true)}>
+            <GuardedButton
+              permission="patient.register"
+              variant="primary"
+              onClick={() => setRegistering(true)}
+            >
               <UserPlusIcon />
               {t('register')}
-            </Button>
+            </GuardedButton>
           </>
         }
       />
@@ -209,7 +213,7 @@ export function Component() {
             {recent.slice(0, 4).map((p) => (
               <Link
                 key={p.id}
-                to={`/laboratory/patients/${p.id}`}
+                to={`/patients/${p.id}`}
                 className="focus-ring tap-reach inline-flex h-7 items-center rounded-full bg-surface-2 px-2.5 text-xs font-medium text-fg hover:bg-surface-3"
               >
                 {p.name}
@@ -224,7 +228,7 @@ export function Component() {
             rows={data}
             getRowId={(r) => r.id}
             rowLabel={(r) => r.name}
-            onRowClick={(r) => void navigate(`/laboratory/patients/${r.id}`)}
+            onRowClick={(r) => void navigate(`/patients/${r.id}`)}
             isLoading={isPending}
             isError={isError}
             onRetry={() => void refetch()}
@@ -235,13 +239,14 @@ export function Component() {
                 title={t('emptyTitle')}
                 description={t('emptyBody')}
                 action={
-                  <Button
+                  <GuardedButton
+                    permission="patient.register"
                     variant="primary"
                     onClick={() => setRegistering(true)}
                   >
                     <UserPlusIcon />
                     {t('register')}
-                  </Button>
+                  </GuardedButton>
                 }
               />
             }
@@ -252,7 +257,7 @@ export function Component() {
         open={registering}
         onOpenChange={setRegistering}
         initialName={query}
-        onRegistered={(p) => void navigate(`/laboratory/patients/${p.id}`)}
+        onRegistered={(p) => void navigate(`/patients/${p.id}`)}
       />
     </>
   )

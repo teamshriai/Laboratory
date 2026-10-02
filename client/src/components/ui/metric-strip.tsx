@@ -51,49 +51,49 @@ export function MetricStrip({
           COLUMNS[Math.min(items.length, 7)],
         )}
       >
-        {items.map((m) => {
-          const body = (
-            <>
-              <dt
-                className={cn(
-                  'text-xs font-medium',
-                  m.alert ? 'text-danger-text' : 'text-fg-subtle',
-                )}
-              >
-                {m.label}
-              </dt>
-              <dd
-                className={cn(
-                  'mt-2 text-figure font-semibold tabular-nums',
-                  m.alert ? 'text-danger-text' : 'text-fg',
-                )}
-              >
-                {m.value}
-              </dd>
-              {m.change || m.detail ? (
-                <dd className="mt-1.5 flex flex-wrap items-center gap-x-2 text-xs text-fg-subtle">
-                  {m.change}
-                  {m.detail}
-                </dd>
-              ) : null}
-            </>
-          )
-          const cell =
-            'min-w-0 border-line p-4 [&:not(:last-child)]:border-r max-sm:[&:nth-child(2n)]:border-r-0'
-          return m.href ? (
-            <Link
-              key={m.key}
-              to={m.href}
-              className={cn(cell, 'block transition-colors hover:bg-surface-2')}
+        {items.map((m) => (
+          // A linked metric stretches its label's link over the whole cell,
+          // so the list keeps valid dl > div > dt/dd structure.
+          <div
+            key={m.key}
+            className={cn(
+              'min-w-0 border-line p-4 [&:not(:last-child)]:border-r max-sm:[&:nth-child(2n)]:border-r-0',
+              m.href && 'relative transition-colors hover:bg-surface-2',
+            )}
+          >
+            <dt
+              className={cn(
+                'text-xs font-medium',
+                m.alert ? 'text-danger-text' : 'text-fg-subtle',
+              )}
             >
-              {body}
-            </Link>
-          ) : (
-            <div key={m.key} className={cell}>
-              {body}
-            </div>
-          )
-        })}
+              {m.href ? (
+                <Link
+                  to={m.href}
+                  className="after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-[var(--focus)]"
+                >
+                  {m.label}
+                </Link>
+              ) : (
+                m.label
+              )}
+            </dt>
+            <dd
+              className={cn(
+                'mt-2 text-figure font-semibold tabular-nums',
+                m.alert ? 'text-danger-text' : 'text-fg',
+              )}
+            >
+              {m.value}
+            </dd>
+            {m.change || m.detail ? (
+              <dd className="mt-1.5 flex flex-wrap items-center gap-x-2 text-xs text-fg-subtle">
+                {m.change}
+                {m.detail}
+              </dd>
+            ) : null}
+          </div>
+        ))}
       </dl>
     </div>
   )

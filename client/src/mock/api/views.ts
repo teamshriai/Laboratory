@@ -73,6 +73,7 @@ export function testChip(db: LabDb, item: OrderItem): TestChip {
     department: item.department,
     status: item.status,
     active: item.active,
+    ...(item.rerunCount && item.status === 'draft' ? { rerun: true } : {}),
   }
 }
 
@@ -126,7 +127,7 @@ export function orderRow(
   const row: OrderRow = {
     id: order.id,
     orderNo: order.orderNo,
-    status: deriveOrderStatus(order, items, index.samplesById),
+    status: deriveOrderStatus(order, items, index.samplesById, db.reports),
     priority: order.priority,
     encounter: order.encounter,
     clinicalDepartment: order.department,
@@ -283,6 +284,7 @@ export function resultView(db: LabDb, r: Result): ResultView {
     revisions: r.revisions,
   }
   if (r.remarks) v.remarks = r.remarks
+  if (r.dilution) v.dilution = r.dilution
   return v
 }
 

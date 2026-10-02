@@ -76,6 +76,7 @@ export function deriveOrderStatus(
   order: Pick<LabOrder, 'state'>,
   items: OrderItem[],
   samplesById: ReadonlyMap<string, Sample>,
+  reports: Readonly<Record<string, Report>>,
 ): OrderStatus {
   if (order.state === 'draft') return 'draft'
   if (order.state === 'cancelled') return 'cancelled'
@@ -91,6 +92,11 @@ export function deriveOrderStatus(
   )
   const min = Math.min(...ranks)
   const max = Math.max(...ranks)
+  // Completed is derived only: every live test released in a final report.
+  const reported = live.filter((i) => isItemReported(i, reports[i.reportId]))
+  if (min === 5 && live.every((i) => isItemFinal(i, reports[i.reportId])))
+    return 'completed'
+  if (reported.length > 0) return 'partially-reported'
   switch (min) {
     case 0:
       return max >= 1 ? 'partially-collected' : 'new'
@@ -103,7 +109,7 @@ export function deriveOrderStatus(
     case 4:
       return 'awaiting-validation'
     default:
-      return 'completed'
+      return 'awaiting-release'
   }
 }
 
@@ -146,12 +152,18 @@ export function orderProgress(
 // ---------- Reports ----------
 
 export function deriveReportStatus(
-  report: Pick<Report, 'versions' | 'pendingAmendment'>,
+  report: Pick<Report, 'versions' | 'pendingAmendment' | 'withdrawn'>,
   items: OrderItem[],
 ): ReportStatus {
+  if (report.withdrawn) return 'withdrawn'
   if (report.pendingAmendment) return 'amendment-pending'
-  if (report.versions.length > 1) return 'corrected'
-  if (report.versions.length === 1) return 'released'
+  const last = report.versions.at(-1)
+  if (last) {
+    if (last.kind === 'preliminary') return 'preliminary'
+    if (last.kind === 'amended' || (!last.kind && report.versions.length > 1))
+      return 'corrected'
+    return 'released'
+  }
   const live = items.filter(isItemLive)
   if (live.length === 0) return 'draft'
   if (live.every((i) => i.status === 'validated')) return 'validated'
@@ -159,8 +171,36 @@ export function deriveReportStatus(
   return 'draft'
 }
 
-export function isReportReleased(report: Pick<Report, 'versions'>) {
-  return report.versions.length > 0
+/** Released to the clinician in some version (preliminary included). */
+export function isReportReleased(
+  report: Pick<Report, 'versions' | 'withdrawn'>,
+) {
+  return report.versions.length > 0 && !report.withdrawn
+}
+
+/** The current version is a final (or amended) report, not preliminary. */
+export function isReportFinal(report: Pick<Report, 'versions' | 'withdrawn'>) {
+  const last = report.versions.at(-1)
+  return Boolean(last) && last!.kind !== 'preliminary' && !report.withdrawn
+}
+
+/** This test's result has been released to the clinician. */
+export function isItemReported(
+  item: Pick<OrderItem, 'id'>,
+  report: Pick<Report, 'versions' | 'withdrawn'> | undefined,
+) {
+  if (!report || report.withdrawn) return false
+  return report.versions.some((v) => !v.itemIds || v.itemIds.includes(item.id))
+}
+
+/** This test's result is on a final report. */
+export function isItemFinal(
+  item: Pick<OrderItem, 'id'>,
+  report: Pick<Report, 'versions' | 'withdrawn'> | undefined,
+) {
+  return Boolean(
+    report && isReportFinal(report) && isItemReported(item, report),
+  )
 }
 
 // ---------- Pipeline ----------

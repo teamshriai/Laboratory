@@ -1,8 +1,5 @@
 @import '@fontsource-variable/plus-jakarta-sans';
-@import '@fontsource-variable/noto-sans-devanagari';
-@import '@fontsource-variable/noto-sans-kannada';
-@import '@fontsource-variable/noto-sans-tamil';
-@import '@fontsource-variable/noto-sans-malayalam';
+@import './fonts.css';
 @import 'tailwindcss';
 @import './theme.css';
 @import './base.css';

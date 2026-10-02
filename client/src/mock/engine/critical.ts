@@ -13,8 +13,10 @@ import {
   logActivity,
   must,
   notify,
+  requirePermission,
   type EngineCtx,
 } from './core'
+import { isFullName } from '@/domain/critical'
 
 export interface DocumentCriticalInput {
   notifiedTo: string
@@ -55,16 +57,16 @@ export function documentCritical(
   input: DocumentCriticalInput,
   ctx: EngineCtx,
 ) {
+  requirePermission(db, ctx, 'critical.communicate')
   const alert = must(db.criticals, alertId, 'critical')
   ensurePending(alert)
   const to = input.notifiedTo.trim()
   if (!to) throw new LabApiError('validation-failed', { field: 'notifiedTo' })
-  if (
-    input.notifiedAt > ctx.now + 60_000 ||
-    input.notifiedAt < alert.detectedAt - 60_000
-  )
+  if (input.notifiedAt > ctx.now || input.notifiedAt < alert.detectedAt)
     throw new LabApiError('validation-failed', { field: 'notifiedAt' })
   const outcome = input.outcome ?? 'reached'
+  if (outcome === 'reached' && !isFullName(to))
+    throw new LabApiError('recipient-full-name')
   if (input.acknowledged && outcome !== 'reached')
     throw new LabApiError('invalid-transition', { from: outcome })
   if (input.acknowledged && !input.readBack)
@@ -109,7 +111,7 @@ export function documentCritical(
     ctx,
     input.acknowledged ? 'critical-acknowledged' : 'critical-notified',
     names(db, alert),
-    `/laboratory/critical-values?alert=${alert.id}`,
+    `/critical-results?alert=${alert.id}`,
   )
   return alert
 }
@@ -121,6 +123,7 @@ export function acknowledgeCritical(
   input: { acknowledgedAt: number; readBack: boolean; remarks?: string },
   ctx: EngineCtx,
 ) {
+  requirePermission(db, ctx, 'critical.communicate')
   const alert = must(db.criticals, alertId, 'critical')
   if (alert.status !== 'notified')
     throw new LabApiError('invalid-transition', { from: alert.status })
@@ -142,7 +145,7 @@ export function acknowledgeCritical(
     ctx,
     'critical-acknowledged',
     names(db, alert),
-    `/laboratory/critical-values?alert=${alert.id}`,
+    `/critical-results?alert=${alert.id}`,
   )
   return alert
 }
@@ -157,6 +160,7 @@ export function escalateCritical(
   input: { to: string; reason: string },
   ctx: EngineCtx,
 ) {
+  requirePermission(db, ctx, 'critical.communicate')
   const alert = must(db.criticals, alertId, 'critical')
   ensurePending(alert)
   const to = input.to.trim()
@@ -178,14 +182,14 @@ export function escalateCritical(
     'critical-escalated',
     'danger',
     { ...names(db, alert), to },
-    `/laboratory/critical-values?alert=${alert.id}`,
+    `/critical-results?alert=${alert.id}`,
   )
   logActivity(
     db,
     ctx,
     'critical-escalated',
     { ...names(db, alert), to },
-    `/laboratory/critical-values?alert=${alert.id}`,
+    `/critical-results?alert=${alert.id}`,
   )
   return alert
 }
@@ -197,6 +201,7 @@ export function voidCritical(
   reason: string,
   ctx: EngineCtx,
 ) {
+  requirePermission(db, ctx, 'critical.communicate')
   const alert = must(db.criticals, alertId, 'critical')
   ensurePending(alert)
   if (!reason.trim()) throw new LabApiError('reason-required')

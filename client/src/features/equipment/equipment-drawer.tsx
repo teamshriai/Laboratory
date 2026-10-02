@@ -368,7 +368,7 @@ function Body({
           .map((ev) => (
             <Link
               key={ev.id}
-              to={`/laboratory/quality-control?event=${ev.id}`}
+              to={`/quality-control?event=${ev.id}`}
               className="flex items-center gap-3 rounded-xl border border-danger/35 bg-danger-soft/40 px-4 py-3 hover:bg-danger-soft/70"
             >
               <CircleXIcon strokeWidth={2.2} className="size-5 text-danger" />

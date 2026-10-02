@@ -2,7 +2,7 @@ import { LucideProvider } from 'lucide-react'
 import { Dialog as D } from 'radix-ui'
 import { useEffect, useRef, useState } from 'react'
 import { XIcon } from 'lucide-react'
-import { Link, Outlet, useLocation } from 'react-router'
+import { Outlet, useLocation } from 'react-router'
 import {
   DESKTOP_QUERY,
   RAIL_QUERY,
@@ -17,7 +17,13 @@ import { usePreferences } from '../preferences/context'
 import { CommandPalette } from './command-palette'
 import { DrawerHost } from './drawer-host'
 import { Header } from './header'
-import { Brand, SettingsEntry, Sidebar, SidebarNav } from './sidebar'
+import {
+  Brand,
+  CoBrandRow,
+  SettingsEntry,
+  Sidebar,
+  SidebarNav,
+} from './sidebar'
 
 function isTyping(target: EventTarget | null) {
   const el = target as HTMLElement | null
@@ -81,13 +87,7 @@ function MobileNav({
             {t('mainNavigation')}
           </D.Description>
           <div className="flex h-16 items-center justify-between gap-2.5 border-b border-line px-4">
-            <Link
-              to="/laboratory"
-              onClick={close}
-              className="focus-ring rounded-lg"
-            >
-              <Brand />
-            </Link>
+            <Brand onNavigate={close} />
             <D.Close asChild>
               <IconButton
                 label={tc('close')}
@@ -95,6 +95,7 @@ function MobileNav({
               />
             </D.Close>
           </div>
+          <CoBrandRow />
           <div className="flex-1 scrollbar-thin overflow-y-auto px-3 pb-4">
             <SidebarNav onNavigate={close} />
           </div>
@@ -145,7 +146,9 @@ export function AppShell() {
     // Only a real page change (also keeps React's dev double-run harmless).
     if (lastPath.current === location.pathname) return
     lastPath.current = location.pathname
-    mainRef.current?.focus({ preventScroll: true })
+    // A page may focus its own first field (the reception scan box).
+    if (!mainRef.current?.contains(document.activeElement))
+      mainRef.current?.focus({ preventScroll: true })
     const id = window.setTimeout(() => {
       if (announcer.current) announcer.current.textContent = document.title
     }, 150)

@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Deploy archive (npm run package); the dev-laboratory folder is tracked.
+*.tar.gz
+deploy/*.generated.conf

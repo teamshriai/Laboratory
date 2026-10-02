@@ -2,12 +2,18 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useLanguage } from '@/i18n/context'
 import { translate } from '@/i18n/core'
+import { localiseParams } from '@/i18n/params'
 import type { Language } from '@/domain/types'
 import { isLabApiError } from './lab-api'
 
 export function errorMessage(error: unknown, lang: Language) {
   if (isLabApiError(error))
-    return translate(lang, 'errors', error.code, error.params)
+    return translate(
+      lang,
+      'errors',
+      error.code,
+      localiseParams(lang, error.params),
+    )
   return translate(lang, 'errors', 'genericBody')
 }
 

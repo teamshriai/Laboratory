@@ -19,6 +19,8 @@ import { IconGlyph } from '@/components/ui/icon-tile'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState, ErrorState } from '@/components/ui/states'
 import { Segmented } from '@/components/ui/toggles'
+import { TatPhasesCard } from './phases'
+import { ExportButton } from '@/components/lab/export-button'
 
 const TARGET_PCT = 90
 type Risk = TatView['atRisk'][number]
@@ -346,6 +348,34 @@ export function Component() {
         }
         actions={
           <>
+            <ExportButton
+              filename={t('exportFile')}
+              disabled={!data?.tests.length}
+              rows={() => [
+                [
+                  t('colTest'),
+                  t('exportDepartment'),
+                  t('exportTarget'),
+                  t('colCompleted'),
+                  t('exportAverage'),
+                  t('exportMedian'),
+                  t('exportOnTime'),
+                  t('colInProgress'),
+                  t('colDelayed'),
+                ],
+                ...(data?.tests ?? []).map((r) => [
+                  r.testName,
+                  e('department', r.department),
+                  r.targetHours,
+                  r.completed,
+                  r.avgMin === null ? '' : Math.round(r.avgMin),
+                  r.medianMin === null ? '' : Math.round(r.medianMin),
+                  r.onTimePct === null ? '' : Math.round(r.onTimePct),
+                  r.inProgress,
+                  r.delayed,
+                ]),
+              ]}
+            />
             <Segmented
               value={range}
               onValueChange={setRange}
@@ -413,6 +443,7 @@ export function Component() {
           />
 
           <div className="grid gap-5">
+            <TatPhasesCard phases={data.phases} />
             <Card>
               <CardHeader
                 icon={<ClockAlertIcon />}

@@ -1,1 +1,0 @@
-import{r as e}from"./rolldown-runtime-hePW80VL.js";import{i as t}from"./react-CR5VJ85Q.js";import{vt as n}from"./skeleton-BnfMu90_.js";var r=e(t(),1);function i(e){let t=n(`common`)(`appTitle`);(0,r.useEffect)(()=>{e&&(document.title=`${e} · ${t}`)},[e,t])}export{i as t};

@@ -41,7 +41,14 @@ export function RejectSampleDialog({
         ...(v.remarks ? { remarks: v.remarks } : {}),
       }),
     {
-      success: () => (recollect ? t('rejectedRecollect') : t('rejected')),
+      success: () =>
+        pending
+          ? recollect
+            ? t('notCollectedRecollect')
+            : t('notCollected')
+          : recollect
+            ? t('rejectedRecollect')
+            : t('rejected'),
       onSuccess: (res) => {
         onOpenChange(false)
         onDone?.(res.recollectionId)
