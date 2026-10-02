@@ -18,7 +18,9 @@ import type {
   Reagent,
   ReagentLot,
   ReferenceRange,
+  ImagingStudy,
   Report,
+  ReportLink,
   Result,
   Sample,
   Staff,
@@ -28,7 +30,7 @@ import type {
 } from '@/domain/types'
 
 /** Bump whenever the shape changes; stored data with another version is reseeded. */
-export const SCHEMA_VERSION = 4
+export const SCHEMA_VERSION = 5
 
 export const MAX_FEED_ENTRIES = 500
 /** The audit log is kept longer than the feeds; entries are compact. */
@@ -71,6 +73,9 @@ export interface LabDb {
   results: Table<Result>
   criticals: Table<CriticalAlert>
   reports: Table<Report>
+  /** Share links by report number (laboratory and imaging). */
+  reportLinks: Table<ReportLink>
+  imaging: Table<ImagingStudy>
   reagents: Table<Reagent>
   lots: Table<ReagentLot>
   consumables: Table<Consumable>
@@ -109,6 +114,8 @@ export function emptyDb(now: number): LabDb {
     results: {},
     criticals: {},
     reports: {},
+    reportLinks: {},
+    imaging: {},
     reagents: {},
     lots: {},
     consumables: {},

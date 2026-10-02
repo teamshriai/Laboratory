@@ -93,103 +93,104 @@ function queueRow(
   }
 }
 
+/** The bench work queue with its bucket counts (also read by Today's Work). */
+export function workQueueList(
+  db: LabDb,
+  index: DbIndex,
+  now: number,
+  filters: WorkQueueFilters = {},
+): WorkQueueList {
+  const all = Object.keys(db.samples)
+    .map((id) => queueRow(db, index, id, now))
+    .filter((r): r is WorkQueueRow => r !== null)
+    .filter((r) =>
+      filters.department ? r.department === filters.department : true,
+    )
+    .filter((r) => (filters.priority ? r.priority === filters.priority : true))
+    .filter((r) =>
+      filters.container ? r.container === filters.container : true,
+    )
+    .filter((r) => (filters.doctorId ? r.doctorId === filters.doctorId : true))
+    .filter((r) =>
+      filters.encounter ? r.encounter === filters.encounter : true,
+    )
+    .filter((r) => (filters.ward ? r.ward === filters.ward : true))
+    .filter((r) =>
+      !filters.tat
+        ? true
+        : filters.tat === 'overdue'
+          ? r.tat?.state === 'breached'
+          : filters.tat === 'at-risk'
+            ? r.tat?.state === 'approaching'
+            : r.tat?.state === 'on-track',
+    )
+    .filter((r) =>
+      !filters.assignee
+        ? true
+        : filters.assignee === 'unassigned'
+          ? !r.assignedTo
+          : r.assignedTo === filters.assignee,
+    )
+    .filter((r) =>
+      inDateRange(
+        r.collectedAt ?? r.orderedAt ?? r.createdAt,
+        filters.date,
+        now,
+      ),
+    )
+    .filter((r) =>
+      matchesQuery(filters.q, [
+        r.accessionNo,
+        r.orderNo,
+        r.patient.name,
+        r.patient.uhid,
+        r.assignedName,
+        ...r.tests.map((t) => t.shortName),
+        ...r.tests.map((t) => t.name),
+      ]),
+    )
+  // Old completed and rejected work would drown the live queue.
+  const recent = all.filter(
+    (r) =>
+      !(r.status === 'completed' || r.status === 'rejected') ||
+      (r.completedAt ?? r.rejection?.at ?? r.createdAt) >= now - 2 * 86_400_000,
+  )
+  const counts = Object.fromEntries(WORK_BUCKETS.map((b) => [b, 0])) as Record<
+    WorkBucket,
+    number
+  >
+  for (const r of recent) for (const b of r.buckets) counts[b] += 1
+  const bucket = filters.bucket ?? 'all'
+  const rows = recent
+    .filter((r) => r.buckets.includes(bucket))
+    .toSorted(
+      (a, b) =>
+        Number(DONE.has(a.status)) - Number(DONE.has(b.status)) ||
+        b.openCriticals - a.openCriticals ||
+        PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] ||
+        (b.tat?.ratio ?? -1) - (a.tat?.ratio ?? -1) ||
+        (a.collectedAt ?? a.createdAt) - (b.collectedAt ?? b.createdAt),
+    )
+  const technicians = Object.values(db.staff)
+    .filter((s) => s.role === 'technician')
+    .map((s) => ({
+      id: s.id,
+      name: s.name,
+      ...(s.department ? { department: s.department } : {}),
+    }))
+  // Filter choices drawn from the live queue (wards, doctors in use).
+  const wards = [
+    ...new Set(recent.map((r) => r.ward).filter((w): w is string => !!w)),
+  ].toSorted()
+  const doctors = [
+    ...new Map(
+      recent.map((r) => [r.doctorId, { id: r.doctorId, name: r.doctorName }]),
+    ).values(),
+  ].toSorted((a, b) => a.name.localeCompare(b.name))
+  return { rows, counts, technicians, wards, doctors }
+}
+
 export const workQueueListApi = {
   list: (filters: WorkQueueFilters = {}) =>
-    read((db, { index, now }): WorkQueueList => {
-      const all = Object.keys(db.samples)
-        .map((id) => queueRow(db, index, id, now))
-        .filter((r): r is WorkQueueRow => r !== null)
-        .filter((r) =>
-          filters.department ? r.department === filters.department : true,
-        )
-        .filter((r) =>
-          filters.priority ? r.priority === filters.priority : true,
-        )
-        .filter((r) =>
-          filters.container ? r.container === filters.container : true,
-        )
-        .filter((r) =>
-          filters.doctorId ? r.doctorId === filters.doctorId : true,
-        )
-        .filter((r) =>
-          filters.encounter ? r.encounter === filters.encounter : true,
-        )
-        .filter((r) => (filters.ward ? r.ward === filters.ward : true))
-        .filter((r) =>
-          !filters.tat
-            ? true
-            : filters.tat === 'overdue'
-              ? r.tat?.state === 'breached'
-              : filters.tat === 'at-risk'
-                ? r.tat?.state === 'approaching'
-                : r.tat?.state === 'on-track',
-        )
-        .filter((r) =>
-          !filters.assignee
-            ? true
-            : filters.assignee === 'unassigned'
-              ? !r.assignedTo
-              : r.assignedTo === filters.assignee,
-        )
-        .filter((r) =>
-          inDateRange(
-            r.collectedAt ?? r.orderedAt ?? r.createdAt,
-            filters.date,
-            now,
-          ),
-        )
-        .filter((r) =>
-          matchesQuery(filters.q, [
-            r.accessionNo,
-            r.orderNo,
-            r.patient.name,
-            r.patient.uhid,
-            r.assignedName,
-            ...r.tests.map((t) => t.shortName),
-            ...r.tests.map((t) => t.name),
-          ]),
-        )
-      // Old completed and rejected work would drown the live queue.
-      const recent = all.filter(
-        (r) =>
-          !(r.status === 'completed' || r.status === 'rejected') ||
-          (r.completedAt ?? r.rejection?.at ?? r.createdAt) >=
-            now - 2 * 86_400_000,
-      )
-      const counts = Object.fromEntries(
-        WORK_BUCKETS.map((b) => [b, 0]),
-      ) as Record<WorkBucket, number>
-      for (const r of recent) for (const b of r.buckets) counts[b] += 1
-      const bucket = filters.bucket ?? 'all'
-      const rows = recent
-        .filter((r) => r.buckets.includes(bucket))
-        .toSorted(
-          (a, b) =>
-            Number(DONE.has(a.status)) - Number(DONE.has(b.status)) ||
-            b.openCriticals - a.openCriticals ||
-            PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] ||
-            (b.tat?.ratio ?? -1) - (a.tat?.ratio ?? -1) ||
-            (a.collectedAt ?? a.createdAt) - (b.collectedAt ?? b.createdAt),
-        )
-      const technicians = Object.values(db.staff)
-        .filter((s) => s.role === 'technician')
-        .map((s) => ({
-          id: s.id,
-          name: s.name,
-          ...(s.department ? { department: s.department } : {}),
-        }))
-      // Filter choices drawn from the live queue (wards, doctors in use).
-      const wards = [
-        ...new Set(recent.map((r) => r.ward).filter((w): w is string => !!w)),
-      ].toSorted()
-      const doctors = [
-        ...new Map(
-          recent.map((r) => [
-            r.doctorId,
-            { id: r.doctorId, name: r.doctorName },
-          ]),
-        ).values(),
-      ].toSorted((a, b) => a.name.localeCompare(b.name))
-      return { rows, counts, technicians, wards, doctors }
-    }),
+    read((db, { index, now }) => workQueueList(db, index, now, filters)),
 }

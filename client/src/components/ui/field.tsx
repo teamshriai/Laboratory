@@ -9,6 +9,7 @@ import {
 import { useLanguage } from '@/i18n/context'
 import { translate } from '@/i18n/core'
 import { cn } from '@/lib/cn'
+import { FieldContext } from './field-context'
 
 /** Resolves "forms.required" style error keys through i18n; plain text passes through. */
 export function useErrorText(message: string | undefined) {
@@ -58,6 +59,7 @@ export function Field({
         'aria-describedby': describedBy,
       })
     : children
+  const controlId = isValidElement(children) ? (children.props.id ?? id) : id
   return (
     <div className={cn('grid gap-1.5', className)}>
       <Label.Root
@@ -76,7 +78,21 @@ export function Field({
           </span>
         ) : null}
       </Label.Root>
-      {control}
+      <FieldContext.Provider
+        value={
+          // A plain element (a div) already took the id above; only a
+          // component that may not pass props on (a Controller) needs this.
+          isValidElement(children) && typeof children.type !== 'string'
+            ? {
+                id: controlId,
+                'aria-invalid': errorText ? true : undefined,
+                'aria-describedby': describedBy,
+              }
+            : null
+        }
+      >
+        {control}
+      </FieldContext.Provider>
       {hint && !errorText ? (
         <p id={hintId} className="text-xs text-fg-subtle">
           {hint}

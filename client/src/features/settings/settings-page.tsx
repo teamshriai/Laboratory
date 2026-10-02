@@ -395,6 +395,8 @@ export function Component() {
     reduceMotion,
     setReduceMotion,
     highContrast,
+    largeInterface,
+    setLargeInterface,
     setHighContrast,
   } = usePreferences()
   const { prefs, set: setPref } = useNotificationPrefs()
@@ -718,6 +720,17 @@ export function Component() {
                   checked={highContrast}
                   onCheckedChange={setHighContrast}
                   label={t('highContrast')}
+                />
+              }
+            />
+            <Row
+              title={t('largeInterface')}
+              hint={t('largeInterfaceHint')}
+              control={
+                <Switch
+                  checked={largeInterface}
+                  onCheckedChange={setLargeInterface}
+                  label={t('largeInterface')}
                 />
               }
             />

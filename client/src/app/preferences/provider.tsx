@@ -35,12 +35,17 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     'high-contrast',
     false,
   )
+  const [largeInterface, setLargeInterface] = usePersistentState<boolean>(
+    'large-ui',
+    false,
+  )
   // Applied on <html> so every screen, dialog and portal follows them.
   useEffect(() => {
     const root = document.documentElement
     root.toggleAttribute('data-reduce-motion', reduceMotion)
     root.toggleAttribute('data-high-contrast', highContrast)
-  }, [reduceMotion, highContrast])
+    root.toggleAttribute('data-large-ui', largeInterface)
+  }, [reduceMotion, highContrast, largeInterface])
 
   const setActorId = useCallback(
     (id: string) => {
@@ -64,6 +69,8 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       setReduceMotion,
       highContrast,
       setHighContrast,
+      largeInterface,
+      setLargeInterface,
     }),
     [
       department,
@@ -78,6 +85,8 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       setReduceMotion,
       highContrast,
       setHighContrast,
+      largeInterface,
+      setLargeInterface,
     ],
   )
   return (

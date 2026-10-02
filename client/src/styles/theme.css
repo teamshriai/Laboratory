@@ -208,6 +208,27 @@
   --tile-amber: #8f5f32;
   --tile-red: #b42318;
   --on-tile: #ffffff;
+
+  /* Dashboard stat tiles: a soft wash and a saturated icon square per hue. */
+  --stat-blue: #ecf0ff;
+  --stat-blue-solid: #4f6ef7;
+  --stat-orange: #fff2e6;
+  --stat-orange-solid: #f7811c;
+  --stat-teal: #e4f6f1;
+  --stat-teal-solid: #14a38b;
+  --stat-violet: #f1eeff;
+  --stat-violet-solid: #7c62e8;
+  --stat-pink: #ffecf4;
+  --stat-pink-solid: #e0457f;
+  --stat-red: #ffecec;
+  --stat-red-solid: #e5484d;
+  /* Values on the wash: the same hues, darkened to 4.5:1 or more. */
+  --stat-blue-text: #445fd4;
+  --stat-orange-text: #a35512;
+  --stat-teal-text: #0e7564;
+  --stat-violet-text: #6b54c8;
+  --stat-pink-text: #b83968;
+  --stat-red-text: #bc3b3f;
 }
 
 :root.dark {
@@ -264,6 +285,25 @@
 
   --ai: #a5a0f5;
   --ai-soft: #22203a;
+
+  --stat-blue: #1e2540;
+  --stat-blue-solid: #6d86f8;
+  --stat-orange: #33251a;
+  --stat-orange-solid: #f59a45;
+  --stat-teal: #16302b;
+  --stat-teal-solid: #2fbfa6;
+  --stat-violet: #262140;
+  --stat-violet-solid: #9781f0;
+  --stat-pink: #361e2a;
+  --stat-pink-solid: #ec6a9c;
+  --stat-red: #3a1e20;
+  --stat-red-solid: #f06a6e;
+  --stat-blue-text: #6d86f8;
+  --stat-orange-text: #f59a45;
+  --stat-teal-text: #2fbfa6;
+  --stat-violet-text: #9781f0;
+  --stat-pink-text: #ec6a9c;
+  --stat-red-text: #f06a6e;
 
   --pastel-sky: #1e2a38;
   --pastel-sky-text: #9cc0e8;
@@ -431,6 +471,24 @@
   --color-tile-amber: var(--tile-amber);
   --color-tile-red: var(--tile-red);
   --color-on-tile: var(--on-tile);
+  --color-stat-blue: var(--stat-blue);
+  --color-stat-blue-solid: var(--stat-blue-solid);
+  --color-stat-orange: var(--stat-orange);
+  --color-stat-orange-solid: var(--stat-orange-solid);
+  --color-stat-teal: var(--stat-teal);
+  --color-stat-teal-solid: var(--stat-teal-solid);
+  --color-stat-violet: var(--stat-violet);
+  --color-stat-violet-solid: var(--stat-violet-solid);
+  --color-stat-pink: var(--stat-pink);
+  --color-stat-pink-solid: var(--stat-pink-solid);
+  --color-stat-red: var(--stat-red);
+  --color-stat-red-solid: var(--stat-red-solid);
+  --color-stat-blue-text: var(--stat-blue-text);
+  --color-stat-orange-text: var(--stat-orange-text);
+  --color-stat-teal-text: var(--stat-teal-text);
+  --color-stat-violet-text: var(--stat-violet-text);
+  --color-stat-pink-text: var(--stat-pink-text);
+  --color-stat-red-text: var(--stat-red-text);
   --color-white: #ffffff;
 
   --shadow-card: var(--elev-card);

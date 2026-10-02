@@ -98,6 +98,15 @@ function describe(
       return { label: '', link: '/settings?section=laboratory' }
     case 'system':
       return { label: '' }
+    case 'imaging': {
+      const study = db.imaging[id]
+      return study
+        ? {
+            label: `${study.examName} · ${study.reportNo ?? study.accessionNo}`,
+            link: `/imaging/reports/${study.id}`,
+          }
+        : { label: id }
+    }
   }
 }
 

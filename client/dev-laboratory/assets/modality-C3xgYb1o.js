@@ -1,0 +1,1 @@
+var e={ct:`/imaging/ct`,mri:`/imaging/mri`,xray:`/imaging/x-ray`},t={ct:`imagingCt`,mri:`imagingMri`,xray:`imagingXray`};function n(e){return e.endsWith(`/mri`)?`mri`:e.endsWith(`/x-ray`)?`xray`:`ct`}export{e as n,n as r,t};

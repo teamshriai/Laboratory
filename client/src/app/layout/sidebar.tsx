@@ -16,6 +16,7 @@ import { Tooltip } from '@/components/ui/tooltip'
 import {
   DEPARTMENT_ICONS,
   ADMIN_NAV,
+  IMAGING_NAV,
   INVENTORY_NAV,
   LAB_NAV,
   OPERATIONS_NAV,
@@ -235,6 +236,9 @@ export function SidebarNav({
     <nav aria-label={t('mainNavigation')} className="grid gap-1">
       <Section title={t('sectionLaboratory')} collapsed={collapsed}>
         {render(LAB_NAV)}
+      </Section>
+      <Section title={t('sectionImaging')} collapsed={collapsed}>
+        {render(IMAGING_NAV)}
       </Section>
       <Section title={t('sectionDepartments')} collapsed={collapsed}>
         {DEPARTMENTS.map((d) => (

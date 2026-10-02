@@ -411,7 +411,7 @@ export function DataTable<T>({
                       type="button"
                       onClick={() => toggleSort(col)}
                       className={cn(
-                        '-my-1 inline-flex min-h-6 items-center gap-1 rounded py-1 hover:text-fg',
+                        '-my-1 inline-flex min-h-[24px] items-center gap-1 rounded py-1 hover:text-fg',
                         col.align === 'right' && 'flex-row-reverse',
                       )}
                       aria-label={t('sortBy', {

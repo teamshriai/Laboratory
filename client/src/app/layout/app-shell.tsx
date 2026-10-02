@@ -24,6 +24,8 @@ import {
   Sidebar,
   SidebarNav,
 } from './sidebar'
+import { LabAssistant } from './assistant/lab-assistant'
+import { ErrorBoundary } from '@/components/ui/error-boundary'
 
 function isTyping(target: EventTarget | null) {
   const el = target as HTMLElement | null
@@ -186,7 +188,7 @@ export function AppShell() {
           >
             <div
               key={location.pathname}
-              className="mx-auto w-full max-w-[1760px]"
+              className="mx-auto w-full max-w-[2560px]"
             >
               <Outlet />
             </div>
@@ -194,6 +196,9 @@ export function AppShell() {
         </div>
         <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
         <DrawerHost />
+        <ErrorBoundary fallback={() => null}>
+          <LabAssistant />
+        </ErrorBoundary>
       </div>
     </LucideProvider>
   )

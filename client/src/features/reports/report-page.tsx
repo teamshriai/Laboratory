@@ -15,7 +15,7 @@ import {
   ArrowRightIcon,
 } from 'lucide-react'
 import { PageHeader } from '@/app/layout/page-header'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router'
 import { toast } from 'sonner'
 import {
@@ -51,6 +51,9 @@ import { Segmented } from '@/components/ui/toggles'
 import { FormErrorSummary } from '@/components/ui/form-errors'
 import { ReportSheet } from './report-sheet'
 import { focusWhenScrollable } from '@/lib/scroll-focus'
+import { ShareLinkPanel } from '@/components/lab/share-link-panel'
+import { useSearchParam } from '@/hooks/use-search-param'
+import { cn } from '@/lib/cn'
 
 function Block({
   title,
@@ -123,6 +126,12 @@ function ShareDialog({
       }
     >
       <div className="grid gap-4">
+        <ShareLinkPanel
+          reportNo={report.reportNo}
+          link={report.shareLink}
+          create={() => labApi.reports.shareLink(report.id)}
+          disabled={Boolean(report.withdrawn) || !report.reportedAt}
+        />
         <Field label={t('channel')}>
           <Segmented
             value={channel}
@@ -552,10 +561,12 @@ function Panel({
   report,
   sheetLang,
   setSheetLang,
+  onViewVersion,
 }: {
   report: ReportDetail
   sheetLang: 'en' | 'ui'
   setSheetLang: (v: 'en' | 'ui') => void
+  onViewVersion: (version: number) => void
 }) {
   const t = useT('reports')
   const e = useEnum()
@@ -772,6 +783,15 @@ function Panel({
                       {t('requestedBy', { name: v.requestedByName })}
                     </p>
                   ) : null}
+                  {v.version !== report.version ? (
+                    <button
+                      type="button"
+                      onClick={() => onViewVersion(v.version)}
+                      className="focus-ring inline-flex min-h-[24px] items-center rounded text-xs font-semibold text-accent-text hover:underline"
+                    >
+                      {t('viewVersion', { version: v.version })}
+                    </button>
+                  ) : null}
                   {changed.length ? (
                     <ul className="mt-1 grid gap-0.5 text-xs">
                       {changed.map((c) => (
@@ -867,13 +887,15 @@ export function Component() {
   const { data: labSettings } = useLabSettings()
   const { language } = useLanguage()
   const [sheetLang, setSheetLang] = useState<'en' | 'ui'>('en')
+  // ?version=n shows an earlier issued version, unchanged.
+  const [versionParam, setVersionParam] = useSearchParam<string>('version', '')
   const {
     data: report,
     isPending,
     isError,
     error,
     refetch,
-  } = useReport(reportId)
+  } = useReport(reportId, Number(versionParam) || undefined)
   if (isPending)
     return (
       <div className="grid gap-5 xl:grid-cols-[1fr_20rem]">
@@ -938,12 +960,98 @@ export function Component() {
             lab={labSettings}
           />
         </div>
-        <Panel
-          report={report}
-          sheetLang={sheetLang}
-          setSheetLang={setSheetLang}
-        />
+        {report.supersededBy ? (
+          <EarlierVersionPanel
+            report={report}
+            onViewVersion={(v) =>
+              setVersionParam(v === null ? null : String(v))
+            }
+            sheet={
+              <ReportSheet
+                report={report}
+                lang={sheetLang === 'en' ? 'en' : language}
+                now={now}
+                lab={labSettings}
+              />
+            }
+          />
+        ) : (
+          <Panel
+            report={report}
+            sheetLang={sheetLang}
+            setSheetLang={setSheetLang}
+            onViewVersion={(v) => setVersionParam(String(v))}
+          />
+        )}
       </div>
     </>
+  )
+}
+
+/**
+ * The side panel while an earlier version is shown: nothing can be done to
+ * a superseded version except read and print it.
+ */
+function EarlierVersionPanel({
+  report,
+  sheet,
+  onViewVersion,
+}: {
+  report: ReportDetail
+  sheet: ReactNode
+  onViewVersion: (version: number | null) => void
+}) {
+  const t = useT('reports')
+  const tp = useT('portal')
+  const { print } = usePrint()
+  return (
+    <div className="grid content-start gap-4">
+      <Card className="grid gap-3 p-4">
+        <p
+          role="status"
+          className="flex items-start gap-2 rounded-lg bg-info-soft p-2.5 text-xs text-info-text"
+        >
+          <HistoryIcon className="mt-px size-4 shrink-0" aria-hidden />
+          {t('viewingVersion', {
+            version: report.version,
+            latest: report.supersededBy ?? report.version,
+          })}
+        </p>
+        <Button variant="primary" onClick={() => onViewVersion(null)}>
+          {t('viewCurrentVersion')}
+        </Button>
+        <Button onClick={() => print(sheet)}>
+          <PrinterIcon />
+          {tp('print')}
+        </Button>
+      </Card>
+      <Card className="grid gap-1 p-4">
+        <h2 className="mb-1 text-sm font-semibold text-fg">{t('versions')}</h2>
+        {Array.from(
+          { length: report.supersededBy ?? report.version },
+          (_, i) => i + 1,
+        )
+          .toReversed()
+          .map((v) => (
+            <button
+              key={v}
+              type="button"
+              aria-current={v === report.version || undefined}
+              onClick={() =>
+                onViewVersion(v === report.supersededBy ? null : v)
+              }
+              className={cn(
+                'focus-ring min-h-11 rounded-lg px-3 text-left text-meta',
+                v === report.version
+                  ? 'bg-accent-soft font-medium text-accent-text'
+                  : 'hover:bg-surface-2',
+              )}
+            >
+              {t('version', { version: v })}
+              {v === report.supersededBy ? ` · ${t('currentVersion')}` : ''}
+            </button>
+          ))}
+      </Card>
+    </div>
   )
 }

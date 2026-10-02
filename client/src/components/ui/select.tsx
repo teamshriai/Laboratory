@@ -3,6 +3,7 @@ import { Select as S } from 'radix-ui'
 import { forwardRef, type ReactNode } from 'react'
 import { cn } from '@/lib/cn'
 import { controlClass } from './input'
+import { useFieldControl } from './field-context'
 
 export interface SelectOption<V extends string = string> {
   value: V
@@ -42,6 +43,9 @@ function SelectInner<V extends string>(
   ref: React.ForwardedRef<HTMLButtonElement>,
 ) {
   const selected = options.find((o) => o.value === value)
+  // Inside a Field, fall back on its id and descriptions (a Controller
+  // between them does not pass props on).
+  const field = useFieldControl()
   return (
     <S.Root
       value={value ?? ''}
@@ -50,10 +54,12 @@ function SelectInner<V extends string>(
     >
       <S.Trigger
         ref={ref}
-        id={rest.id}
+        id={rest.id ?? field?.id}
         aria-label={rest['aria-label']}
-        aria-invalid={rest['aria-invalid']}
-        aria-describedby={rest['aria-describedby']}
+        aria-invalid={rest['aria-invalid'] ?? field?.['aria-invalid']}
+        aria-describedby={
+          rest['aria-describedby'] ?? field?.['aria-describedby']
+        }
         className={cn(
           controlClass,
           'flex items-center gap-2 text-left data-placeholder:text-fg-subtle',

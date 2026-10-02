@@ -160,4 +160,9 @@ export default {
   runningCollected: 'சேகரிக்கப்பட்டது {time}',
   runningIssued: 'வழங்கப்பட்டது {time}',
   exportFile: 'அறிக்கைகள்',
+  viewVersion: 'பதிப்பு {version} ஐக் காண்க',
+  viewingVersion:
+    'நீங்கள் பதிப்பு {version} ஐப் பார்க்கிறீர்கள். பதிப்பு {latest} தற்போதைய அறிக்கை.',
+  viewCurrentVersion: 'தற்போதைய பதிப்பைக் காண்க',
+  currentVersion: 'தற்போதையது',
 } as const

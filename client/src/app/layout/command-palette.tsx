@@ -42,7 +42,13 @@ import { useReturnFocus } from '@/components/ui/return-focus'
 import { useRecentPatients } from '@/hooks/use-recent-patients'
 import { IconTile } from '@/components/ui/icon-tile'
 import { NAV_TONES, type IconTone } from '@/lib/icon-tones'
-import { ADMIN_NAV, INVENTORY_NAV, LAB_NAV, OPERATIONS_NAV } from './nav-config'
+import {
+  ADMIN_NAV,
+  IMAGING_NAV,
+  INVENTORY_NAV,
+  LAB_NAV,
+  OPERATIONS_NAV,
+} from './nav-config'
 
 function Item({
   value,
@@ -99,6 +105,7 @@ export function CommandPalette({
   const deferred = useDebouncedValue(query, 150)
   const destinations = [
     ...LAB_NAV,
+    ...IMAGING_NAV,
     ...INVENTORY_NAV,
     ...OPERATIONS_NAV,
     ...ADMIN_NAV,

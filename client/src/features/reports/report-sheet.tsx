@@ -6,9 +6,13 @@ import type { LabSettings, Language } from '@/domain/types'
 import { translate, translateEnum } from '@/i18n/core'
 import { createFormatter } from '@/i18n/format'
 import { formatRange } from '@/domain/reference-ranges'
-import type { ReportDetail } from '@/services/lab-api'
+import type { PublicLabReport as ReportDetail } from '@/services/lab-api'
 import { cn } from '@/lib/cn'
-import { cssString, usePageRules } from '@/components/ui/page-margins'
+import {
+  cssString,
+  pageOfContent,
+  usePageRules,
+} from '@/components/ui/page-margins'
 
 type Kind = 'draft' | 'preliminary' | 'final' | 'amended' | 'withdrawn'
 const KIND_KEY = {
@@ -94,17 +98,9 @@ export function ReportSheet({
   )
   // Running header and footer on every printed page (ISO 15189 7.4.1.6):
   // the patient and report identity, and "Page x of y".
-  const pageOf = t('pageOf', { page: '{page}', pages: '{pages}' })
-    .split(/(\{pages?\})/)
-    .filter(Boolean)
-    .map((part) =>
-      part === '{page}'
-        ? 'counter(page)'
-        : part === '{pages}'
-          ? 'counter(pages)'
-          : cssString(part),
-    )
-    .join(' ')
+  const pageOf = pageOfContent(
+    t('pageOf', { page: '{page}', pages: '{pages}' }),
+  )
   const footerLeft = [
     Number.isFinite(collectedAt)
       ? t('runningCollected', { time: f.dateTime(collectedAt) })

@@ -91,9 +91,16 @@ function looksLikeDb(value: unknown): value is LabDb {
   const v = value as Record<string, unknown>
   return (
     v.schemaVersion === SCHEMA_VERSION &&
-    ['patients', 'orders', 'items', 'samples', 'reports', 'tests'].every(
-      (k) => v[k] !== null && typeof v[k] === 'object',
-    ) &&
+    [
+      'patients',
+      'orders',
+      'items',
+      'samples',
+      'reports',
+      'tests',
+      'imaging',
+      'reportLinks',
+    ].every((k) => v[k] !== null && typeof v[k] === 'object') &&
     Array.isArray(v.activity) &&
     Array.isArray(v.audit)
   )

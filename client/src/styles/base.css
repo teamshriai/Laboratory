@@ -415,6 +415,15 @@ html[data-reduce-motion] *::after {
   scroll-behavior: auto !important;
 }
 
+/* Wide screens with a mouse draw the interface at ~94% (15px root) so more
+   fits; every rem-based size, gap and control scales together. Touch screens
+   keep full size (44px targets), and Settings > Larger interface restores it. */
+@media (width >= 80rem) and (pointer: fine) {
+  html:not([data-large-ui]) {
+    font-size: 93.75%;
+  }
+}
+
 /* Higher contrast: darker text and borders (design system 4.6). */
 html[data-high-contrast] {
   --fg: #000000;
@@ -431,4 +440,30 @@ html[data-high-contrast].dark {
   --line: #8d9bad;
   --border: #8d9bad;
   --line-strong: #b3becd;
+}
+
+/* Lab Assistant (design system 13.2): docked beside the page on wide
+   screens, the page narrows instead of being covered. */
+:root {
+  --chat-dock-w: clamp(20rem, 30vw, 25rem);
+}
+@media (width >= 80rem) {
+  :root[data-chat-docked='true'] #main {
+    padding-right: calc(var(--chat-dock-w) + 1.5rem);
+  }
+  :root[data-chat-docked='true'] [data-sonner-toaster] {
+    right: calc(var(--chat-dock-w) + 1rem) !important;
+  }
+}
+@keyframes dock-in {
+  from {
+    opacity: 0;
+    transform: translateX(1.5rem);
+  }
+}
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
 }

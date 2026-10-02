@@ -4,6 +4,7 @@ export default {
   sectionInventory: 'இருப்பு',
   sectionOperations: 'செயல்பாடுகள்',
   sectionAdministration: 'நிர்வாகம்',
+  sectionImaging: 'நோயறிதல் படிமவியல்',
   overview: 'டாஷ்போர்டு',
   workQueue: 'பணி வரிசை',
   patients: 'நோயாளிகள்',
@@ -34,4 +35,10 @@ export default {
   sample: 'மாதிரி',
   report: 'அறிக்கை',
   patient: 'நோயாளி',
+  imaging: 'படிமவியல் கண்ணோட்டம்',
+  imagingCt: 'CT',
+  imagingMri: 'MRI',
+  imagingXray: 'X-Ray',
+  imagingReport: 'படிமவியல் அறிக்கை',
+  sharedReport: 'பகிரப்பட்ட அறிக்கை',
 } as const

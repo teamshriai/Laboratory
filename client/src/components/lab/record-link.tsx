@@ -28,7 +28,7 @@ export function RecordLink({
       to={href(kind, id)}
       onClick={(ev) => ev.stopPropagation()}
       className={cn(
-        'inline-flex min-h-6 items-center rounded-sm underline-offset-2 hover:text-accent-text hover:underline',
+        'inline-flex min-h-[24px] items-center rounded-sm underline-offset-2 hover:text-accent-text hover:underline',
         mono && 'font-mono tabular-nums',
         className,
       )}

@@ -4,6 +4,7 @@ export default {
   sectionInventory: 'Inventory',
   sectionOperations: 'Operations',
   sectionAdministration: 'Administration',
+  sectionImaging: 'Diagnostic Imaging',
   overview: 'Dashboard',
   workQueue: 'Work Queue',
   patients: 'Patients',
@@ -34,4 +35,10 @@ export default {
   sample: 'Specimen',
   report: 'Report',
   patient: 'Patient',
+  imaging: 'Imaging Overview',
+  imagingCt: 'CT',
+  imagingMri: 'MRI',
+  imagingXray: 'X-Ray',
+  imagingReport: 'Imaging report',
+  sharedReport: 'Shared report',
 } as const

@@ -38,6 +38,7 @@ export default {
   'entity.test': 'Test',
   'entity.analyte': 'Parameter',
   'entity.system': 'System',
+  'entity.imaging': 'Imaging report',
   'action.placed': 'Order placed',
   'action.draft-saved': 'Draft saved',
   'action.draft-discarded': 'Draft discarded',
@@ -107,4 +108,5 @@ export default {
   allowed: 'Allowed',
   notAllowed: 'Not allowed',
   anyDepartment: 'All departments',
+  'action.link-created': 'Share link created',
 } as const

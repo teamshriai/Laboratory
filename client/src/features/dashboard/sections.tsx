@@ -6,15 +6,12 @@ import {
   FileTextIcon,
   GaugeIcon,
   PackageIcon,
-  TimerIcon,
   TriangleAlertIcon,
   UsersRoundIcon,
   WrenchIcon,
-  HistoryIcon,
 } from 'lucide-react'
-import { useId, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Link } from 'react-router'
-import { CRITICAL_NOTIFY_LIMIT_MIN } from '@/domain/types'
 import { DAY } from '@/domain/time'
 import { useNow } from '@/hooks/use-now'
 import { useEnum, useT } from '@/i18n/context'
@@ -24,13 +21,11 @@ import { NAV_TONES } from '@/lib/icon-tones'
 import type { DashboardView } from '@/services/lab-api'
 import { TAT_TARGET_PCT } from '@/features/departments/workload'
 import { ChartLegend } from '@/components/charts/chart-kit'
-import { CountdownRing, Ring } from '@/components/charts/micro'
+import { Ring } from '@/components/charts/micro'
 import { KpiCard } from '@/components/lab/kpi-tile'
 import { EquipmentBadge, QcBadge, StockBadge } from '@/components/lab/status'
-import { Button } from '@/components/ui/button'
 import { Card, CardHeader } from '@/components/ui/card'
 import { Change } from '@/components/ui/metric-strip'
-import { initials } from '@/components/ui/misc'
 import { focusWhenScrollable } from '@/lib/scroll-focus'
 
 type View = DashboardView
@@ -74,171 +69,6 @@ function useTrendLabel() {
       : undefined
 }
 
-/* ── 2. Critical values ────────────────────────────────────────────────── */
-
-export function CriticalSection({
-  criticals,
-}: {
-  criticals: View['criticals']
-}) {
-  const t = useT('dashboard')
-  const now = useNow()
-  const open = criticals.filter(
-    (c) => c.status === 'open' || c.status === 'notified',
-  )
-  return (
-    <Card
-      className={cn(
-        'flex h-full min-w-0 flex-col',
-        open.length > 0 && 'border-danger-text/35',
-      )}
-    >
-      <CardHeader
-        icon={<BellRingIcon />}
-        tone="red"
-        title={t('criticals')}
-        description={
-          open.length
-            ? t('criticalsMeta', { count: open.length })
-            : t('target30', {
-                minutes: criticals[0]?.limitMin ?? CRITICAL_NOTIFY_LIMIT_MIN,
-              })
-        }
-        action={<ViewAll to="/critical-results" label={t('viewAll')} />}
-      />
-      {open.length === 0 ? (
-        <AllClear>{t('allCommunicated')}</AllClear>
-      ) : (
-        <ul className="divide-y divide-line border-t border-line">
-          {open.map((c) => {
-            const minutes = (now - c.detectedAt) / 60_000
-            const overdue = c.overdue
-            return (
-              <li
-                key={c.id}
-                className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-5"
-              >
-                <CountdownRing elapsedMin={minutes} limitMin={c.limitMin} />
-                <div className="min-w-0 flex-1 basis-48">
-                  <p className="truncate text-sm">
-                    <Link
-                      to={`/patients/${c.patient.id}`}
-                      className="inline-block py-0.5 font-semibold text-fg hover:underline"
-                    >
-                      {c.patient.name}
-                    </Link>
-                    <span className="text-fg-muted"> · {c.analyteName} </span>
-                    <span className="font-semibold text-danger-text tabular-nums">
-                      {c.value} {c.unit}
-                    </span>
-                  </p>
-                  <p className="truncate text-xs text-fg-subtle">
-                    {c.status === 'open'
-                      ? t('statusOpen')
-                      : t('statusNotified')}{' '}
-                    · {c.doctor.name}
-                  </p>
-                </div>
-                <span
-                  className={cn(
-                    'inline-flex items-center gap-1 text-xs tabular-nums',
-                    overdue
-                      ? 'font-semibold text-danger-text'
-                      : 'text-fg-muted',
-                  )}
-                >
-                  {overdue ? (
-                    <TriangleAlertIcon className="size-3.5" aria-hidden />
-                  ) : null}
-                  {overdue ? `${t('overdue')} · ` : ''}
-                  {t('minutesAgo', { value: Math.round(minutes) })}
-                </span>
-                <Button
-                  asChild
-                  size="xs"
-                  variant={c.status === 'open' ? 'danger' : 'secondary'}
-                >
-                  <Link to={`/critical-results?alert=${c.id}`}>
-                    {t('record')}
-                  </Link>
-                </Button>
-              </li>
-            )
-          })}
-        </ul>
-      )}
-    </Card>
-  )
-}
-
-/* ── 3. Over TAT ───────────────────────────────────────────────────────── */
-
-export function OverTatSection({ tat }: { tat: View['tat'] }) {
-  const t = useT('dashboard')
-  const f = useFormat()
-  const rows = tat.worst.filter((w) => w.tat.ratio > 1).slice(0, 5)
-  return (
-    <Card className="flex h-full min-w-0 flex-col">
-      <CardHeader
-        icon={<TimerIcon />}
-        tone={NAV_TONES.tat}
-        title={t('overTat')}
-        description={t('overTatMeta', {
-          breached: tat.breached,
-          approaching: tat.approaching,
-        })}
-        action={<ViewAll to="/tat" label={t('viewAll')} />}
-      />
-      {rows.length === 0 ? (
-        <AllClear>{t('noneOverTat')}</AllClear>
-      ) : (
-        <ul className="divide-y divide-line border-t border-line">
-          {rows.map((w) => {
-            const over = Math.min(2, w.tat.ratio)
-            return (
-              <li key={w.itemId}>
-                <Link
-                  to={`?sample=${w.sampleId}`}
-                  className="focus-ring flex items-center gap-4 px-4 py-2.5 transition-colors hover:bg-surface-2 sm:px-5"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-fg">
-                      {w.testName}
-                    </p>
-                    <p className="truncate text-xs text-fg-subtle">
-                      <span className="font-mono">{w.accessionNo}</span> ·{' '}
-                      {w.patientName}
-                    </p>
-                  </div>
-                  <span
-                    aria-hidden
-                    className="hidden h-1.5 w-24 overflow-hidden rounded-full bg-surface-3 sm:block"
-                  >
-                    <span
-                      className="block h-full rounded-full bg-danger"
-                      style={{ width: `${(over / 2) * 100}%` }}
-                    />
-                  </span>
-                  <span className="shrink-0 text-right text-xs tabular-nums">
-                    <span className="block font-semibold text-danger-text">
-                      {t('overBy', {
-                        value: f.duration(w.tat.elapsedMs - w.tat.targetMs),
-                      })}
-                    </span>
-                    <span className="text-fg-subtle">
-                      {t('targetValue', { value: f.duration(w.tat.targetMs) })}
-                    </span>
-                  </span>
-                </Link>
-              </li>
-            )
-          })}
-        </ul>
-      )}
-    </Card>
-  )
-}
-
 /* ── 4. White KPI cards ────────────────────────────────────────────────── */
 
 export function KpiRow({ data }: { data: View }) {
@@ -248,7 +78,7 @@ export function KpiRow({ data }: { data: View }) {
   const k = data.kpis
   const openCriticals = k.criticalResults.detail?.value ?? 0
   return (
-    <div className="grid h-full grid-cols-1 gap-4 min-[420px]:grid-cols-2 sm:gap-5 lg:grid-cols-4">
+    <div className="grid h-full grid-cols-2 gap-4 lg:grid-cols-4">
       <KpiCard
         to="/critical-results"
         tone="red"
@@ -745,76 +575,5 @@ export function StockPanel({ alerts }: { alerts: View['stockAlerts'] }) {
         </ul>
       )}
     </Card>
-  )
-}
-
-/* ── 12. Recent activity: the solid timeline panel (design system 9.3) ── */
-
-export function RecentActivity({ activity }: { activity: View['activity'] }) {
-  const t = useT('dashboard')
-  const ta = useT('activity')
-  const f = useFormat()
-  const now = useNow()
-  const id = useId()
-  return (
-    <section
-      aria-labelledby={id}
-      style={{
-        backgroundImage:
-          'linear-gradient(160deg, var(--tile-blue) 0%, var(--tile-blue) 55%, color-mix(in oklab, var(--tile-blue) 78%, #6a4e9e) 100%)',
-      }}
-      className="flex h-full min-w-0 flex-col rounded-xl p-4 text-white shadow-card sm:p-5"
-    >
-      <h2
-        id={id}
-        className="flex min-h-11 items-center gap-2.5 text-sm font-semibold"
-      >
-        <span aria-hidden className="duo-on-fill inline-flex">
-          <HistoryIcon className="size-[22px]" strokeWidth={1.75} />
-        </span>
-        {t('activity')}
-      </h2>
-      <ol className="mt-3 grid gap-x-6 md:grid-cols-2">
-        {activity.slice(0, 8).map((a, i, list) => {
-          const body = (
-            <>
-              <span className="flex flex-col items-center self-stretch">
-                <span
-                  aria-hidden
-                  className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/15 text-2xs font-bold"
-                >
-                  {initials(a.byName)}
-                </span>
-                {i < list.length - 1 ? (
-                  <span aria-hidden className="w-px flex-1 bg-white/20" />
-                ) : null}
-              </span>
-              <span className="min-w-0 flex-1 pb-3">
-                <span className="block truncate text-sm font-medium text-white">
-                  {ta(a.type as Parameters<typeof ta>[0], a.params)}
-                </span>
-                <span className="block text-xs text-white/75">
-                  {a.byName} · {f.relative(a.at, now)}
-                </span>
-              </span>
-            </>
-          )
-          return (
-            <li key={a.id}>
-              {a.link ? (
-                <Link
-                  to={a.link}
-                  className="focus-ring flex gap-3 rounded-lg pt-1 hover:bg-white/5"
-                >
-                  {body}
-                </Link>
-              ) : (
-                <div className="flex gap-3 pt-1">{body}</div>
-              )}
-            </li>
-          )
-        })}
-      </ol>
-    </section>
   )
 }

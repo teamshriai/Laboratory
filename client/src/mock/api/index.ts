@@ -20,6 +20,10 @@ import { analyticsReportApi } from './analytics'
 import { workQueueListApi } from './work-queue'
 import { referenceApi, systemApi } from './system'
 import { adminApi } from './admin'
+import { assistantApi } from './assistant'
+import { imagingApi } from './imaging'
+import { portalApi } from './portal'
+import { todayApi } from './today'
 
 export const labApi = {
   dashboard: dashboardApi,
@@ -43,11 +47,15 @@ export const labApi = {
   reference: referenceApi,
   system: systemApi,
   admin: adminApi,
+  today: todayApi,
+  assistant: assistantApi,
+  imaging: imagingApi,
+  portal: portalApi,
 }
 
 export type LabApi = typeof labApi
 export type * from './types'
-export { MILESTONES, WORK_BUCKETS } from './types'
+export { ASSISTANT_INTENTS, MILESTONES, WORK_BUCKETS } from './types'
 export type { OrderInput } from './orders'
 export type { ItemResultsInput } from './results'
 export type { DocumentCriticalInput, RegisterPatientInput } from './clinical'

@@ -155,4 +155,9 @@ export default {
   runningCollected: 'संग्रहित {time}',
   runningIssued: 'जारी {time}',
   exportFile: 'reports',
+  viewVersion: 'संस्करण {version} देखें',
+  viewingVersion:
+    'आप संस्करण {version} देख रहे हैं। संस्करण {latest} वर्तमान रिपोर्ट है।',
+  viewCurrentVersion: 'वर्तमान संस्करण देखें',
+  currentVersion: 'वर्तमान',
 } as const

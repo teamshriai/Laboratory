@@ -4,6 +4,7 @@ export default {
   sectionInventory: 'ದಾಸ್ತಾನು',
   sectionOperations: 'ಕಾರ್ಯಾಚರಣೆ',
   sectionAdministration: 'ಆಡಳಿತ',
+  sectionImaging: 'ರೋಗನಿರ್ಣಯ ಇಮೇಜಿಂಗ್',
   overview: 'ಡ್ಯಾಶ್‌ಬೋರ್ಡ್',
   workQueue: 'ಕೆಲಸದ ಸರದಿ',
   patients: 'ರೋಗಿಗಳು',
@@ -34,4 +35,10 @@ export default {
   sample: 'ಮಾದರಿ',
   report: 'ವರದಿ',
   patient: 'ರೋಗಿ',
+  imaging: 'ಇಮೇಜಿಂಗ್ ಸಾರಾಂಶ',
+  imagingCt: 'CT',
+  imagingMri: 'MRI',
+  imagingXray: 'X-Ray',
+  imagingReport: 'ಇಮೇಜಿಂಗ್ ವರದಿ',
+  sharedReport: 'ಹಂಚಿಕೊಂಡ ವರದಿ',
 } as const

@@ -13,23 +13,21 @@ import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/components/ui/menu'
 import { PageHeader } from '@/app/layout/page-header'
 import { istHour } from '@/domain/time'
 import { useNow } from '@/hooks/use-now'
-import { useT } from '@/i18n/context'
+import { useEnum, useT } from '@/i18n/context'
+import { usePreferences } from '@/app/preferences/context'
+import { usePermissions } from '@/hooks/use-permission'
 import { useFormat } from '@/i18n/format'
 import type { DashboardView } from '@/services/lab-api'
-import { useDashboard } from '@/services/queries'
+import { useDashboard, useLabSettings } from '@/services/queries'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ErrorState } from '@/components/ui/states'
-import { ActionQueues } from './action-queues'
-import { HourlyChart } from './hourly-chart'
+import { DashboardHome } from './home'
 import { PipelineFlow } from './pipeline-flow'
 import {
   AnalyzersPanel,
-  CriticalSection,
   KpiRow,
-  OverTatSection,
-  RecentActivity,
   StockPanel,
   TatPanel,
   WorkloadPanel,
@@ -41,7 +39,7 @@ import {
  * same cells, so nothing jumps when the data arrives.
  */
 const GRID =
-  'grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 md:grid-cols-4 xl:grid-cols-6'
+  'grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-6'
 
 const FULL = 'sm:col-span-2 md:col-span-4 xl:col-span-6'
 
@@ -52,22 +50,22 @@ const CELLS: {
   render: (data: DashboardView) => ReactNode
 }[] = [
   {
-    key: 'queues',
+    key: 'kpis',
     span: FULL,
     skeleton: 'h-40',
-    render: () => <ActionQueues />,
+    render: (d) => <KpiRow data={d} />,
   },
   {
-    key: 'criticals',
-    span: 'sm:col-span-2 md:col-span-4 xl:col-span-3',
-    skeleton: 'h-56',
-    render: (d) => <CriticalSection criticals={d.criticals} />,
+    key: 'home',
+    span: FULL,
+    skeleton: 'h-[52rem]',
+    render: (d) => <DashboardHome dashboard={d} />,
   },
   {
-    key: 'over-tat',
-    span: 'sm:col-span-2 md:col-span-4 xl:col-span-3',
-    skeleton: 'h-56',
-    render: (d) => <OverTatSection tat={d.tat} />,
+    key: 'performance',
+    span: FULL,
+    skeleton: 'h-8',
+    render: () => <PerformanceHeading />,
   },
   {
     key: 'pipeline',
@@ -76,48 +74,40 @@ const CELLS: {
     render: (d) => <PipelineFlow pipeline={d.pipeline} />,
   },
   {
-    key: 'kpis',
-    span: FULL,
-    skeleton: 'h-40',
-    render: (d) => <KpiRow data={d} />,
-  },
-  {
-    key: 'hourly',
-    span: 'sm:col-span-2 md:col-span-4 xl:col-span-4',
-    skeleton: 'h-80',
-    render: (d) => <HourlyChart hourly={d.hourly} />,
-  },
-  {
     key: 'tat',
-    span: 'sm:col-span-2 md:col-span-4 xl:col-span-2',
+    span: 'sm:col-span-2 md:col-span-4 xl:col-span-3',
     skeleton: 'h-80',
     render: (d) => <TatPanel tat={d.tat} byDepartment={d.tatByDepartment} />,
   },
   {
     key: 'workload',
-    span: 'sm:col-span-2 md:col-span-4 xl:col-span-4',
+    span: 'sm:col-span-2 md:col-span-4 xl:col-span-3',
     skeleton: 'h-80',
     render: (d) => <WorkloadPanel workload={d.workload} />,
   },
   {
-    key: 'stock',
-    span: 'sm:col-span-2 md:col-span-4 xl:col-span-2',
-    skeleton: 'h-80',
-    render: (d) => <StockPanel alerts={d.stockAlerts} />,
-  },
-  {
     key: 'analyzers',
-    span: FULL,
+    span: 'sm:col-span-2 md:col-span-4 xl:col-span-4',
     skeleton: 'h-64',
     render: (d) => <AnalyzersPanel data={d} />,
   },
   {
-    key: 'activity',
-    span: FULL,
-    skeleton: 'h-72',
-    render: (d) => <RecentActivity activity={d.activity} />,
+    key: 'stock',
+    span: 'sm:col-span-2 md:col-span-4 xl:col-span-2',
+    skeleton: 'h-64',
+    render: (d) => <StockPanel alerts={d.stockAlerts} />,
   },
 ]
+
+/** Separates the working day from the longer-term figures below it. */
+function PerformanceHeading() {
+  const t = useT('today')
+  return (
+    <h2 className="pt-6 text-base font-semibold text-fg">
+      {t('performanceTitle')}
+    </h2>
+  )
+}
 
 /** The day's routine jumps, without taking space on the dashboard. */
 function QuickActions() {
@@ -178,7 +168,20 @@ export function Component() {
   const f = useFormat()
   const now = useNow()
   const { data, isPending, isError, refetch, dataUpdatedAt } = useDashboard()
+  const tt = useT('today')
+  const e = useEnum()
+  const { department } = usePreferences()
+  const { actor } = usePermissions()
+  const { data: settings } = useLabSettings()
   const hour = istHour(now)
+  const greeting = tt(
+    hour < 12
+      ? 'greeting.morning'
+      : hour < 17
+        ? 'greeting.afternoon'
+        : 'greeting.evening',
+    { name: actor?.name ?? '' },
+  )
   const shift =
     hour >= 7 && hour < 14
       ? t('shiftMorning')
@@ -189,11 +192,16 @@ export function Component() {
   return (
     <>
       <PageHeader
-        title={t('title')}
+        title={greeting}
+        documentTitle={t('title')}
         meta={
           <>
             <span>{f.date(now)}</span>
             <span>{shift}</span>
+            <span>
+              {department ? e('department', department) : tt('allDepartments')}
+            </span>
+            {settings?.labName ? <span>{settings.labName}</span> : null}
             {dataUpdatedAt ? (
               <span>{t('updated', { time: f.time(dataUpdatedAt) })}</span>
             ) : null}

@@ -4,6 +4,7 @@ export default {
   sectionInventory: 'ഇൻവെന്ററി',
   sectionOperations: 'പ്രവർത്തനങ്ങൾ',
   sectionAdministration: 'ഭരണനിർവഹണം',
+  sectionImaging: 'ഡയഗ്നോസ്റ്റിക് ഇമേജിംഗ്',
   overview: 'ഡാഷ്ബോർഡ്',
   workQueue: 'വർക്ക് ക്യൂ',
   patients: 'രോഗികൾ',
@@ -34,4 +35,10 @@ export default {
   sample: 'സാമ്പിൾ',
   report: 'റിപ്പോർട്ട്',
   patient: 'രോഗി',
+  imaging: 'ഇമേജിംഗ് അവലോകനം',
+  imagingCt: 'CT',
+  imagingMri: 'MRI',
+  imagingXray: 'X-Ray',
+  imagingReport: 'ഇമേജിംഗ് റിപ്പോർട്ട്',
+  sharedReport: 'പങ്കിട്ട റിപ്പോർട്ട്',
 } as const

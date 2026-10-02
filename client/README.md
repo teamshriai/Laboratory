@@ -72,6 +72,37 @@ No secrets belong in these variables: everything prefixed `VITE_` ends up in the
 
 `src/mock/api/*.test.ts` describe the expected behaviour and can be reused as API contract tests.
 
+### Where future endpoints connect
+
+The screens call `labApi` (through `services/queries.ts` and `services/mutations.ts`). Each group maps onto a REST resource. These are suggested shapes, not an existing API:
+
+| `labApi` call                                      | Future endpoint                                       |
+| -------------------------------------------------- | ----------------------------------------------------- |
+| `patients.get(id)` (with `reportHistory`)          | `GET /api/patients/:id`                               |
+| `reports.get(id, { version })`                     | `GET /api/reports/:id?version=n`                      |
+| `reports.release`, `withdraw`, corrections         | `POST /api/reports/:id/release` and so on             |
+| `reports.shareLink(id)`                            | `POST /api/reports/:id/share`                         |
+| `portal.report(reportNo, { version })`             | `GET /api/public/reports/:reportNo` (link-gated)      |
+| `reportPdf(reportNo)` (`services/report-files.ts`) | `GET /api/reports/:id/pdf`                            |
+| `imaging.overview / list / report`                 | `GET /api/imaging/studies`, `/studies/:id`            |
+| `today.get()`                                      | `GET /api/worklists/today`                            |
+| `assistant.ask` (`services/assistant.ts`)          | `POST /api/assistant/ask`                             |
+| `samples.*`, `results.*`, `validation.*`           | `/api/specimens`, `/api/results`, `/api/verification` |
+
+Two seams are deliberately narrower than `labApi`:
+
+- `services/assistant.ts`: the Lab Assistant panel talks only to `AssistantService` (`suggestions`, `ask`). Replies are structured (message keys with values, or plain text), so a backend or AI service can answer in the same shape.
+- `services/report-files.ts`: returns a server PDF when one exists; until then, Download PDF prints the report and the browser saves it as PDF.
+
+### Prepared, not implemented
+
+These have data shapes and UI places ready but no real implementation:
+
+- Share links: the link is `.../report/<report number>` and works only in the browser that made it. Access control, expiry (`ReportLink.expiresAt` is reserved) and revocation need the backend.
+- Patient and doctor portals: `PatientReportEntry` (laboratory and imaging reports per patient, newest first) is the list both portals will show.
+- Imaging: studies and reports are demo data and read-only here. Scheduling, acquisition and reporting come from a RIS/PACS (DICOM, HL7) through the backend.
+- Server-generated PDFs, SMS, email and WhatsApp delivery, analyzer interfaces (HL7/ASTM) and a real AI assistant.
+
 ## Deploying
 
 ```sh

@@ -30,6 +30,8 @@
           var meta = document.querySelector('meta[name="theme-color"]')
           if (meta) meta.setAttribute('content', dark ? '#14181F' : '#E8EDF4')
           root.lang = read('language', 'en')
+          if (read('large-ui', false) === true)
+            root.setAttribute('data-large-ui', '')
         } catch (e) {}
       })()
     </script>

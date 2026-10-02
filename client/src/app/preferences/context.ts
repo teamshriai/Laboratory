@@ -18,6 +18,9 @@ export interface PreferencesState {
   setReduceMotion: (on: boolean) => void
   highContrast: boolean
   setHighContrast: (on: boolean) => void
+  /** Full-size interface on wide screens (the default is scaled to ~94%). */
+  largeInterface: boolean
+  setLargeInterface: (on: boolean) => void
 }
 
 export const PreferencesContext = createContext<PreferencesState | null>(null)

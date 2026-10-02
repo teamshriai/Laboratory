@@ -4,6 +4,7 @@ import { Popover } from 'radix-ui'
 import { useState, type ReactNode } from 'react'
 import { cn } from '@/lib/cn'
 import { controlClass } from './input'
+import { useFieldControl } from './field-context'
 
 export interface ComboOption {
   value: string
@@ -39,6 +40,7 @@ export function Combobox({
   ...rest
 }: ComboboxProps) {
   const [open, setOpen] = useState(false)
+  const field = useFieldControl()
   const selected = options.find((o) => o.value === value)
   const groups = [...new Set(options.map((o) => o.group ?? ''))]
   return (
@@ -48,9 +50,11 @@ export function Combobox({
           type="button"
           role="combobox"
           aria-expanded={open}
-          id={rest.id}
-          aria-invalid={rest['aria-invalid']}
-          aria-describedby={rest['aria-describedby']}
+          id={rest.id ?? field?.id}
+          aria-invalid={rest['aria-invalid'] ?? field?.['aria-invalid']}
+          aria-describedby={
+            rest['aria-describedby'] ?? field?.['aria-describedby']
+          }
           className={cn(
             controlClass,
             'flex h-11 items-center gap-2 px-3.5 text-left',

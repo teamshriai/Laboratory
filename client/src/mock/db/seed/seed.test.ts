@@ -33,6 +33,8 @@ describe('seedDatabase', () => {
               'calibrationDueAt',
               'dueAt',
               'nextDueAt',
+              // An imaging study booked for later today.
+              'scheduledAt',
             ].includes(k) &&
             v > NOW + 60_000
           )

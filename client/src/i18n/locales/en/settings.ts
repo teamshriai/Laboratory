@@ -97,6 +97,9 @@ export default {
     'Turns off transitions, in addition to your device setting.',
   highContrast: 'Higher contrast',
   highContrastHint: 'Darker text and borders for bright rooms or low vision.',
+  largeInterface: 'Larger interface',
+  largeInterfaceHint:
+    'On wide screens the interface is drawn slightly smaller to fit more. Turn this on for full-size text and controls.',
   labAddress: 'Address on reports',
   labRegistration: 'Registration number',
   labAccreditation: 'Accreditation',

@@ -17,6 +17,7 @@ import {
   type InventoryItemFilters,
   type InventoryKind,
   type WorkQueueFilters,
+  type ImagingFilters,
 } from './lab-api'
 
 const keep = { placeholderData: keepPreviousData }
@@ -131,11 +132,13 @@ export const useReports = (filters: ReportFilters) =>
     queryFn: () => labApi.reports.list(filters),
     ...keep,
   })
-export const useReport = (id: string | undefined) =>
+export const useReport = (id: string | undefined, version?: number) =>
   useQuery({
-    queryKey: ['lab', 'report', id],
-    queryFn: () => labApi.reports.get(id!),
+    queryKey: ['lab', 'report', id, version ?? 'current'],
+    queryFn: () =>
+      labApi.reports.get(id!, version !== undefined ? { version } : {}),
     enabled: Boolean(id),
+    ...keep,
   })
 
 export const useCriticals = (filters: CriticalFilters) =>
@@ -294,5 +297,49 @@ export const useAuditLog = (filters: AuditFilters) =>
   useQuery({
     queryKey: ['lab', 'audit', filters],
     queryFn: () => labApi.admin.audit(filters),
+    ...keep,
+  })
+
+// ---------- Today's work, imaging and the report portal ----------
+
+export const useToday = () =>
+  useQuery({
+    queryKey: ['lab', 'today'],
+    queryFn: labApi.today.get,
+    refetchInterval: 60_000,
+  })
+
+export const useImagingOverview = () =>
+  useQuery({
+    queryKey: ['lab', 'imaging', 'overview'],
+    queryFn: labApi.imaging.overview,
+  })
+
+export const useImagingList = (filters: ImagingFilters) =>
+  useQuery({
+    queryKey: ['lab', 'imaging', 'list', filters],
+    queryFn: () => labApi.imaging.list(filters),
+    ...keep,
+  })
+
+export const useImagingReport = (id: string | undefined, version?: number) =>
+  useQuery({
+    queryKey: ['lab', 'imaging', 'report', id, version ?? 'current'],
+    queryFn: () =>
+      labApi.imaging.report(id!, version !== undefined ? { version } : {}),
+    enabled: Boolean(id),
+    ...keep,
+  })
+
+export const usePortalReport = (
+  reportNo: string | undefined,
+  version?: number,
+) =>
+  useQuery({
+    queryKey: ['lab', 'portal', reportNo, version ?? 'current'],
+    queryFn: () =>
+      labApi.portal.report(reportNo!, version !== undefined ? { version } : {}),
+    enabled: Boolean(reportNo),
+    retry: false,
     ...keep,
   })

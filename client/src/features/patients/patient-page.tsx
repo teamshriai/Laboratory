@@ -27,12 +27,12 @@ import {
   NotesCard,
   OrderList,
   PatientTimeline,
-  ReportList,
   ResultsTable,
   SampleList,
 } from './patient-sections'
 import { EditPatientDialog } from './edit-patient-dialog'
 import { TrendCard } from './trend-card'
+import { ReportHistory } from './report-history'
 
 const TABS = [
   'overview',
@@ -230,7 +230,7 @@ export function Component() {
             {
               value: 'reports',
               label: t('tabReports'),
-              count: data.reports.length,
+              count: data.reportHistory.length,
             },
             {
               value: 'history',
@@ -277,10 +277,7 @@ export function Component() {
                   tone="teal"
                   title={t('recentReports')}
                 />
-                <ReportList
-                  reports={data.reports.slice(0, 5)}
-                  empty={t('noReports')}
-                />
+                <ReportHistory entries={data.reportHistory} limit={4} />
               </Card>
               <Card>
                 <CardHeader
@@ -310,7 +307,13 @@ export function Component() {
         </TabsContent>
         <TabsContent value="reports">
           <Card className="overflow-hidden">
-            <ReportList reports={data.reports} empty={t('noReports')} />
+            <CardHeader
+              icon={<FileTextIcon />}
+              tone="teal"
+              title={t('reportHistoryTitle')}
+              description={t('reportHistoryHint')}
+            />
+            <ReportHistory entries={data.reportHistory} />
           </Card>
         </TabsContent>
         <TabsContent value="history">

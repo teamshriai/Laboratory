@@ -784,6 +784,86 @@ export interface Report {
   withdrawn?: { at: number; by: string; reason: string }
 }
 
+/**
+ * A share link for a released report (demo: it opens in this browser only).
+ * The URL carries the report number; a real link needs server-side access
+ * control and expiry, which `expiresAt` is reserved for.
+ */
+export interface ReportLink {
+  reportNo: string
+  kind: 'laboratory' | 'imaging'
+  /** Report id (laboratory) or imaging study id. */
+  targetId: string
+  createdAt: number
+  createdBy: string
+  /** The version that was current when the link was made. */
+  version: number
+  expiresAt?: number
+}
+
+// ---------- Diagnostic imaging ----------
+
+export const MODALITIES = ['ct', 'mri', 'xray'] as const
+export type Modality = (typeof MODALITIES)[number]
+
+/** Derived from the study (see `imagingStatus` in domain/imaging.ts). */
+export const IMAGING_STATUSES = [
+  'scheduled',
+  'acquired',
+  'reported',
+  'final',
+  'amended',
+] as const
+export type ImagingStatus = (typeof IMAGING_STATUSES)[number]
+
+export interface Signatory {
+  name: string
+  qualification: string
+}
+
+export interface ImagingFinding {
+  heading: string
+  text: string
+}
+
+/** One issued version of an imaging report; earlier versions are kept. */
+export interface ImagingReportVersion {
+  version: number
+  kind: 'preliminary' | 'final' | 'amended'
+  releasedAt: number
+  reportedBy: Signatory
+  verifiedBy: Signatory
+  technique: string
+  comparison?: string
+  findings: ImagingFinding[]
+  impression: string[]
+  recommendations?: string[]
+  /** Why this version replaced the previous one. */
+  amendmentReason?: string
+}
+
+/**
+ * A diagnostic imaging study and its report. Read-only in the frontend
+ * phase: acquisition and reporting happen in the RIS/PACS (future).
+ */
+export interface ImagingStudy {
+  id: string
+  accessionNo: string
+  /** Set once a report is issued. */
+  reportNo?: string
+  patientId: string
+  orderingDoctorId: string
+  modality: Modality
+  examName: string
+  bodyRegion: string
+  indication: string
+  contrast?: string
+  priority: Priority
+  scheduledAt: number
+  performedAt?: number
+  versions: ImagingReportVersion[]
+}
+
 // ---------- Inventory ----------
 
 export const STORAGE_CONDITIONS = [
@@ -1206,6 +1286,7 @@ export const AUDIT_ENTITIES = [
   'test',
   'analyte',
   'system',
+  'imaging',
 ] as const
 export type AuditEntity = (typeof AUDIT_ENTITIES)[number]
 

@@ -8,6 +8,9 @@ import type { TatInfo } from '@/domain/tat'
 import type {
   ActivityEvent,
   Analyte,
+  ImagingReportVersion,
+  ImagingStatus,
+  Modality,
   CancelReason,
   ClinicalDepartmentId,
   ClinicalNote,
@@ -533,6 +536,16 @@ export interface ReportDetail {
   }[]
   openCriticals: number
   reportedAt?: number
+  /** Set when this is an earlier version: the version that replaced it. */
+  supersededBy?: number
+  /** The demo share link, once one has been made. */
+  shareLink?: ShareLinkInfo
+}
+
+export interface ShareLinkInfo {
+  createdAt: number
+  createdByName: string
+  version: number
 }
 
 export interface CorrectionOption {
@@ -649,6 +662,8 @@ export interface PatientDetail {
     byName: string
     link?: string
   }[]
+  /** Laboratory and imaging reports, newest first. */
+  reportHistory: PatientReportEntry[]
   trends: TrendSeries[]
 }
 
@@ -1353,4 +1368,209 @@ export interface AuditList {
   total: number
   entities: AuditEntity[]
   actions: string[]
+}
+
+// ---------- Diagnostic imaging ----------
+
+export interface ImagingRow {
+  id: string
+  accessionNo: string
+  reportNo?: string
+  patient: PatientSummary
+  doctorName: string
+  modality: Modality
+  examName: string
+  bodyRegion: string
+  priority: Priority
+  status: ImagingStatus
+  scheduledAt: number
+  performedAt?: number
+  /** When the current version was issued. */
+  reportedAt?: number
+  /** Current version (0 while not reported). */
+  version: number
+}
+
+export interface ImagingFilters {
+  modality?: Modality
+  status?: ImagingStatus | 'all'
+  q?: string
+}
+
+export interface ImagingOverview {
+  counts: {
+    today: number
+    awaitingReport: number
+    reportedToday: number
+    scheduled: number
+    amended: number
+  }
+  /** Acquired and waiting for a report, oldest first. */
+  awaiting: ImagingRow[]
+  modalities: {
+    modality: Modality
+    total: number
+    awaitingReport: number
+    scheduled: number
+    recent: ImagingRow[]
+  }[]
+}
+
+export interface ImagingVersionSummary {
+  version: number
+  kind: ImagingReportVersion['kind']
+  releasedAt: number
+  reportedBy: string
+  amendmentReason?: string
+}
+
+export interface ImagingReportDetail extends ImagingRow {
+  indication: string
+  contrast?: string
+  doctor: DoctorRef
+  /** The version shown; absent while the study is not reported. */
+  viewing?: ImagingReportVersion
+  versions: ImagingVersionSummary[]
+  /** Set when an earlier version is shown. */
+  supersededBy?: number
+  shareLink?: ShareLinkInfo
+}
+
+// ---------- Report history and the patient-facing portal ----------
+
+/**
+ * One report in a patient's history, laboratory or imaging. This is the
+ * shape the future patient and doctor portals list.
+ */
+export interface PatientReportEntry {
+  kind: 'laboratory' | 'imaging'
+  id: string
+  reportNo: string
+  /** Laboratory department or imaging modality. */
+  discipline: DepartmentId | Modality
+  title: string
+  status: ReportStatus | ImagingStatus
+  date: number
+  version: number
+  /** Where the report opens in the app. */
+  href: string
+}
+
+/** What a share link shows: no internal workflow fields. */
+export type PublicLabReport = Omit<
+  ReportDetail,
+  | 'shareLog'
+  | 'pendingAmendment'
+  | 'previousReports'
+  | 'printCount'
+  | 'renotifyPending'
+>
+
+export type PublicReport =
+  | { kind: 'laboratory'; report: PublicLabReport }
+  | { kind: 'imaging'; report: ImagingReportDetail }
+
+// ---------- Today's work (dashboard panel and assistant) ----------
+
+export type TodaySeverity = 'critical' | 'high' | 'medium' | 'info'
+
+export type TodayPriorityKey =
+  | 'critical'
+  | 'qc'
+  | 'stat'
+  | 'overdue'
+  | 'transit'
+  | 'recollection'
+  | 'authorise'
+  | 'imaging'
+
+export interface TodayPriority {
+  key: TodayPriorityKey
+  severity: TodaySeverity
+  count: number
+  /** The oldest item's start (how long it has waited). */
+  oldestAt?: number
+  /** How many are past their limit (criticals past the notify limit). */
+  overdue?: number
+  to: string
+}
+
+export type TodayTodoKey =
+  | 'collection'
+  | 'reception'
+  | 'entry'
+  | 'verify'
+  | 'authorise'
+  | 'release'
+  | 'critical'
+  | 'recollection'
+
+export interface TodayTodo {
+  key: TodayTodoKey
+  count: number
+  /** Of these, due or overdue today. */
+  dueToday: number
+  oldestAt?: number
+  to: string
+}
+
+export interface TodayAgendaItem {
+  id: string
+  kind: 'routine' | 'deadline'
+  /** Routine slot key, or the deadline's kind. */
+  key: string
+  at: number
+  state: 'done' | 'now' | 'next' | 'overdue'
+  /** Deadline details (shown as recorded data). */
+  label?: string
+  to: string
+}
+
+export interface TodayView {
+  priorities: TodayPriority[]
+  todo: TodayTodo[]
+  agenda: TodayAgendaItem[]
+  summary: {
+    ordersToday: number
+    collected: number
+    received: number
+    inProgress: number
+    verified: number
+    released: number
+    criticals: number
+    rejected: number
+  }
+}
+
+// ---------- Lab Assistant ----------
+
+export const ASSISTANT_INTENTS = [
+  'attention',
+  'pending',
+  'critical',
+  'reception',
+  'verify',
+  'authorise',
+  'stat',
+  'completed',
+  'rejected',
+  'delayed',
+  'imaging',
+  'help',
+] as const
+export type AssistantIntent = (typeof ASSISTANT_INTENTS)[number]
+
+/**
+ * One line of a reply: a message key with values (shown in the reader's
+ * language), or plain text (recorded data, or a future AI's own words).
+ * `ms` params are durations.
+ */
+export type AssistantLine =
+  { key: string; params?: Record<string, string | number> } | { text: string }
+
+export interface AssistantReply {
+  intent: AssistantIntent
+  lines: AssistantLine[]
+  bullets: AssistantLine[]
+  links: { key: string; to: string }[]
 }

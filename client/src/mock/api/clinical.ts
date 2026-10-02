@@ -16,8 +16,12 @@ import {
   type RegisterPatientInput,
   type UpdatePatientInput,
 } from '../engine/patients'
+import type { LabDb } from '../db/schema'
+import type { DbIndex } from './index-cache'
+import { imagingRow } from './imaging'
 import { read, write } from './runtime'
 import type {
+  PatientReportEntry,
   CriticalFilters,
   CriticalRow,
   PatientDetail,
@@ -124,6 +128,51 @@ export const criticalApi = {
 
   void: (id: string, reason: string) =>
     write((db, ctx) => void voidCritical(db, id, reason, ctx)),
+}
+
+/**
+ * Every issued report for the patient, laboratory and imaging together,
+ * newest first: the list the patient and doctor portals will show.
+ */
+function patientReportHistory(
+  db: LabDb,
+  index: DbIndex,
+  patientId: string,
+): PatientReportEntry[] {
+  const lab: PatientReportEntry[] = Object.values(db.reports)
+    .filter((r) => r.patientId === patientId && r.versions.length > 0)
+    .map((r) => {
+      const row = reportRow(db, index, r)
+      const latest = r.versions.at(-1)!
+      return {
+        kind: 'laboratory',
+        id: r.id,
+        reportNo: r.reportNo,
+        discipline: r.department,
+        title: row.tests.join(', '),
+        status: row.status,
+        date: latest.releasedAt,
+        version: latest.version,
+        href: `/reports/${r.id}`,
+      }
+    })
+  const imaging: PatientReportEntry[] = Object.values(db.imaging)
+    .filter((s) => s.patientId === patientId && s.versions.length > 0)
+    .map((s) => {
+      const row = imagingRow(db, s)
+      return {
+        kind: 'imaging',
+        id: s.id,
+        reportNo: s.reportNo ?? s.accessionNo,
+        discipline: s.modality,
+        title: s.examName,
+        status: row.status,
+        date: row.reportedAt ?? s.scheduledAt,
+        version: row.version,
+        href: `/imaging/reports/${s.id}`,
+      }
+    })
+  return [...lab, ...imaging].toSorted((a, b) => b.date - a.date)
 }
 
 export const patientsApi = {
@@ -442,6 +491,7 @@ export const patientsApi = {
           .map((c) => criticalRow(db, c, now))
           .toSorted((a, b) => b.detectedAt - a.detectedAt),
         timeline: timeline.slice(0, 200),
+        reportHistory: patientReportHistory(db, index, id),
         trends,
       }
     }),

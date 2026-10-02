@@ -27,6 +27,10 @@ import {
   LayersIcon,
   ScrollTextIcon,
   UserCogIcon,
+  ScanLineIcon,
+  BrainIcon,
+  BoneIcon,
+  RadiationIcon,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { DepartmentId } from '@/domain/types'
@@ -53,6 +57,10 @@ export type NavKey =
   | 'testCatalog'
   | 'users'
   | 'auditLog'
+  | 'imaging'
+  | 'imagingCt'
+  | 'imagingMri'
+  | 'imagingXray'
 
 export interface NavItem {
   key: NavKey
@@ -140,6 +148,14 @@ export const OPERATIONS_NAV: NavItem[] = [
   },
   { key: 'tat', to: '/tat', icon: <TimerIcon /> },
   { key: 'analytics', to: '/analytics', icon: <TrendingUpIcon /> },
+]
+
+/** Diagnostic imaging, kept apart from the laboratory's test lists. */
+export const IMAGING_NAV: NavItem[] = [
+  { key: 'imaging', to: '/imaging', icon: <ScanLineIcon />, end: true },
+  { key: 'imagingCt', to: '/imaging/ct', icon: <RadiationIcon /> },
+  { key: 'imagingMri', to: '/imaging/mri', icon: <BrainIcon /> },
+  { key: 'imagingXray', to: '/imaging/x-ray', icon: <BoneIcon /> },
 ]
 
 /** Changes rarely and needs the lab manager (audit §28). */

@@ -17,7 +17,7 @@ function renderAt(path: string) {
 }
 
 const SCREENS: [string, RegExp][] = [
-  ['/dashboard', /^dashboard$/i],
+  ['/dashboard', /^good (morning|afternoon|evening)/i],
   ['/work-queue', /^work queue$/i],
   ['/patients', /^patients$/i],
   ['/test-catalog', /^test catalog$/i],
@@ -31,6 +31,10 @@ const SCREENS: [string, RegExp][] = [
   ['/settings', /^settings$/i],
   ['/users', /^users and roles$/i],
   ['/audit-log', /^audit log$/i],
+  ['/imaging', /^diagnostic imaging$/i],
+  ['/imaging/ct', /^ct$/i],
+  ['/imaging/mri', /^mri$/i],
+  ['/imaging/x-ray', /^x-ray$/i],
 ]
 
 // Every other screen, detail pages included: each must render its page
@@ -61,6 +65,11 @@ const DETAIL: [string, () => string][] = [
   ['critical values', () => '/critical-results'],
   ['departments', () => '/departments'],
   ['department', () => '/departments/hematology'],
+  [
+    'imaging report',
+    () =>
+      `/imaging/reports/${Object.values(db.imaging).find((s) => s.versions.length > 0)!.id}`,
+  ],
 ]
 
 describe('routes', () => {
@@ -108,7 +117,7 @@ describe('routes', () => {
     renderAt('/dashboard')
     await screen.findByRole(
       'heading',
-      { level: 1, name: /^dashboard$/i },
+      { level: 1, name: /^good (morning|afternoon|evening)/i },
       { timeout: 8000 },
     )
     for (const [name, href] of [
@@ -128,7 +137,7 @@ describe('routes', () => {
     expect(
       await screen.findByRole(
         'heading',
-        { level: 1, name: /^dashboard$/i },
+        { level: 1, name: /^good (morning|afternoon|evening)/i },
         { timeout: 8000 },
       ),
     ).toBeInTheDocument()
@@ -158,5 +167,44 @@ describe('routes', () => {
     expect(
       await screen.findByRole('heading', { name: /page not found/i }),
     ).toBeInTheDocument()
+  })
+
+  it('shows the shared report page only for a shared report', async () => {
+    const report = Object.values(db.reports).find(
+      (r) => r.versions.length > 0 && !r.withdrawn,
+    )!
+    renderAt(`/report/${report.reportNo}`)
+    expect(
+      await screen.findByRole(
+        'heading',
+        { name: /report not available/i },
+        { timeout: 8000 },
+      ),
+    ).toBeInTheDocument()
+    // The portal has no staff shell.
+    expect(screen.queryByRole('navigation', { name: /main/i })).toBeNull()
+  })
+
+  it('opens a shared report outside the staff shell', async () => {
+    const report = Object.values(db.reports).find(
+      (r) => r.versions.length > 0 && !r.withdrawn && !r.pendingAmendment,
+    )!
+    db.reportLinks[report.reportNo] = {
+      reportNo: report.reportNo,
+      kind: 'laboratory',
+      targetId: report.id,
+      createdAt: Date.now(),
+      createdBy: 'st_shruthi',
+      version: report.versions.length,
+    }
+    renderAt(`/report/${report.reportNo}`)
+    expect(
+      await screen.findByRole(
+        'button',
+        { name: /download pdf/i },
+        { timeout: 8000 },
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getAllByText(report.reportNo).length).toBeGreaterThan(0)
   })
 })

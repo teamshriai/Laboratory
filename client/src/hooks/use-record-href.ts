@@ -1,6 +1,6 @@
 import { useLocation } from 'react-router'
 
-export type RecordKind = 'patient' | 'order' | 'specimen' | 'report'
+export type RecordKind = 'patient' | 'order' | 'specimen' | 'report' | 'imaging'
 
 /**
  * Where a record lives. Orders open as a drawer over the current page (the
@@ -12,6 +12,7 @@ export function useRecordHref() {
     if (kind === 'patient') return `/patients/${id}`
     if (kind === 'specimen') return `/specimens/${id}`
     if (kind === 'report') return `/reports/${id}`
+    if (kind === 'imaging') return `/imaging/reports/${id}`
     const search = new URLSearchParams(location.search)
     search.set('order', id)
     return `${location.pathname}?${search.toString()}`

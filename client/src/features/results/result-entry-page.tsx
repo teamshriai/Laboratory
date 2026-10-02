@@ -12,6 +12,7 @@ import {
 import { Fragment, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { useUnsavedChanges } from '@/hooks/use-unsaved-changes'
+import { useAssistantClearance } from '@/hooks/use-assistant-clearance'
 import { UnsavedChangesDialog } from '@/components/ui/unsaved-dialog'
 import { toast } from 'sonner'
 import {
@@ -472,6 +473,8 @@ function EntryForm({ view }: { view: ResultEntryView }) {
   )
   const dirty = JSON.stringify(values) !== JSON.stringify(initial)
   const blocker = useUnsavedChanges(dirty, () => submitted.current)
+  // The action bar is sticky at the bottom: keep the assistant above it.
+  useAssistantClearance(76)
 
   const editableItems = view.items.filter((i) => EDITABLE.includes(i.status))
   let total = 0

@@ -33,3 +33,21 @@ export function usePageRules(css: string | null) {
     }
   }, [css])
 }
+
+/**
+ * A translated "Page {page} of {pages}" as margin-box `content`, with the
+ * placeholders replaced by the page counters.
+ */
+export function pageOfContent(template: string) {
+  return template
+    .split(/(\{pages?\})/)
+    .filter(Boolean)
+    .map((part) =>
+      part === '{page}'
+        ? 'counter(page)'
+        : part === '{pages}'
+          ? 'counter(pages)'
+          : cssString(part),
+    )
+    .join(' ')
+}

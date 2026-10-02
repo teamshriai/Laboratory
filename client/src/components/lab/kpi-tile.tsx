@@ -52,13 +52,13 @@ export function KpiCard({
         <IconGlyph
           icon={icon}
           tone={alert ? 'red' : tone}
-          size={22}
+          size={20}
           className="transition-transform duration-200 group-hover:scale-110"
         />
       </span>
       <span
         className={cn(
-          'mt-2 block text-2xl leading-none font-semibold tracking-tight tabular-nums',
+          'mt-2 block text-xl leading-none font-semibold tracking-tight tabular-nums',
           alert ? 'text-danger-text' : 'text-fg',
         )}
       >
@@ -71,8 +71,8 @@ export function KpiCard({
         </span>
       ) : null}
       {trend && trend.length > 1 ? (
-        <span className="duo-icon mt-3 block">
-          <TrendLine values={trend} height={34} />
+        <span className="duo-icon mt-2.5 block">
+          <TrendLine values={trend} height={26} />
           {trendLabel ? <span className="sr-only">{trendLabel}</span> : null}
         </span>
       ) : null}

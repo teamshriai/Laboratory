@@ -272,7 +272,7 @@ function Detail({
             : t('sameUser')}
         </p>
       ) : null}
-      <div className="min-h-0 flex-1 scrollbar-thin overflow-auto">
+      <div className="relative min-h-0 flex-1 scrollbar-thin overflow-auto">
         <table className="w-full min-w-[640px] text-sm">
           <thead>
             <tr className="border-b border-line bg-surface-2/60 text-left text-xs text-fg-muted">

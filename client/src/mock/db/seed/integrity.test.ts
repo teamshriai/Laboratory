@@ -217,11 +217,37 @@ function check(db: LabDb, now: number) {
     'Accession',
     Object.values(db.samples).map((s) => s.accessionNo),
   )
+  unique('D7', 'Report', [
+    ...Object.values(db.reports).map((r) => r.reportNo),
+    ...Object.values(db.imaging).map((s) => s.reportNo ?? null),
+  ])
   unique(
     'D7',
-    'Report',
-    Object.values(db.reports).map((r) => r.reportNo),
+    'Imaging accession',
+    Object.values(db.imaging).map((s) => s.accessionNo),
   )
+
+  // Imaging (same rules): a real patient, steps in order, and an amended
+  // report that keeps its earlier version and says why.
+  for (const study of Object.values(db.imaging)) {
+    if (!db.patients[study.patientId])
+      fail('D3', `${study.accessionNo} has no patient`)
+    if (
+      study.performedAt !== undefined &&
+      study.performedAt < study.scheduledAt
+    )
+      fail('D5', `${study.accessionNo} performed before it was scheduled`)
+    study.versions.forEach((v, i) => {
+      if (study.performedAt === undefined || v.releasedAt < study.performedAt)
+        fail('D5', `${study.accessionNo} reported before it was performed`)
+      if (v.version !== i + 1)
+        fail('D13', `${study.accessionNo} lost an earlier version`)
+      if (v.kind === 'amended' && !v.amendmentReason)
+        fail('D13', `${study.accessionNo} v${v.version} has no reason`)
+    })
+    if (study.versions.length > 0 && !study.reportNo)
+      fail('D7', `${study.accessionNo} reported without a report number`)
+  }
   return problems
 }
 

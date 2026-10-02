@@ -414,7 +414,7 @@ export function Header({
           icon={<MenuIcon className="size-5" />}
           onClick={onOpenNav}
         />
-        <div className="min-w-0 flex-1 lg:flex-initial lg:shrink-0 lg:pr-3 xl:pr-10">
+        <div className="min-w-0 flex-1 lg:flex-initial lg:pr-3 xl:pr-10">
           <Breadcrumbs />
         </div>
         <button

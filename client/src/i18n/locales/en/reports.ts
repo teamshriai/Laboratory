@@ -156,4 +156,9 @@ export default {
   runningCollected: 'Collected {time}',
   runningIssued: 'Issued {time}',
   exportFile: 'reports',
+  viewVersion: 'View version {version}',
+  viewingVersion:
+    'You are viewing version {version}. Version {latest} is the current report.',
+  viewCurrentVersion: 'View the current version',
+  currentVersion: 'Current',
 } as const

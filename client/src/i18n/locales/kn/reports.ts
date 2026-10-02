@@ -156,4 +156,9 @@ export default {
   runningCollected: 'ಸಂಗ್ರಹ: {time}',
   runningIssued: 'ನೀಡಿದ್ದು: {time}',
   exportFile: 'reports',
+  viewVersion: 'ಆವೃತ್ತಿ {version} ನೋಡಿ',
+  viewingVersion:
+    'ನೀವು ಆವೃತ್ತಿ {version} ನೋಡುತ್ತಿದ್ದೀರಿ. ಆವೃತ್ತಿ {latest} ಪ್ರಸ್ತುತ ವರದಿ.',
+  viewCurrentVersion: 'ಪ್ರಸ್ತುತ ಆವೃತ್ತಿ ನೋಡಿ',
+  currentVersion: 'ಪ್ರಸ್ತುತ',
 } as const

@@ -158,4 +158,9 @@ export default {
   runningCollected: 'ശേഖരിച്ചത് {time}',
   runningIssued: 'പുറപ്പെടുവിച്ചത് {time}',
   exportFile: 'reports',
+  viewVersion: 'പതിപ്പ് {version} കാണുക',
+  viewingVersion:
+    'നിങ്ങൾ പതിപ്പ് {version} ആണ് കാണുന്നത്. പതിപ്പ് {latest} ആണ് നിലവിലെ റിപ്പോർട്ട്.',
+  viewCurrentVersion: 'നിലവിലെ പതിപ്പ് കാണുക',
+  currentVersion: 'നിലവിലെ',
 } as const

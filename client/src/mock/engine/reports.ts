@@ -399,3 +399,28 @@ export function withdrawReport(
   )
   return report
 }
+
+/**
+ * Creates (or refreshes) the share link for a released report. Demo only:
+ * the link carries the report number and opens in this browser; real access
+ * control and expiry belong to the backend.
+ */
+export function createReportLink(db: LabDb, reportId: string, ctx: EngineCtx) {
+  requirePermission(db, ctx, 'report.share')
+  const report = must(db.reports, reportId, 'report')
+  ensureNotWithdrawn(report)
+  if (!isReportReleased(report)) throw new LabApiError('report-not-released')
+  const version = report.versions.at(-1)!.version
+  db.reportLinks[report.reportNo] = {
+    reportNo: report.reportNo,
+    kind: 'laboratory',
+    targetId: report.id,
+    createdAt: ctx.now,
+    createdBy: ctx.by,
+    version,
+  }
+  audit(db, ctx, 'report', report.id, 'link-created', {
+    detail: { report: report.reportNo, version },
+  })
+  return db.reportLinks[report.reportNo]!
+}

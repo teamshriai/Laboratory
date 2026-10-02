@@ -80,6 +80,7 @@ import {
 import { antibiogramFor, generateItemValues } from './values'
 
 import { enrichDatabase } from './enrich'
+import { seedImaging } from './imaging'
 const SEED = 20260928
 
 const PHLEBOTOMISTS = ['st_kavya', 'st_ravi', 'st_sumathi', 'st_joseph']
@@ -1049,6 +1050,8 @@ export function seedDatabase(
   const generated = generatePatients(70 * scale, rng)
   for (const p of [...NAMED_PATIENTS, ...SCENARIO_PATIENTS, ...generated])
     db.patients[p.id] = toPatient(p, now, rng)
+  for (const study of seedImaging(now, (name) => named[name]?.id))
+    db.imaging[study.id] = study
 
   const sched = new Scheduler()
   const flow = (plan: FlowPlan) => scheduleFlow(db, sched, plan, rng)

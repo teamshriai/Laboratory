@@ -9,6 +9,13 @@ const crumb = (key: TKey<'nav'>, to?: string) => ({ crumb: key, crumbTo: to })
 export const routes: RouteObject[] = [
   // Links and bookmarks from before the URLs dropped the /laboratory prefix.
   { path: '/laboratory/*', element: <LegacyRedirect /> },
+  // The patient-facing report behind a share link: outside the staff shell.
+  {
+    path: '/report/:reportNo',
+    errorElement: <RouteError />,
+    hydrateFallbackElement: <AppLoading />,
+    lazy: () => import('@/features/portal/report-portal-page'),
+  },
   {
     path: '/',
     element: <AppShell />,
@@ -119,6 +126,36 @@ export const routes: RouteObject[] = [
             path: 'critical-results',
             handle: crumb('criticalValues'),
             lazy: () => import('@/features/critical/critical-page'),
+          },
+          {
+            path: 'imaging',
+            handle: crumb('imaging', '/imaging'),
+            children: [
+              {
+                index: true,
+                lazy: () => import('@/features/imaging/imaging-page'),
+              },
+              {
+                path: 'ct',
+                handle: crumb('imagingCt'),
+                lazy: () => import('@/features/imaging/modality-page'),
+              },
+              {
+                path: 'mri',
+                handle: crumb('imagingMri'),
+                lazy: () => import('@/features/imaging/modality-page'),
+              },
+              {
+                path: 'x-ray',
+                handle: crumb('imagingXray'),
+                lazy: () => import('@/features/imaging/modality-page'),
+              },
+              {
+                path: 'reports/:studyId',
+                handle: crumb('imagingReport'),
+                lazy: () => import('@/features/imaging/imaging-report-page'),
+              },
+            ],
           },
           {
             path: 'test-catalog',

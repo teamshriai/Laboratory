@@ -86,4 +86,7 @@ export default {
   bloodUnknown: 'Not known',
   allergiesHint: 'Separate with commas. Leave empty if none are known.',
   allEncounters: 'All encounters',
+  reportHistoryTitle: 'Diagnostic & Laboratory Reports',
+  reportHistoryHint:
+    'Every issued laboratory and imaging report for this patient, newest first.',
 } as const
