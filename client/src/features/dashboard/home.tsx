@@ -23,10 +23,9 @@ import {
 import { useId, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { usePreferences } from '@/app/preferences/context'
-import { istDay, istHour, startOfIstDay, DAY } from '@/domain/time'
+import { istHour, startOfIstDay } from '@/domain/time'
 import { useNow } from '@/hooks/use-now'
-import { useEnum, useLanguage, useT } from '@/i18n/context'
-import { INTL_LOCALE } from '@/i18n/core'
+import { useEnum, useT } from '@/i18n/context'
 import { useFormat } from '@/i18n/format'
 import { cn } from '@/lib/cn'
 import type {
@@ -40,6 +39,7 @@ import { useToday, useWorkQueueList } from '@/services/queries'
 import { AgeSex } from '@/components/lab/patient'
 import { PriorityMark } from '@/components/lab/status'
 import { Avatar } from '@/components/ui/misc'
+import { CalendarCard } from './calendar-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ErrorState } from '@/components/ui/states'
 
@@ -104,14 +104,14 @@ function StatTile({
       to={to}
       aria-label={`${label}: ${f.number(value)}. ${sub}`}
       className={cn(
-        'focus-ring card-hover flex min-w-0 flex-col items-start gap-2.5 rounded-2xl p-3.5 @lg:flex-row @lg:items-center @lg:gap-3',
+        'focus-ring card-hover flex min-w-0 flex-col items-start gap-2 rounded-2xl p-3 @lg:flex-row @lg:items-center @lg:gap-3',
         look.wash,
       )}
     >
       <span
         aria-hidden
         className={cn(
-          'flex size-9 shrink-0 items-center justify-center rounded-xl @lg:size-10 [&>svg]:size-[18px] @lg:[&>svg]:size-5',
+          'flex size-8 shrink-0 items-center justify-center rounded-xl @lg:size-9 [&>svg]:size-4 @lg:[&>svg]:size-[18px]',
           quiet ? 'bg-surface/70 text-fg-subtle' : `${look.solid} text-white`,
         )}
       >
@@ -120,16 +120,16 @@ function StatTile({
       <span className="w-full min-w-0">
         <span
           className={cn(
-            'block text-xl leading-none font-semibold tracking-tight tabular-nums',
+            'block text-lg leading-none font-semibold tracking-tight tabular-nums',
             quiet ? 'text-fg-muted' : look.text,
           )}
         >
           {f.number(value)}
         </span>
-        <span className="mt-1 block truncate text-sm font-medium text-fg">
+        <span className="mt-1 block truncate text-sm leading-tight font-medium text-fg">
           {label}
         </span>
-        <span className="block truncate text-xs text-fg-muted">{sub}</span>
+        <span className="block truncate text-2xs text-fg-muted">{sub}</span>
       </span>
     </Link>
   )
@@ -147,7 +147,7 @@ export function StatTiles({ today }: { today: TodayView }) {
       ? t('tile.nothing')
       : t('oldest', { age: f.duration(now - at) })
   return (
-    <div className="grid grid-cols-2 gap-4 @3xl:grid-cols-3 @7xl:grid-cols-5">
+    <div className="grid grid-cols-2 gap-3 @3xl:grid-cols-3 @5xl:grid-cols-5">
       <StatTile
         to="/orders"
         hue="blue"
@@ -233,8 +233,8 @@ function HourStrip({ hourly }: { hourly: DashboardView['hourly'] }) {
   const minuteShare =
     (now - startOfIstDay(now) - hourNow * 3_600_000) / 3_600_000
   return (
-    <figure className="m-0 rounded-xl bg-surface-2 p-3">
-      <figcaption className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-fg-muted">
+    <figure className="m-0 rounded-xl bg-surface-2 px-3 py-2.5">
+      <figcaption className="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-xs text-fg-muted">
         <span>{t('hourlyCaption')}</span>
         <span className="font-semibold text-fg">
           {t('hourlySummary', { count: total })}
@@ -252,7 +252,7 @@ function HourStrip({ hourly }: { hourly: DashboardView['hourly'] }) {
               key={h.hour}
               title={t('hourCell', { hour: label, count: h.today })}
               className={cn(
-                'relative h-7 rounded-md',
+                'relative h-6 rounded-md',
                 h.hour > hourNow ? 'bg-surface-3/60' : level(h.today),
                 current &&
                   'ring-2 ring-accent ring-offset-1 ring-offset-surface-2',
@@ -335,9 +335,9 @@ export function TodayCard({
   return (
     <section
       aria-labelledby={id}
-      className={cn(CARD, '@container flex min-w-0 flex-col p-4 sm:p-5')}
+      className={cn(CARD, '@container flex min-w-0 flex-col p-3.5 sm:p-4')}
     >
-      <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+      <div className="mb-2.5 flex flex-wrap items-center gap-x-3 gap-y-1">
         <h2 id={id} className="text-base font-semibold text-fg">
           {t('todayCard')}
         </h2>
@@ -355,7 +355,7 @@ export function TodayCard({
         ) : null}
       </div>
       <HourStrip hourly={dashboard.hourly} />
-      <ol className="mt-3 max-h-[19rem] scrollbar-thin space-y-0.5 overflow-y-auto pr-1">
+      <ol className="mt-2 max-h-[18rem] scrollbar-thin space-y-px overflow-y-auto pr-1">
         {today.agenda.map((item) => {
           const isNow = item.state === 'now'
           const done = item.state === 'done'
@@ -364,7 +364,7 @@ export function TodayCard({
               <Link
                 to={item.to}
                 className={cn(
-                  'focus-ring group flex items-center gap-3 rounded-xl px-2.5 py-1.5 transition-colors',
+                  'focus-ring group flex items-center gap-2.5 rounded-xl px-2 py-1 transition-colors',
                   isNow ? 'bg-accent-soft' : 'hover:bg-surface-2',
                 )}
               >
@@ -384,7 +384,7 @@ export function TodayCard({
                 <span
                   aria-hidden
                   className={cn(
-                    'hidden size-9 shrink-0 items-center justify-center rounded-full border @md:flex [&>svg]:size-4',
+                    'hidden size-8 shrink-0 items-center justify-center rounded-full border @md:flex [&>svg]:size-3.5',
                     isNow
                       ? 'border-transparent bg-accent text-on-accent'
                       : item.state === 'overdue'
@@ -403,12 +403,12 @@ export function TodayCard({
                   >
                     {label(item)}
                   </span>
-                  <span className="mt-1 flex flex-wrap gap-1.5">
+                  <span className="mt-0.5 flex flex-wrap gap-1">
                     {chips(item).map((c) => (
                       <span
                         key={c.text}
                         className={cn(
-                          'max-w-full truncate rounded-md px-2 py-0.5 text-xs',
+                          'max-w-full truncate rounded-md px-1.5 py-px text-2xs',
                           c.warn
                             ? 'bg-warning-soft text-warning-text'
                             : 'bg-surface-2 text-fg-muted',
@@ -472,9 +472,9 @@ export function SpecimensToday() {
   return (
     <section
       aria-labelledby={id}
-      className={cn(CARD, '@container flex min-w-0 flex-col p-4 sm:p-5')}
+      className={cn(CARD, '@container flex min-w-0 flex-col p-3.5 sm:p-4')}
     >
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
         <h2 id={id} className="text-base font-semibold text-fg">
           {t('specimensTitle')}
         </h2>
@@ -527,27 +527,27 @@ export function SpecimensToday() {
       ) : (
         <div
           role="tabpanel"
-          className="max-h-[25rem] scrollbar-thin overflow-y-auto pr-1"
+          className="max-h-[23rem] scrollbar-thin overflow-y-auto pr-1"
         >
           <ul className="divide-y divide-line">
             {rows.slice(0, 40).map((r) => (
               <li key={r.id}>
                 <Link
                   to={`/specimens/${r.id}`}
-                  className="focus-ring flex items-center gap-3 rounded-lg px-1.5 py-2 transition-colors hover:bg-surface-2"
+                  className="focus-ring flex items-center gap-2.5 rounded-lg px-1.5 py-1.5 transition-colors hover:bg-surface-2"
                 >
                   <Avatar name={r.patient.name} size="sm" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-meta font-medium text-fg">
                       {r.patient.name}
                     </span>
-                    <span className="block truncate text-xs text-fg-subtle">
+                    <span className="block truncate text-2xs text-fg-subtle">
                       <AgeSex dob={r.patient.dob} sex={r.patient.sex} /> ·{' '}
                       <span className="font-mono">
                         {r.accessionNo ?? r.patient.uhid}
                       </span>
                     </span>
-                    <span className="mt-1 flex flex-wrap items-center gap-2 text-xs @md:hidden">
+                    <span className="mt-0.5 flex flex-wrap items-center gap-2 text-2xs @md:hidden">
                       {r.priority !== 'routine' ? (
                         <PriorityMark priority={r.priority} />
                       ) : null}
@@ -569,7 +569,7 @@ export function SpecimensToday() {
                   ) : null}
                   <span
                     className={cn(
-                      'hidden shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium @md:inline-flex',
+                      'hidden shrink-0 items-center gap-1 rounded-full px-2 py-px text-2xs font-medium @md:inline-flex',
                       r.openCriticals
                         ? 'bg-danger-soft text-danger-text'
                         : r.status === 'pending_collection' ||
@@ -579,9 +579,9 @@ export function SpecimensToday() {
                     )}
                   >
                     {r.openCriticals ? (
-                      <BellRingIcon className="size-3.5" aria-hidden />
+                      <BellRingIcon className="size-3" aria-hidden />
                     ) : (
-                      <ClockIcon className="size-3.5" aria-hidden />
+                      <ClockIcon className="size-3" aria-hidden />
                     )}
                     {e('stage', r.stage)}
                   </span>
@@ -597,7 +597,7 @@ export function SpecimensToday() {
       )}
       <Link
         to="/work-queue"
-        className="mt-3 inline-flex min-h-11 items-center gap-1 self-start text-meta font-semibold text-accent-text hover:underline"
+        className="tap-reach mt-2 inline-flex min-h-[24px] items-center gap-1 self-start text-xs font-semibold text-accent-text hover:underline"
       >
         {t('viewAllWork')}
         <ChevronRightIcon className="size-4" aria-hidden />
@@ -606,174 +606,13 @@ export function SpecimensToday() {
   )
 }
 
-/* ── Week ─────────────────────────────────────────────────────────────── */
-
-type Busy = 'light' | 'moderate' | 'high'
-const BUSY_DOTS: Record<Busy, number> = { light: 1, moderate: 2, high: 3 }
-
-export function WeekCard({
-  today,
-  dashboard,
-}: {
-  today: TodayView
-  dashboard: DashboardView
-}) {
-  const t = useT('today')
-  const { language } = useLanguage()
-  const now = useNow()
-  const id = useId()
-  const locale = INTL_LOCALE[language]
-  const weekday = new Intl.DateTimeFormat(locale, {
-    weekday: 'short',
-    timeZone: 'Asia/Kolkata',
-  })
-  const dayNum = new Intl.DateTimeFormat(locale, {
-    day: 'numeric',
-    timeZone: 'Asia/Kolkata',
-  })
-  const dayMonth = new Intl.DateTimeFormat(locale, {
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'Asia/Kolkata',
-  })
-  const monthYear = new Intl.DateTimeFormat(locale, {
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'Asia/Kolkata',
-  })
-
-  const startToday = startOfIstDay(now)
-  // Monday-first week (IST): Mon = 0.
-  const dow = (new Date(startToday + 5.5 * 3_600_000).getUTCDay() + 6) % 7
-  const monday = startToday - dow * DAY
-  const byDay = new Map(
-    dashboard.trend.days.map((d, i) => [d, dashboard.trend.samples[i] ?? 0]),
-  )
-  const average =
-    dashboard.trend.samples.reduce((n, v) => n + v, 0) /
-    Math.max(1, dashboard.trend.samples.length)
-  const busy = (n: number): Busy =>
-    n < average * 0.85 ? 'light' : n < average * 1.15 ? 'moderate' : 'high'
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const at = monday + i * DAY
-    const key = istDay(at)
-    const isToday = at === startToday
-    const count = isToday ? today.summary.collected : byDay.get(key)
-    return { at, isToday, future: at > startToday, count }
-  })
-  const todayBusy = busy(today.summary.collected)
-
-  return (
-    <section
-      aria-labelledby={id}
-      className={cn(CARD, '@container flex min-w-0 flex-col p-4 sm:p-5')}
-    >
-      <h2 id={id} className="text-base font-semibold text-fg">
-        {t('weekTitle', {
-          from: dayMonth.format(monday),
-          to: dayMonth.format(monday + 6 * DAY),
-        })}
-      </h2>
-      <p className="text-xs text-fg-subtle">{t('weekCaption')}</p>
-      <ol className="mt-4 grid grid-cols-7 gap-1 text-center">
-        {days.map((d) => (
-          <li key={d.at} className="grid justify-items-center gap-1">
-            <span className="text-xs text-fg-subtle">
-              {weekday.format(d.at)}
-            </span>
-            <span
-              className={cn(
-                'flex size-9 items-center justify-center rounded-full text-meta font-semibold tabular-nums',
-                d.isToday
-                  ? 'bg-accent-soft text-accent-text ring-2 ring-accent'
-                  : d.future
-                    ? 'text-fg-subtle'
-                    : 'text-fg',
-              )}
-              aria-current={d.isToday ? 'date' : undefined}
-            >
-              {dayNum.format(d.at)}
-            </span>
-            <span className="flex h-2 items-center gap-0.5" aria-hidden>
-              {d.count !== undefined && !d.future
-                ? Array.from({ length: BUSY_DOTS[busy(d.count)] }, (_, i) => (
-                    <span
-                      key={i}
-                      className={cn(
-                        'size-1 rounded-full',
-                        busy(d.count!) === 'high' ? 'bg-warning' : 'bg-accent',
-                      )}
-                    />
-                  ))
-                : null}
-            </span>
-            {d.count !== undefined && !d.future ? (
-              <span className="sr-only">
-                {t('daySpecimens', { count: d.count })},{' '}
-                {t(`busy.${busy(d.count)}`)}
-              </span>
-            ) : null}
-          </li>
-        ))}
-      </ol>
-      <p
-        className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-2xs text-fg-subtle"
-        aria-hidden
-      >
-        {(['light', 'moderate', 'high'] as const).map((b) => (
-          <span key={b} className="inline-flex items-center gap-1">
-            <span className="flex gap-0.5">
-              {Array.from({ length: BUSY_DOTS[b] }, (_, i) => (
-                <span
-                  key={i}
-                  className={cn(
-                    'size-1 rounded-full',
-                    b === 'high' ? 'bg-warning' : 'bg-accent',
-                  )}
-                />
-              ))}
-            </span>
-            {t(`busy.${b}`)}
-          </span>
-        ))}
-      </p>
-      <div className="mt-4 flex items-center gap-3 border-t border-line pt-4">
-        <span className="flex size-14 shrink-0 flex-col items-center justify-center rounded-xl bg-accent-soft text-accent-text">
-          <span className="text-xl leading-none font-bold tabular-nums">
-            {dayNum.format(now)}
-          </span>
-          <span className="mt-0.5 text-2xs font-semibold uppercase">
-            {weekday.format(now)}
-          </span>
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-fg">
-            {monthYear.format(now)}
-          </p>
-          <p className="text-xs text-fg-subtle">
-            {t('weekToday')} · {t(`busy.${todayBusy}`)}
-          </p>
-        </div>
-      </div>
-      <p className="mt-3 flex flex-wrap gap-1.5 text-xs">
-        <span className="rounded-md bg-surface-2 px-2 py-1 text-fg-muted">
-          {t('daySpecimens', { count: today.summary.collected })}
-        </span>
-        <span className="rounded-md bg-surface-2 px-2 py-1 text-fg-muted">
-          {t('dayTests', { count: today.summary.inProgress })} · {t('tabInLab')}
-        </span>
-      </p>
-    </section>
-  )
-}
-
 /* ── Needs action ─────────────────────────────────────────────────────── */
 
 const SEVERITY_ICON: Record<TodaySeverity, ReactNode> = {
-  critical: <CircleAlertIcon className="size-5 text-danger" />,
-  high: <TriangleAlertIcon className="size-5 text-warning" />,
-  medium: <TriangleAlertIcon className="size-5 text-warning" />,
-  info: <CircleIcon className="size-5 text-stat-violet-solid" />,
+  critical: <CircleAlertIcon className="size-[18px] text-danger" />,
+  high: <TriangleAlertIcon className="size-[18px] text-warning" />,
+  medium: <TriangleAlertIcon className="size-[18px] text-warning" />,
+  info: <CircleIcon className="size-[18px] text-stat-violet-solid" />,
 }
 
 const TODO_ICON: Record<TodayView['todo'][number]['key'], ReactNode> = {
@@ -794,8 +633,8 @@ export function NeedsAction({ today }: { today: TodayView }) {
   const id = useId()
   const critical = today.priorities.find((p) => p.key === 'critical')
   return (
-    <section aria-labelledby={id} className={cn(CARD, 'min-w-0 p-4 sm:p-5')}>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <section aria-labelledby={id} className={cn(CARD, 'min-w-0 p-3.5 sm:p-4')}>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h2 id={id} className="text-base font-semibold text-fg">
           {t('needsAction')}
         </h2>
@@ -806,8 +645,8 @@ export function NeedsAction({ today }: { today: TodayView }) {
           </span>
         ) : null}
       </div>
-      <div className="grid gap-6 @4xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] @4xl:divide-x @4xl:divide-line">
-        <div className="min-w-0 @4xl:pr-6">
+      <div className="grid gap-4 @4xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] @4xl:divide-x @4xl:divide-line">
+        <div className="min-w-0 @4xl:pr-5">
           <p className="mb-2 flex items-center justify-between gap-2 text-xs font-semibold tracking-wide text-fg-muted uppercase">
             <span>
               {t('attention')}{' '}
@@ -830,7 +669,7 @@ export function NeedsAction({ today }: { today: TodayView }) {
                   <Link
                     to={p.to}
                     className={cn(
-                      'focus-ring group flex items-center gap-3 rounded-xl px-2.5 py-1.5 transition-colors',
+                      'focus-ring group flex items-center gap-2.5 rounded-xl px-2 py-1 transition-colors',
                       p.severity === 'critical'
                         ? 'bg-danger-soft hover:bg-danger-soft/80'
                         : 'hover:bg-surface-2',
@@ -866,7 +705,7 @@ export function NeedsAction({ today }: { today: TodayView }) {
             </ul>
           )}
         </div>
-        <div className="min-w-0 @4xl:pl-6">
+        <div className="min-w-0 @4xl:pl-5">
           <p className="mb-2 text-xs font-semibold tracking-wide text-fg-muted uppercase">
             {t('tasks')}{' '}
             <span className="ml-1 rounded-md bg-surface-2 px-1.5 py-0.5 tabular-nums">
@@ -878,11 +717,11 @@ export function NeedsAction({ today }: { today: TodayView }) {
               <li key={item.key}>
                 <Link
                   to={item.to}
-                  className="focus-ring flex items-center gap-3 rounded-xl px-2.5 py-2 transition-colors hover:bg-surface-2"
+                  className="focus-ring flex items-center gap-2.5 rounded-xl px-2 py-1 transition-colors hover:bg-surface-2"
                 >
                   <span
                     aria-hidden
-                    className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-line text-fg-muted [&>svg]:size-[18px]"
+                    className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-line text-fg-muted [&>svg]:size-4"
                   >
                     {TODO_ICON[item.key]}
                   </span>
@@ -932,7 +771,7 @@ export function DashboardHome({ dashboard }: { dashboard: DashboardView }) {
   if (isPending)
     return (
       <div className="grid gap-4">
-        <Skeleton className="h-24 rounded-2xl" />
+        <Skeleton className="h-[4.5rem] rounded-2xl" />
         <div className="grid gap-4 xl:grid-cols-3">
           <Skeleton className="h-[34rem] rounded-2xl" />
           <Skeleton className="h-[34rem] rounded-2xl" />
@@ -941,14 +780,12 @@ export function DashboardHome({ dashboard }: { dashboard: DashboardView }) {
       </div>
     )
   return (
-    <div className="@container grid gap-6">
+    <div className="@container grid gap-4">
       <StatTiles today={today} />
-      <div className="grid gap-6 @4xl:grid-cols-2 @7xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1.3fr)_minmax(0,0.85fr)]">
+      <div className="grid gap-4 @4xl:grid-cols-2 @7xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1.3fr)_minmax(0,0.85fr)]">
         <TodayCard today={today} dashboard={dashboard} />
         <SpecimensToday />
-        <div className="@4xl:col-span-2 @7xl:col-span-1">
-          <WeekCard today={today} dashboard={dashboard} />
-        </div>
+        <CalendarCard className="@4xl:col-span-2 @7xl:col-span-1" />
         <div className="@4xl:col-span-2 @7xl:col-span-3">
           <NeedsAction today={today} />
         </div>

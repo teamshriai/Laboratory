@@ -11,6 +11,7 @@ import {
   tatHoursFor,
   worstTat,
 } from './tat'
+import { busyLevel } from './lab-day'
 import { DAY, HOUR, MINUTE } from './time'
 import type {
   Equipment,
@@ -498,5 +499,20 @@ describe('critical values', () => {
     expect(isCriticalOverdue({ ...old, status: 'notified' }, NOW, 30)).toBe(
       false,
     )
+  })
+})
+
+describe('busy level', () => {
+  it('grades a day against the recorded average', () => {
+    expect(busyLevel(80, 100)).toBe('light')
+    expect(busyLevel(100, 100)).toBe('moderate')
+    expect(busyLevel(120, 100)).toBe('high')
+    expect(busyLevel(5, 0)).toBe('light')
+  })
+
+  it('compares a day still running pro rata', () => {
+    // Half the day gone, half the usual specimens: a normal day.
+    expect(busyLevel(50, 100, 0.5)).toBe('moderate')
+    expect(busyLevel(70, 100, 0.5)).toBe('high')
   })
 })

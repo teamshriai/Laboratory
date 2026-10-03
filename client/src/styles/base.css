@@ -455,15 +455,20 @@ html[data-high-contrast].dark {
     right: calc(var(--chat-dock-w) + 1rem) !important;
   }
 }
+/* Room at the end of every page for the AI launcher (48px, 20px from the
+   corner), so the last row always scrolls clear of it. Not while the panel
+   is open: the launcher is hidden then. */
+:root:not([data-chat-open='true']) #main {
+  padding-bottom: calc(4.75rem + var(--fab-clearance, 0px));
+}
+@media print {
+  :root #main {
+    padding-bottom: 0;
+  }
+}
 @keyframes dock-in {
   from {
     opacity: 0;
     transform: translateX(1.5rem);
-  }
-}
-@keyframes slide-up {
-  from {
-    opacity: 0;
-    transform: translateY(0.5rem);
   }
 }

@@ -78,7 +78,7 @@ export function KpiRow({ data }: { data: View }) {
   const k = data.kpis
   const openCriticals = k.criticalResults.detail?.value ?? 0
   return (
-    <div className="grid h-full grid-cols-2 gap-4 lg:grid-cols-4">
+    <div className="grid h-full grid-cols-2 gap-3 lg:grid-cols-4">
       <KpiCard
         to="/critical-results"
         tone="red"

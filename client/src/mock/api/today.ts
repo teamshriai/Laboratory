@@ -3,8 +3,15 @@
 // every number here matches the screen it links to.
 
 import { isCriticalPending } from '@/domain/critical'
-import { LAB_ROUTINE } from '@/domain/lab-day'
-import { HOUR, MINUTE, startOfIstDay } from '@/domain/time'
+import { busyLevel, LAB_ROUTINE } from '@/domain/lab-day'
+import {
+  DAY,
+  HOUR,
+  MINUTE,
+  istDay,
+  istHour,
+  startOfIstDay,
+} from '@/domain/time'
 import {
   awaitsAuthorisation,
   awaitsReview,
@@ -12,11 +19,15 @@ import {
   isItemLive,
 } from '@/domain/workflow'
 import type { LabDb } from '../db/schema'
-import { itemsOfReport } from '../engine/core'
+import { itemsOfReport, LabApiError } from '../engine/core'
+import { dayShareUntilHour } from '../db/seed/stats'
 import type { DbIndex } from './index-cache'
 import { imagingRows } from './imaging'
+import { todayStat } from './overview'
 import { read } from './runtime'
 import type {
+  CalendarDay,
+  CalendarView,
   TodayAgendaItem,
   TodayPriority,
   TodayTodo,
@@ -319,6 +330,86 @@ export function todayView(db: LabDb, index: DbIndex, now: number): TodayView {
   }
 }
 
+const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/
+/** The longest range one request may ask for (a 6-week month grid, padded). */
+const MAX_CALENDAR_DAYS = 62
+
+const dayStart = (day: string) => Date.parse(`${day}T00:00:00+05:30`)
+
+/**
+ * Day-by-day figures for the dashboard calendar: the recorded history for
+ * past days, today's live figures, and scheduled imaging for every day.
+ */
+export function calendarView(
+  db: LabDb,
+  index: DbIndex,
+  now: number,
+  range: { from: string; to: string },
+): CalendarView {
+  if (!DAY_KEY.test(range.from) || !DAY_KEY.test(range.to))
+    throw new LabApiError('validation-failed')
+  const first = dayStart(range.from)
+  const last = dayStart(range.to)
+  if (Number.isNaN(first) || Number.isNaN(last) || last < first)
+    throw new LabApiError('validation-failed')
+  const length = Math.round((last - first) / DAY) + 1
+  if (length > MAX_CALENDAR_DAYS) throw new LabApiError('validation-failed')
+
+  const todayKey = istDay(now)
+  const recorded = new Map(
+    db.dailyStats.filter((d) => d.day !== todayKey).map((d) => [d.day, d]),
+  )
+  const average =
+    recorded.size === 0
+      ? 0
+      : [...recorded.values()].reduce((n, d) => n + d.samples, 0) /
+        recorded.size
+  const share = dayShareUntilHour(istHour(now), (now % HOUR) / HOUR)
+
+  const imaging = new Map<string, number>()
+  for (const study of Object.values(db.imaging)) {
+    const key = istDay(study.scheduledAt)
+    imaging.set(key, (imaging.get(key) ?? 0) + 1)
+  }
+
+  const days: CalendarDay[] = []
+  for (let i = 0; i < length; i++) {
+    const day = istDay(first + i * DAY + 12 * HOUR)
+    const state =
+      day === todayKey ? 'today' : day < todayKey ? 'past' : 'future'
+    const stat =
+      state === 'today'
+        ? todayStat(db, index, now)
+        : state === 'past'
+          ? recorded.get(day)
+          : undefined
+    days.push({
+      day,
+      state,
+      hasData: stat !== undefined,
+      samples: stat?.samples ?? 0,
+      tests: stat?.tests ?? 0,
+      completed: stat?.completed ?? 0,
+      rejected: stat?.rejected ?? 0,
+      criticals: stat?.criticals ?? 0,
+      tatAvgMin: stat?.tatAvgMin ?? 0,
+      imaging: imaging.get(day) ?? 0,
+      ...(stat
+        ? {
+            busy: busyLevel(
+              stat.samples,
+              average,
+              state === 'today' ? share : 1,
+            ),
+          }
+        : {}),
+    })
+  }
+  return { days, average: Math.round(average) }
+}
+
 export const todayApi = {
   get: () => read((db, { index, now }) => todayView(db, index, now)),
+  calendar: (range: { from: string; to: string }) =>
+    read((db, { index, now }) => calendarView(db, index, now, range)),
 }

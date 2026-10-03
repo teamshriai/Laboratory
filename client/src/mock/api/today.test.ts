@@ -3,6 +3,7 @@
 // worklists show.
 
 import { beforeEach, describe, expect, it } from 'vitest'
+import { DAY, istDay } from '@/domain/time'
 import { getDb, startMemoryDb } from '../db/store'
 import { labApi } from './index'
 import { actingAs, STAFF } from './testing'
@@ -203,5 +204,65 @@ describe('diagnostic imaging and the patient report history', () => {
     await expect(tech.imaging.shareLink(waiting.id)).rejects.toMatchObject({
       code: 'report-not-released',
     })
+  })
+})
+
+describe('the dashboard calendar', () => {
+  beforeEach(() => {
+    startMemoryDb()
+  })
+
+  const day = (offset: number) => istDay(Date.now() + offset * DAY)
+
+  it('shows the recorded history, today live, and scheduled imaging', async () => {
+    const db = getDb()
+    const { days, average } = await labApi.today.calendar({
+      from: day(-40),
+      to: day(7),
+    })
+    expect(days).toHaveLength(48)
+    expect(average).toBeGreaterThan(0)
+
+    // Past days carry exactly the recorded figures.
+    const yesterday = days.find((d) => d.day === day(-1))!
+    const recorded = db.dailyStats.find((d) => d.day === day(-1))!
+    expect(yesterday).toMatchObject({
+      state: 'past',
+      hasData: true,
+      samples: recorded.samples,
+      completed: recorded.completed,
+      criticals: recorded.criticals,
+    })
+    expect(yesterday.busy).toBeDefined()
+
+    // Today matches the dashboard's own live figures.
+    const today = days.find((d) => d.state === 'today')!
+    const overview = await labApi.analytics.report({ preset: 'today' })
+    expect(today.day).toBe(day(0))
+    expect(today.samples).toBe(overview.totals.samples)
+
+    // Beyond the history there are no records; the future has none yet.
+    expect(days[0]).toMatchObject({ state: 'past', hasData: false, samples: 0 })
+    expect(days.at(-1)).toMatchObject({ state: 'future', hasData: false })
+    expect(days.at(-1)?.busy).toBeUndefined()
+
+    // Every imaging study is counted on its scheduled day.
+    const scheduled = Object.values(db.imaging).filter(
+      (s) =>
+        istDay(s.scheduledAt) >= day(-40) && istDay(s.scheduledAt) <= day(7),
+    ).length
+    expect(days.reduce((n, d) => n + d.imaging, 0)).toBe(scheduled)
+  })
+
+  it('refuses malformed or oversized ranges', async () => {
+    await expect(
+      labApi.today.calendar({ from: 'yesterday', to: day(0) }),
+    ).rejects.toMatchObject({ code: 'validation-failed' })
+    await expect(
+      labApi.today.calendar({ from: day(0), to: day(-1) }),
+    ).rejects.toMatchObject({ code: 'validation-failed' })
+    await expect(
+      labApi.today.calendar({ from: day(-100), to: day(0) }),
+    ).rejects.toMatchObject({ code: 'validation-failed' })
   })
 })

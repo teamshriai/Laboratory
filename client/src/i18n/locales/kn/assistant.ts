@@ -2,6 +2,7 @@
 export default {
   launcher: 'AI',
   launcherLabel: 'AI ಸಹಾಯಕವನ್ನು ತೆರೆಯಿರಿ',
+  launcherLabelTip: 'AI ಸಹಾಯಕವನ್ನು ತೆರೆಯಿರಿ (1 ಸಲಹೆ ಕಾಯುತ್ತಿದೆ)',
   title: 'ಪ್ರಯೋಗಾಲಯ ಸಹಾಯಕ',
   subtitle: 'ಈ ಪ್ರಯೋಗಾಲಯದ ದಾಖಲೆಗಳಿಂದ · ನಿಯಮ ಆಧಾರಿತ ಡೆಮೊ, AI ಅಲ್ಲ',
   close: 'ಸಹಾಯಕವನ್ನು ಮುಚ್ಚಿ',

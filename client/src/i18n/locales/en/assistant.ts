@@ -2,6 +2,7 @@
 export default {
   launcher: 'AI',
   launcherLabel: 'Open the AI assistant',
+  launcherLabelTip: 'Open the AI assistant (1 tip waiting)',
   title: 'Lab Assistant',
   subtitle: "From this lab's records · rule-based demo, not AI",
   close: 'Close the assistant',

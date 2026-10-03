@@ -36,7 +36,7 @@ export function KpiCard({
       to={to}
       style={toneStyle(alert ? 'red' : tone)}
       className={cn(
-        'focus-ring group tinted-surface flex min-w-0 flex-col rounded-xl border bg-surface p-4 shadow-card transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:shadow-card-md',
+        'focus-ring group tinted-surface @container flex min-w-0 flex-col rounded-xl border bg-surface px-3.5 py-3 shadow-card transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:shadow-card-md',
         alert && 'border-danger-text/35',
       )}
     >
@@ -52,30 +52,38 @@ export function KpiCard({
         <IconGlyph
           icon={icon}
           tone={alert ? 'red' : tone}
-          size={20}
+          size={16}
           className="transition-transform duration-200 group-hover:scale-110"
         />
       </span>
-      <span
-        className={cn(
-          'mt-2 block text-xl leading-none font-semibold tracking-tight tabular-nums',
-          alert ? 'text-danger-text' : 'text-fg',
-        )}
-      >
-        {value}
+      {/* Figures on the left; the trend beside them once the card is wide
+          enough, under them on a phone. */}
+      <span className="mt-1.5 flex flex-col gap-1.5 @[14rem]:flex-row @[14rem]:items-end @[14rem]:gap-3">
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <span
+              className={cn(
+                'text-xl leading-none font-semibold tracking-tight tabular-nums',
+                alert ? 'text-danger-text' : 'text-fg',
+              )}
+            >
+              {value}
+            </span>
+            {change ? <span className="text-2xs">{change}</span> : null}
+          </span>
+          {detail ? (
+            <span className="mt-1 block truncate text-2xs text-fg-subtle">
+              {detail}
+            </span>
+          ) : null}
+        </span>
+        {trend && trend.length > 1 ? (
+          <span className="duo-icon block w-full shrink-0 @[14rem]:w-[38%] @[14rem]:max-w-36">
+            <TrendLine values={trend} height={22} />
+            {trendLabel ? <span className="sr-only">{trendLabel}</span> : null}
+          </span>
+        ) : null}
       </span>
-      {change || detail ? (
-        <span className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-fg-subtle">
-          {change}
-          {detail}
-        </span>
-      ) : null}
-      {trend && trend.length > 1 ? (
-        <span className="duo-icon mt-2.5 block">
-          <TrendLine values={trend} height={26} />
-          {trendLabel ? <span className="sr-only">{trendLabel}</span> : null}
-        </span>
-      ) : null}
     </Link>
   )
 }

@@ -309,6 +309,14 @@ export const useToday = () =>
     refetchInterval: 60_000,
   })
 
+/** Day-by-day figures for the dashboard calendar (YYYY-MM-DD, inclusive). */
+export const useCalendar = (from: string, to: string) =>
+  useQuery({
+    queryKey: ['lab', 'today', 'calendar', from, to],
+    queryFn: () => labApi.today.calendar({ from, to }),
+    ...keep,
+  })
+
 export const useImagingOverview = () =>
   useQuery({
     queryKey: ['lab', 'imaging', 'overview'],

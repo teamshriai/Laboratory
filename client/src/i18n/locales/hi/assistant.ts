@@ -2,6 +2,7 @@
 export default {
   launcher: 'AI',
   launcherLabel: 'AI सहायक खोलें',
+  launcherLabelTip: 'AI सहायक खोलें (1 सुझाव प्रतीक्षा में)',
   title: 'लैब सहायक',
   subtitle: 'इस लैब के रिकॉर्ड से · नियम-आधारित डेमो, AI नहीं',
   close: 'सहायक बंद करें',

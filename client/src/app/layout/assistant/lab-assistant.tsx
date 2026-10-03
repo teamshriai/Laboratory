@@ -70,6 +70,8 @@ export function LabAssistant() {
   const composer = useRef<HTMLTextAreaElement>(null)
   const log = useRef<HTMLDivElement>(null)
   const docked = open && wide
+  const insight = useInsight()
+  const [tipOpen, setTipOpen] = useState(false)
 
   // The page narrows beside a docked panel (CSS reads these attributes).
   useEffect(() => {
@@ -92,6 +94,7 @@ export function LabAssistant() {
 
   const close = () => {
     setOpen(false)
+    setTipOpen(false)
     // The launcher stays mounted, so focus can return to it.
     window.setTimeout(() => launcher.current?.focus(), 0)
   }
@@ -137,32 +140,42 @@ export function LabAssistant() {
 
   const suggestions = assistantService.suggestions()
 
+  const openPanel = () => {
+    // A waiting tip shows once, as the panel's first card.
+    if (insight.pending) {
+      setTipOpen(true)
+      insight.dismiss()
+    }
+    setOpen(true)
+  }
+
   return (
     <>
-      <InsightBubble
-        hidden={open}
-        onAsk={(intent) => {
-          setOpen(true)
-          ask({ intent })
-        }}
-      />
       <button
         ref={launcher}
         type="button"
-        aria-label={t('launcherLabel')}
+        aria-label={
+          insight.pending ? t('launcherLabelTip') : t('launcherLabel')
+        }
         aria-expanded={open}
         aria-controls="lab-assistant"
-        onClick={() => setOpen(true)}
-        style={{ bottom: 'calc(1.5rem + var(--fab-clearance, 0px))' }}
+        onClick={openPanel}
+        style={{ bottom: 'calc(1.25rem + var(--fab-clearance, 0px))' }}
         className={cn(
-          'focus-ring fixed right-4 z-30 flex h-14 items-center gap-2 rounded-full border border-border bg-surface px-3.5 text-primary-700 shadow-card-lg transition-transform hover:scale-105 active:scale-95 md:right-6 md:border-transparent md:bg-primary-600 md:text-on-accent print:hidden',
+          'focus-ring fixed right-4 z-30 flex h-12 items-center gap-1.5 rounded-full border border-border bg-surface px-3 text-primary-700 shadow-card-lg transition-transform hover:scale-105 active:scale-95 md:right-5 md:border-transparent md:bg-primary-600 md:text-on-accent print:hidden',
           open && 'invisible',
         )}
       >
-        <AssistantMark size={30} />
-        <span aria-hidden className="pr-1 text-sm font-bold tracking-wide">
+        <AssistantMark size={24} />
+        <span aria-hidden className="pr-0.5 text-sm font-bold tracking-wide">
           {t('launcher')}
         </span>
+        {insight.pending ? (
+          <span
+            aria-hidden
+            className="absolute -top-0.5 -right-0.5 size-3 rounded-full bg-warning ring-2 ring-surface"
+          />
+        ) : null}
       </button>
       {open && !docked ? (
         <button
@@ -217,6 +230,20 @@ export function LabAssistant() {
             aria-busy={busy}
             className="min-h-0 flex-1 scrollbar-thin space-y-3 overflow-y-auto px-4 py-4"
           >
+            {tipOpen && insight.top ? (
+              <TipCard
+                text={t(`priority.${insight.top.key}` as 'priority.critical', {
+                  count: insight.top.count,
+                })}
+                onAsk={() => {
+                  setTipOpen(false)
+                  ask({
+                    intent: INSIGHT_INTENT[insight.top!.key] ?? 'attention',
+                  })
+                }}
+                onDismiss={() => setTipOpen(false)}
+              />
+            ) : null}
             {messages.length === 0 ? (
               <div className="grid gap-2">
                 <p className="text-xs font-semibold tracking-wide text-fg-subtle uppercase">
@@ -343,20 +370,12 @@ export function LabAssistant() {
 }
 
 /**
- * A tip by the launcher (design system 13.3), written from today's records:
- * the most urgent item, once per session, after a short pause. Dismissing it
- * stops tips for the session.
+ * A tip from today's records (design system 13.3): the most urgent item,
+ * once per session. It waits as a dot on the launcher and shows as the
+ * panel's first card, so it never floats over the page.
  */
-function InsightBubble({
-  hidden,
-  onAsk,
-}: {
-  hidden: boolean
-  onAsk: (intent: AssistantIntent) => void
-}) {
-  const t = useT('assistant')
+function useInsight() {
   const { data } = useToday()
-  const [visible, setVisible] = useState(false)
   const [dismissed, setDismissed] = useState(() => {
     try {
       return sessionStorage.getItem(INSIGHT_KEY) === 'done'
@@ -365,15 +384,7 @@ function InsightBubble({
     }
   })
   const top = data?.priorities[0]
-
-  useEffect(() => {
-    if (dismissed || !top) return
-    const id = window.setTimeout(() => setVisible(true), 4000)
-    return () => window.clearTimeout(id)
-  }, [dismissed, top])
-
-  const stop = () => {
-    setVisible(false)
+  const dismiss = () => {
     setDismissed(true)
     try {
       sessionStorage.setItem(INSIGHT_KEY, 'done')
@@ -381,54 +392,40 @@ function InsightBubble({
       // Tips simply return next session.
     }
   }
+  return { top, pending: !dismissed && top !== undefined, dismiss }
+}
 
-  if (!visible || dismissed || hidden || !top) return null
+function TipCard({
+  text,
+  onAsk,
+  onDismiss,
+}: {
+  text: string
+  onAsk: () => void
+  onDismiss: () => void
+}) {
+  const t = useT('assistant')
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      style={{ bottom: 'calc(5.75rem + var(--fab-clearance, 0px))' }}
-      className="fixed right-4 z-30 w-[min(20rem,calc(100vw-2rem))] motion-safe:animate-[slide-up_220ms_var(--ease-premium)] md:right-6 print:hidden"
-    >
-      <div className="relative rounded-2xl border border-pastel-sky-text/20 bg-pastel-sky p-3 pr-11 shadow-card-lg">
-        <div className="flex items-start gap-2.5">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface text-primary-700">
-            <AssistantMark size={20} />
-          </span>
-          <div className="min-w-0">
-            <p className="text-2xs font-semibold tracking-wide text-pastel-sky-text uppercase">
-              {t('insightLabel')}
-            </p>
-            <p className="mt-0.5 text-sm leading-snug text-fg">
-              {t(`priority.${top.key}` as 'priority.critical', {
-                count: top.count,
-              })}
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                stop()
-                onAsk(INSIGHT_INTENT[top.key] ?? 'attention')
-              }}
-              className="focus-ring mt-1 inline-flex min-h-[24px] items-center rounded text-xs font-semibold text-pastel-sky-text hover:underline"
-            >
-              {t('insightAsk')} →
-            </button>
-          </div>
-        </div>
-        <button
-          type="button"
-          aria-label={t('insightClose')}
-          onClick={stop}
-          className="focus-ring absolute top-0 right-0 flex size-11 items-center justify-center rounded-tr-2xl text-fg-subtle hover:text-fg"
-        >
-          <XIcon className="size-4" aria-hidden />
-        </button>
-        <span
-          aria-hidden
-          className="absolute right-[1.3rem] -bottom-[7px] size-3.5 rotate-45 border-r border-b border-pastel-sky-text/20 bg-pastel-sky"
-        />
-      </div>
+    <div className="relative rounded-2xl border border-pastel-sky-text/20 bg-pastel-sky p-3 pr-11">
+      <p className="text-2xs font-semibold tracking-wide text-pastel-sky-text uppercase">
+        {t('insightLabel')}
+      </p>
+      <p className="mt-0.5 text-sm leading-snug text-fg">{text}</p>
+      <button
+        type="button"
+        onClick={onAsk}
+        className="focus-ring mt-1 inline-flex min-h-[24px] items-center rounded text-xs font-semibold text-pastel-sky-text hover:underline"
+      >
+        {t('insightAsk')} →
+      </button>
+      <button
+        type="button"
+        aria-label={t('insightClose')}
+        onClick={onDismiss}
+        className="focus-ring absolute top-0 right-0 flex size-11 items-center justify-center rounded-tr-2xl text-fg-subtle hover:text-fg"
+      >
+        <XIcon className="size-4" aria-hidden />
+      </button>
     </div>
   )
 }

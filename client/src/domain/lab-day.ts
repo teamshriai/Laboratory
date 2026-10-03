@@ -13,3 +13,19 @@ export const LAB_ROUTINE = [
 ] as const
 
 export type RoutineKey = (typeof LAB_ROUTINE)[number]['key']
+
+/**
+ * How busy a day was against the recorded daily average: under 85% is
+ * light, up to 115% moderate, above that high. `share` compares a day still
+ * running pro rata (the fraction of a normal day's specimens due by now).
+ */
+export function busyLevel(
+  count: number,
+  average: number,
+  share = 1,
+): 'light' | 'moderate' | 'high' {
+  const expected = average * Math.max(0.05, Math.min(1, share))
+  if (expected <= 0) return 'light'
+  const ratio = count / expected
+  return ratio < 0.85 ? 'light' : ratio < 1.15 ? 'moderate' : 'high'
+}

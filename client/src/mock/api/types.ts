@@ -1542,6 +1542,36 @@ export interface TodayView {
   }
 }
 
+// ---------- Dashboard calendar ----------
+
+export const BUSY_LEVELS = ['light', 'moderate', 'high'] as const
+export type BusyLevel = (typeof BUSY_LEVELS)[number]
+
+export interface CalendarDay {
+  /** IST calendar day (YYYY-MM-DD). */
+  day: string
+  state: 'past' | 'today' | 'future'
+  /** False for days outside the recorded history (and for future days). */
+  hasData: boolean
+  samples: number
+  tests: number
+  /** Tests completed (reported) that day. */
+  completed: number
+  rejected: number
+  criticals: number
+  tatAvgMin: number
+  /** Imaging studies scheduled that day. */
+  imaging: number
+  /** Against the recorded daily average; today is compared pro rata. */
+  busy?: BusyLevel
+}
+
+export interface CalendarView {
+  days: CalendarDay[]
+  /** Average specimens per recorded day. */
+  average: number
+}
+
 // ---------- Lab Assistant ----------
 
 export const ASSISTANT_INTENTS = [

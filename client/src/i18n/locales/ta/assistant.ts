@@ -2,6 +2,7 @@
 export default {
   launcher: 'AI',
   launcherLabel: 'AI உதவியாளரைத் திற',
+  launcherLabelTip: 'AI உதவியாளரைத் திற (1 குறிப்பு காத்திருக்கிறது)',
   title: 'ஆய்வக உதவியாளர்',
   subtitle:
     'இந்த ஆய்வகத்தின் பதிவுகளிலிருந்து · விதி அடிப்படையிலான டெமோ, AI அல்ல',

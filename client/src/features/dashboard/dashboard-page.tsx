@@ -39,7 +39,7 @@ import {
  * same cells, so nothing jumps when the data arrives.
  */
 const GRID =
-  'grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-6'
+  'grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-6'
 
 const FULL = 'sm:col-span-2 md:col-span-4 xl:col-span-6'
 
@@ -52,13 +52,13 @@ const CELLS: {
   {
     key: 'kpis',
     span: FULL,
-    skeleton: 'h-40',
+    skeleton: 'h-24',
     render: (d) => <KpiRow data={d} />,
   },
   {
     key: 'home',
     span: FULL,
-    skeleton: 'h-[52rem]',
+    skeleton: 'h-[44rem]',
     render: (d) => <DashboardHome dashboard={d} />,
   },
   {
@@ -103,7 +103,7 @@ const CELLS: {
 function PerformanceHeading() {
   const t = useT('today')
   return (
-    <h2 className="pt-6 text-base font-semibold text-fg">
+    <h2 className="pt-3 text-base font-semibold text-fg">
       {t('performanceTitle')}
     </h2>
   )
