@@ -24,6 +24,8 @@ async function receivedSample(testId: string) {
   await labApi.samples.collect(sampleId, {
     collectedAt: Date.now(),
     site: 'left-antecubital',
+    identity: 'name-dob' as const,
+    fasting: 'fasting' as const,
   })
   const accession = (await labApi.samples.get(sampleId)).accessionNo!
   await labApi.samples.receive(accession)

@@ -8,6 +8,7 @@ import type {
   ControlLot,
   DepartmentId,
   LabTest,
+  ReferralLab,
   QcEvent,
   SpecimenId,
   Staff,
@@ -15,6 +16,7 @@ import type {
   StorageLocation,
   Supplier,
 } from '@/domain/types'
+import { CALCULATED_FROM } from '@/domain/calculated'
 import type { LabDb } from '../schema'
 import type { Rng } from './random'
 
@@ -441,10 +443,107 @@ function enrichTest(t: LabTest) {
   t.priceInsurance ??= Math.round((t.price * 1.15) / 10) * 10
 }
 
+/** Fictional referral laboratories (one deliberately not accredited). */
+export const REFERRAL_LABS: ReferralLab[] = [
+  {
+    id: 'rl_kaveri',
+    name: 'Kaveri Reference Laboratory',
+    city: 'Chennai',
+    nablAccredited: true,
+    certificateNo: 'MC-5108',
+    contact: '+91 44 4012 7788',
+    turnaroundDays: 3,
+    active: true,
+  },
+  {
+    id: 'rl_coromandel',
+    name: 'Coromandel Molecular Diagnostics',
+    city: 'Coimbatore',
+    nablAccredited: true,
+    certificateNo: 'MC-6634',
+    contact: '+91 422 455 1900',
+    turnaroundDays: 5,
+    active: true,
+  },
+  {
+    id: 'rl_sunrise',
+    name: 'Sunrise Pathology Centre',
+    city: 'Mysuru',
+    nablAccredited: false,
+    contact: '+91 821 241 3366',
+    turnaroundDays: 2,
+    active: true,
+  },
+]
+
+/**
+ * Catalog policies the workflow relies on, applied before any order is
+ * replayed: tests that need consent, the lab's NABL scope, tests usually
+ * referred out, and report comment templates.
+ */
+export function applyCatalogPolicies(db: LabDb) {
+  for (const lab of REFERRAL_LABS) db.referralLabs[lab.id] = { ...lab }
+  // Derived values are computed by the system, never typed.
+  for (const id of Object.keys(CALCULATED_FROM)) {
+    const analyte = db.analytes[id]
+    if (analyte) analyte.calculated = true
+  }
+  const set = (ids: string[], patch: Partial<LabTest>) => {
+    for (const id of ids) {
+      const test = db.tests[id]
+      if (test) Object.assign(test, patch)
+    }
+  }
+  // HIV needs pre-test counselling consent; FNAC and biopsies are invasive.
+  set(['hiv', 'fnac', 'biopsy_small', 'biopsy_large'], {
+    consentRequired: true,
+  })
+  // Outside this lab's NABL scope (marked on the report).
+  set(['ana', 'accp', 'widal', 'malaria', 'bf_cyto'], { accredited: false })
+  // Usually referred to an accredited reference lab.
+  set(['ana', 'accp'], { sendOutLabId: 'rl_kaveri' })
+  const templates: Record<string, string[]> = {
+    lipid: [
+      'Fasting status not confirmed; interpret triglycerides with caution.',
+      'Triglycerides above 400 mg/dL: LDL measured directly is advised.',
+    ],
+    hba1c: [
+      'HbA1c may be unreliable in haemoglobin variants or recent transfusion.',
+    ],
+    thyroid: [
+      'Results may be affected by biotin supplements; stop 48 hours before repeat testing.',
+    ],
+    cbc: [
+      'Peripheral smear reviewed.',
+      'Platelet clumps seen; count may be falsely low. Repeat on citrate advised.',
+    ],
+    urine_cs: [
+      'Mixed growth of three or more organisms; repeat with a clean catch.',
+    ],
+  }
+  for (const [id, list] of Object.entries(templates)) {
+    const test = db.tests[id]
+    if (test) test.commentTemplates = list
+  }
+}
+
 export function enrichDatabase(db: LabDb, now: number, rng: Rng) {
   for (const s of SUPPLIERS) db.suppliers[s.id] = { ...s }
   for (const l of LOCATIONS) db.locations[l.id] = { ...l }
   for (const t of Object.values(db.tests)) enrichTest(t)
+
+  // Flags analyzers send with some values: haemolysis on a few potassium
+  // results, lipaemia on high triglycerides, icterus on high bilirubin.
+  for (const r of Object.values(db.results)) {
+    if (!r.source || r.source === 'manual' || r.value === null) continue
+    const value = Number(r.value)
+    if (r.analyteId === 'k' && rng.next() < 0.05)
+      r.instrumentFlags = ['hemolysis-index']
+    else if (r.analyteId === 'tg' && value > 400)
+      r.instrumentFlags = ['lipemia-index']
+    else if (r.analyteId === 'tbil' && value > 5)
+      r.instrumentFlags = ['icterus-index']
+  }
 
   // ---------- Reagents and lots ----------
   const reagents = Object.values(db.reagents).toSorted((a, b) =>

@@ -7,6 +7,7 @@ import {
   CircleUserIcon,
   TriangleAlertIcon,
   PencilIcon,
+  GitMergeIcon,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
@@ -14,8 +15,11 @@ import { useDocumentTitle } from '@/hooks/use-document-title'
 import { useRecentPatients } from '@/hooks/use-recent-patients'
 import { useEnum, useT } from '@/i18n/context'
 import { useFormat } from '@/i18n/format'
+import { isLabApiError } from '@/services/lab-api'
 import { usePatient, useReference } from '@/services/queries'
 import { AgeSex } from '@/components/lab/patient'
+import { GuardedButton } from '@/components/lab/guarded-button'
+import { RecordLink } from '@/components/lab/record-link'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader } from '@/components/ui/card'
@@ -31,8 +35,12 @@ import {
   SampleList,
 } from './patient-sections'
 import { EditPatientDialog } from './edit-patient-dialog'
+import { MergePatientDialog } from './merge-patient-dialog'
+import { ConsentsCard } from './patient-consents'
+import { MessagingPreferencesCard } from './messaging-preferences'
 import { TrendCard } from './trend-card'
 import { ReportHistory } from './report-history'
+import { useRecordView } from '@/hooks/use-record-view'
 
 const TABS = [
   'overview',
@@ -40,12 +48,14 @@ const TABS = [
   'samples',
   'results',
   'reports',
+  'consents',
   'history',
 ] as const
 type Tab = (typeof TABS)[number]
 
 export function Component() {
   const { patientId: id } = useParams()
+  useRecordView('patient', id)
   const t = useT('patients')
   const e = useEnum()
   const f = useFormat()
@@ -53,18 +63,23 @@ export function Component() {
   const tab: Tab = TABS.includes(params.get('tab') as Tab)
     ? (params.get('tab') as Tab)
     : 'overview'
-  const { data, isPending, isError, refetch } = usePatient(id)
+  const { data, isPending, isError, error, refetch } = usePatient(id)
   const { data: reference } = useReference()
   const { remember } = useRecentPatients()
   const [editing, setEditing] = useState(false)
+  const [merging, setMerging] = useState(false)
   const p = data?.patient
+  const { data: survivorData } = usePatient(p?.mergedInto)
+  const survivor = survivorData?.patient
   useDocumentTitle(p?.name)
   useEffect(() => {
     if (p) remember({ id: p.id, name: p.name, uhid: p.uhid })
   }, [p, remember])
 
   if (isPending) return <PatientSkeleton />
-  if (isError) return <ErrorState onRetry={() => void refetch()} />
+  // An unknown id is not a failure to retry: it gets the not-found state.
+  const notFound = isLabApiError(error) && error.code === 'not-found'
+  if (isError && !notFound) return <ErrorState onRetry={() => void refetch()} />
   if (!data || !p)
     return (
       <EmptyState
@@ -91,6 +106,8 @@ export function Component() {
     ? `${p.encounter.ward}${p.encounter.bed ? ` / ${p.encounter.bed}` : ''}`
     : e('clinicalDepartment', p.encounter.department)
 
+  const merged = Boolean(p.mergedInto)
+
   return (
     <>
       <Link
@@ -100,6 +117,34 @@ export function Component() {
         <ArrowLeftIcon aria-hidden />
         {t('title')}
       </Link>
+      {p.mergedInto ? (
+        <div
+          role="status"
+          className="mb-5 flex items-start gap-3 rounded-xl border border-warning-text/30 bg-warning-soft px-4 py-3.5"
+        >
+          <GitMergeIcon
+            className="mt-0.5 size-5 shrink-0 text-warning-text"
+            aria-hidden
+          />
+          <div className="min-w-0 text-meta text-fg">
+            <p className="text-sm font-semibold">{t('mergedBannerTitle')}</p>
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5">
+              <span>{t('mergedBannerInto')}</span>
+              <RecordLink
+                kind="patient"
+                id={p.mergedInto}
+                mono={false}
+                className="font-semibold text-accent-text underline"
+              >
+                {survivor
+                  ? `${survivor.name} (${survivor.uhid})`
+                  : t('mergedBannerOpen')}
+              </RecordLink>
+            </p>
+            <p className="mt-0.5 text-fg-muted">{t('mergedBannerBody')}</p>
+          </div>
+        </div>
+      ) : null}
       <header className="mb-5 flex flex-wrap items-start gap-x-4 gap-y-3 border-b border-line pb-5">
         <Avatar name={p.name} size="lg" />
         <div className="min-w-0 flex-1">
@@ -163,32 +208,85 @@ export function Component() {
             <span>
               {p.city}, {p.state}
             </span>
+            {p.pinCode ? (
+              <>
+                <span aria-hidden>·</span>
+                <span>
+                  {t('pinCode')}{' '}
+                  <span className="tabular-nums">{p.pinCode}</span>
+                </span>
+              </>
+            ) : null}
             <span aria-hidden>·</span>
             <span>
               {t('registered')} {f.date(p.registeredAt)}
             </span>
           </p>
+          {p.abha?.number || p.abha?.address ? (
+            <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-fg-muted">
+              {p.abha.number ? (
+                <span>
+                  {t('abhaNumberShort')}{' '}
+                  <span className="font-mono text-fg">{p.abha.number}</span>
+                </span>
+              ) : null}
+              {p.abha.number && p.abha.address ? (
+                <span aria-hidden>·</span>
+              ) : null}
+              {p.abha.address ? (
+                <span>
+                  {t('abhaAddressShort')}{' '}
+                  <span className="font-mono break-all text-fg">
+                    {p.abha.address}
+                  </span>
+                </span>
+              ) : null}
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
-            <PencilIcon aria-hidden />
-            {t('editDetails')}
-          </Button>
+          {merged ? null : (
+            <>
+              <GuardedButton
+                permission="patient.edit"
+                variant="ghost"
+                size="sm"
+                onClick={() => setEditing(true)}
+              >
+                <PencilIcon aria-hidden />
+                {t('editDetails')}
+              </GuardedButton>
+              <GuardedButton
+                permission="patient.merge"
+                variant="ghost"
+                size="sm"
+                onClick={() => setMerging(true)}
+              >
+                <GitMergeIcon aria-hidden />
+                {t('mergeAction')}
+              </GuardedButton>
+            </>
+          )}
           <Button asChild variant="secondary" size="sm">
             <Link to={`/reports?q=${encodeURIComponent(p.uhid)}&date=all`}>
               {t('viewReports')}
             </Link>
           </Button>
-          <Button asChild variant="primary" size="sm">
-            <Link to={`/orders/new?patient=${p.id}`}>
-              <PlusIcon strokeWidth={2.5} aria-hidden />
-              {t('newOrder')}
-            </Link>
-          </Button>
+          {merged ? null : (
+            <Button asChild variant="primary" size="sm">
+              <Link to={`/orders/new?patient=${p.id}`}>
+                <PlusIcon strokeWidth={2.5} aria-hidden />
+                {t('newOrder')}
+              </Link>
+            </Button>
+          )}
         </div>
       </header>
-      {editing ? (
+      {editing && !merged ? (
         <EditPatientDialog patient={p} onClose={() => setEditing(false)} />
+      ) : null}
+      {merging && !merged ? (
+        <MergePatientDialog patient={p} onClose={() => setMerging(false)} />
       ) : null}
 
       <Tabs
@@ -233,6 +331,11 @@ export function Component() {
               count: data.reportHistory.length,
             },
             {
+              value: 'consents',
+              label: t('tabConsents'),
+              count: data.consents.length,
+            },
+            {
               value: 'history',
               label: t('tabHistory'),
             },
@@ -266,11 +369,13 @@ export function Component() {
               </Card>
             </div>
             <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-5">
-              <NotesCard
-                patientId={p.id}
-                notes={p.notes}
-                staffName={staffName}
-              />
+              {merged ? null : (
+                <NotesCard
+                  patientId={p.id}
+                  notes={p.notes}
+                  staffName={staffName}
+                />
+              )}
               <Card>
                 <CardHeader
                   icon={<FileTextIcon />}
@@ -315,6 +420,15 @@ export function Component() {
             />
             <ReportHistory entries={data.reportHistory} />
           </Card>
+        </TabsContent>
+        <TabsContent value="consents" className="grid gap-5">
+          <ConsentsCard
+            patientId={p.id}
+            consents={data.consents}
+            preferredLanguage={p.preferredLanguage}
+            readOnly={merged}
+          />
+          <MessagingPreferencesCard patient={p} readOnly={merged} />
         </TabsContent>
         <TabsContent value="history">
           <Card className="pt-5">

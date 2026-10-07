@@ -1,17 +1,18 @@
-import { SendHorizontalIcon, XIcon } from 'lucide-react'
+import { ChevronDownIcon, SendHorizontalIcon, XIcon } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Link } from 'react-router'
+import { Link, useLocation } from 'react-router'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { useLanguage, useT } from '@/i18n/context'
-import { createFormatter } from '@/i18n/format'
+import { createFormatter, useFormat } from '@/i18n/format'
 import { cn } from '@/lib/cn'
 import { assistantService } from '@/services/assistant'
-import type {
-  AssistantIntent,
-  AssistantLine,
-  AssistantReply,
+import {
+  isLabApiError,
+  type AssistantIntent,
+  type AssistantLine,
+  type AssistantReply,
 } from '@/services/lab-api'
-import { useToday } from '@/services/queries'
+import { useLabSettings, useToday } from '@/services/queries'
 import { AssistantMark } from '@/components/ui/assistant-mark'
 import { IconButton } from '@/components/ui/icon-button'
 
@@ -55,9 +56,25 @@ function useLineText() {
  * The Lab Assistant (design system 13): a launcher in the corner and a
  * panel that docks beside the page on wide screens or covers it on smaller
  * ones. Answers come from `assistantService`: rules over this lab's records
- * today, a backend or AI service later.
+ * today, a backend or AI service later. When the lab switches it off in
+ * Settings, neither the launcher nor the panel renders.
  */
 export function LabAssistant() {
+  const { data: settings, isError } = useLabSettings()
+  const off = settings?.assistantEnabled === false
+  // No launcher to clear: #main drops the room it keeps for it.
+  useEffect(() => {
+    if (!off) return
+    const root = document.documentElement
+    root.setAttribute('data-assistant-off', 'true')
+    return () => root.removeAttribute('data-assistant-off')
+  }, [off])
+  // Wait for the settings, so a switched-off assistant never flashes in.
+  if (off || (!settings && !isError)) return null
+  return <AssistantPanel />
+}
+
+function AssistantPanel() {
   const t = useT('assistant')
   const lineText = useLineText()
   const wide = useMediaQuery(DOCK_QUERY)
@@ -84,9 +101,25 @@ export function LabAssistant() {
     }
   }, [open, docked])
 
+  // With a keyboard or mouse, typing can start at once; on touch, focus the
+  // panel's title so the phone keyboard does not cover half the screen.
   useEffect(() => {
-    if (open) composer.current?.focus()
+    if (!open) return
+    if (window.matchMedia?.('(pointer: coarse)').matches)
+      document.getElementById('lab-assistant-title')?.focus()
+    else composer.current?.focus()
   }, [open])
+
+  // A new page closes the sheet (phones and tablets); the docked panel stays.
+  const { pathname } = useLocation()
+  const [lastPath, setLastPath] = useState(pathname)
+  if (pathname !== lastPath) {
+    setLastPath(pathname)
+    if (open && !wide) {
+      setOpen(false)
+      setTipOpen(false)
+    }
+  }
 
   useEffect(() => {
     log.current?.scrollTo({ top: log.current.scrollHeight })
@@ -115,7 +148,7 @@ export function LabAssistant() {
           { id: nextId.current++, role: 'assistant', reply },
         ]),
       )
-      .catch(() =>
+      .catch((error: unknown) =>
         setMessages((m) => [
           ...m,
           {
@@ -123,7 +156,12 @@ export function LabAssistant() {
             role: 'assistant',
             reply: {
               intent: 'help',
-              lines: [{ key: 'help' }],
+              // Switched off in Settings since this page loaded.
+              lines: [
+                isLabApiError(error) && error.code === 'assistant-off'
+                  ? { key: 'offReply' }
+                  : { key: 'help' },
+              ],
               bullets: [],
               links: [],
             },
@@ -160,7 +198,10 @@ export function LabAssistant() {
         aria-expanded={open}
         aria-controls="lab-assistant"
         onClick={openPanel}
-        style={{ bottom: 'calc(1.25rem + var(--fab-clearance, 0px))' }}
+        style={{
+          bottom:
+            'calc(1.25rem + var(--fab-clearance, 0px) + var(--bottom-nav-h, 0px))',
+        }}
         className={cn(
           'focus-ring fixed right-4 z-30 flex h-12 items-center gap-1.5 rounded-full border border-border bg-surface px-3 text-primary-700 shadow-card-lg transition-transform hover:scale-105 active:scale-95 md:right-5 md:border-transparent md:bg-primary-600 md:text-on-accent print:hidden',
           open && 'invisible',
@@ -210,7 +251,8 @@ export function LabAssistant() {
             <div className="min-w-0 flex-1">
               <h2
                 id="lab-assistant-title"
-                className="text-sm font-semibold text-fg"
+                tabIndex={-1}
+                className="text-sm font-semibold text-fg outline-none"
               >
                 {t('title')}
               </h2>
@@ -318,6 +360,7 @@ export function LabAssistant() {
                         ))}
                       </div>
                     ) : null}
+                    {m.reply.source ? <ShowQuery reply={m.reply} /> : null}
                   </div>
                 </div>
               ),
@@ -327,7 +370,10 @@ export function LabAssistant() {
             ) : null}
           </div>
 
-          <form onSubmit={submit} className="border-t border-line px-4 py-3">
+          <form
+            onSubmit={submit}
+            className="border-t border-line px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+          >
             <div className="flex items-end gap-1.5 rounded-xl border border-line-strong bg-surface-2 p-1.5">
               <label htmlFor="lab-assistant-input" className="sr-only">
                 {t('placeholder')}
@@ -427,5 +473,44 @@ function TipCard({
         <XIcon className="size-4" aria-hidden />
       </button>
     </div>
+  )
+}
+
+/**
+ * Where an answer came from: the matched check, the read model, when it
+ * was read and the rule version. Rule-based, never medical advice.
+ */
+function ShowQuery({ reply }: { reply: AssistantReply }) {
+  const t = useT('assistant')
+  const f = useFormat()
+  const source = reply.source
+  if (!source) return null
+  return (
+    <details className="group/query mt-2 border-t border-line pt-1.5">
+      <summary className="tap-reach inline-flex cursor-pointer list-none items-center gap-1 rounded py-0.5 text-2xs font-semibold text-fg-muted hover:text-fg [&::-webkit-details-marker]:hidden">
+        <ChevronDownIcon
+          className="size-3 transition-transform group-open/query:rotate-180"
+          aria-hidden
+        />
+        {t('showQuery')}
+      </summary>
+      <ul className="mt-1 space-y-0.5 text-2xs text-fg-muted">
+        {reply.intent !== 'help' ? (
+          <li>
+            {t('query.intent', {
+              question: t(`q.${reply.intent}` as 'q.attention'),
+            })}
+          </li>
+        ) : null}
+        <li>
+          {t('query.readModel', {
+            model: t(`readModel.${source.readModel}`),
+          })}
+        </li>
+        <li>{t('query.at', { time: f.dateTime(source.at) })}</li>
+        <li>{t('query.rules', { rules: source.rules })}</li>
+      </ul>
+      <p className="mt-1 text-2xs text-fg-subtle">{t('queryNote')}</p>
+    </details>
   )
 }

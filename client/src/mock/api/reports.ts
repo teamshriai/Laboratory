@@ -1,3 +1,4 @@
+import { ensureDoctorMayRead } from './doctor'
 import {
   REPORT_STATUSES,
   type ReportStatus,
@@ -13,7 +14,6 @@ import {
   requestCorrection,
   recordPrint,
   releaseReport,
-  createReportLink,
   setInterpretation,
   shareReport,
   withdrawReport,
@@ -23,6 +23,7 @@ import type { DbIndex } from './index-cache'
 import { read, write } from './runtime'
 import type {
   CorrectionRequest,
+  CreatedShareLink,
   ReportDetail,
   ReportFilters,
   ReportListResult,
@@ -38,6 +39,9 @@ import {
   reportRow,
   staffName,
 } from './views'
+import { paginate, type Sorters } from './paging'
+import { createShareLink, revokeShareLink } from '../engine/share'
+import { shareLinkRow, shareLinksOf } from './share'
 
 /**
  * The report as screens and the printed sheet show it; `version` returns an
@@ -48,7 +52,8 @@ export function reportDetail(
   db: LabDb,
   index: DbIndex,
   id: string,
-  version?: number,
+  version: number | undefined,
+  now: number,
 ): ReportDetail {
   const report = must(db.reports, id, 'report')
   const order = db.orders[report.orderId]!
@@ -68,6 +73,8 @@ export function reportDetail(
       testName: item.testName,
       code: item.testCode,
       status: item.status,
+      ...(item.accredited === false ? { notAccredited: true } : {}),
+      ...(item.performedBy ? { performedBy: item.performedBy } : {}),
       rows: item.analyteIds
         .map((analyteId) => {
           const r = results.find((x) => x.analyteId === analyteId)
@@ -161,6 +168,7 @@ export function reportDetail(
     0,
   )
   const detail: ReportDetail = {
+    shareLinks: shareLinksOf(db, 'laboratory', report.id, now),
     id: report.id,
     reportNo: report.reportNo,
     status: row.status,
@@ -269,13 +277,6 @@ export function reportDetail(
     openCriticals,
   }
   if (report.interpretation) detail.interpretation = report.interpretation
-  const link = db.reportLinks[report.reportNo]
-  if (link)
-    detail.shareLink = {
-      createdAt: link.createdAt,
-      createdByName: staffName(db, link.createdBy),
-      version: link.version,
-    }
   const authorised = Math.max(0, ...items.map((i) => i.validatedAt ?? 0))
   if (authorised) detail.authorisedAt = authorised
   const released = report.versions.at(-1)?.releasedAt
@@ -287,7 +288,14 @@ export function reportDetail(
     version !== undefined
       ? report.versions.find((v) => v.version === version)
       : undefined
+  const sealOf = (v: typeof current) =>
+    v?.digest && v.verifyToken
+      ? { digest: v.digest, verifyToken: v.verifyToken }
+      : undefined
+  const currentSeal = sealOf(current)
+  if (currentSeal) detail.seal = currentSeal
   if (!viewed || !current || viewed.version === current.version) return detail
+  const viewedSeal = sealOf(viewed)
   const snapshot = new Map((viewed.snapshot ?? []).map((v) => [v.resultId, v]))
   const issued = new Set(viewed.itemIds ?? items.map((i) => i.id))
   const viewedSigner = db.staff[viewed.releasedBy]
@@ -305,6 +313,7 @@ export function reportDetail(
     renotifyPending: false,
     supersededBy: current.version,
     reportedAt: viewed.releasedAt,
+    ...(viewedSeal ? { seal: viewedSeal } : {}),
     pathologist: viewedSigner
       ? {
           name: viewedSigner.name,
@@ -331,6 +340,13 @@ export function reportDetail(
       }
     }),
   }
+}
+
+const REPORT_SORTERS: Sorters<ReportRow> = {
+  report: (r) => r.reportNo,
+  patient: (r) => r.patient.name,
+  flags: (r) => r.criticalCount * 100 + r.abnormalCount,
+  released: (r) => r.releasedAt ?? 0,
 }
 
 export const reportsApi = {
@@ -373,22 +389,36 @@ export const reportsApi = {
       ]) as Record<ReportStatus | 'all', number>
       for (const r of rows) counts[r.status] += 1
       const status = filters.status ?? 'all'
-      return {
-        rows: rows
-          .filter((r) => status === 'all' || r.status === status)
-          .toSorted(
-            (a, b) =>
-              (b.releasedAt ?? b.createdAt) - (a.releasedAt ?? a.createdAt),
-          ),
-        counts,
-      }
+      const newestFirst = rows
+        .filter((r) => status === 'all' || r.status === status)
+        .toSorted(
+          (a, b) =>
+            (b.releasedAt ?? b.createdAt) - (a.releasedAt ?? a.createdAt),
+        )
+      return { ...paginate(newestFirst, filters, REPORT_SORTERS), counts }
     }),
 
   /** Demo share link (opens in this browser only). */
-  shareLink: (id: string) => write((db, ctx) => createReportLink(db, id, ctx)),
+  /** A new share link; the token is returned once to build the URL. */
+  createShareLink: (id: string, input: { days?: number } = {}) =>
+    write((db, ctx): CreatedShareLink => {
+      const { link, token } = createShareLink(
+        db,
+        { kind: 'laboratory', id },
+        input,
+        ctx,
+      )
+      return { token, link: shareLinkRow(db, link, ctx.now) }
+    }),
+
+  revokeShareLink: (linkId: string) =>
+    write((db, ctx) => void revokeShareLink(db, linkId, ctx)),
 
   get: (id: string, options: { version?: number } = {}) =>
-    read((db, { index }) => reportDetail(db, index, id, options.version)),
+    read((db, { index, now, actor }) => {
+      ensureDoctorMayRead(db, actor, id)
+      return reportDetail(db, index, id, options.version, now)
+    }),
 
   // Release and corrections are signed by the acting user.
   release: (id: string, options: { preliminary?: boolean } = {}) =>

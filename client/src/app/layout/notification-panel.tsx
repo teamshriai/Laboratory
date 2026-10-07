@@ -119,22 +119,29 @@ export function NotificationPanel({ trigger }: { trigger: ReactNode }) {
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <Tooltip content={th('notificationsUnread', { count: unread })}>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            aria-label={th('notificationsUnread', { count: unread })}
-            className="focus-ring tap-target relative rounded-lg text-fg-muted hover:bg-surface-2 hover:text-fg [&>svg]:size-[19px]"
+      {/* The count sits beside the button, not in it: the button's name
+          already says how many are unread. */}
+      <span className="relative inline-flex">
+        <Tooltip content={th('notificationsUnread', { count: unread })}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              aria-label={th('notificationsUnread', { count: unread })}
+              className="focus-ring tap-target relative rounded-lg text-fg-muted hover:bg-surface-2 hover:text-fg [&>svg]:size-[19px]"
+            >
+              {trigger}
+            </button>
+          </PopoverTrigger>
+        </Tooltip>
+        {unread > 0 ? (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute top-1.5 right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-danger px-1 text-2xs leading-none font-semibold text-on-danger tabular-nums"
           >
-            {trigger}
-            {unread > 0 ? (
-              <span className="absolute top-1.5 right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-danger px-1 text-2xs leading-none font-semibold text-on-danger tabular-nums">
-                {unread > 9 ? '9+' : unread}
-              </span>
-            ) : null}
-          </button>
-        </PopoverTrigger>
-      </Tooltip>
+            {unread > 9 ? '9+' : unread}
+          </span>
+        ) : null}
+      </span>
       <PopoverContent className="w-[min(26rem,calc(100vw-1.5rem))] overflow-hidden p-0">
         <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
           <p className="text-sm font-semibold text-fg">{t('title')}</p>

@@ -4,7 +4,7 @@ import type { LabSettings } from '@/domain/types'
 import { useEnum, useT } from '@/i18n/context'
 import { useFormat } from '@/i18n/format'
 import { cn } from '@/lib/cn'
-import type { ImagingReportDetail } from '@/services/lab-api'
+import type { PublicImagingReport } from '@/services/lab-api'
 import { IndostatesLogo, Logo } from '@/components/ui/logo'
 import {
   cssString,
@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/page-margins'
 import { INDOSTATES } from '@/lib/brand'
 import { useAgeText } from '../patient'
+import { VerificationBlock } from './report-blocks'
 
 type Lab = Pick<
   LabSettings,
@@ -55,7 +56,7 @@ export function ImagingDocument({
   report,
   lab,
 }: {
-  report: ImagingReportDetail
+  report: PublicImagingReport
   lab?: Lab | undefined
 }) {
   const t = useT('imaging')
@@ -255,6 +256,14 @@ export function ImagingDocument({
               </p>
             </div>
           </footer>
+          {report.seal ? (
+            <VerificationBlock
+              seal={report.seal}
+              scanLabel={tp('scanToVerify')}
+              digestLabel={tp('digest')}
+              className="mt-5"
+            />
+          ) : null}
           <p className="mt-6 text-[8pt] text-[#5b6670]">{t('demoNote')}</p>
           <p className="mt-1 text-[8pt] font-semibold tracking-[0.2em] text-[#5b6670] uppercase">
             {t('endOfReport')}

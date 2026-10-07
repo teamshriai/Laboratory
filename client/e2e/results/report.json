@@ -1,0 +1,67 @@
+{
+  "base": "http://127.0.0.1:37445/dev/laboratory",
+  "mode": "quick",
+  "suites": [
+    "journeys"
+  ],
+  "startedAt": "2026-10-06T11:52:17.658Z",
+  "seconds": 111,
+  "stats": {
+    "journeys": {
+      "steps passed": 20,
+      "checks passed": 1
+    }
+  },
+  "failureCount": 4,
+  "failures": [
+    {
+      "theme": "light",
+      "suite": "journeys",
+      "check": "journey a",
+      "route": "/patients",
+      "viewport": "1440x900",
+      "role": "receptionist",
+      "element": "specimen to report: check \"registering opens the patient page\"",
+      "symptom": "expectation not met",
+      "detail": "after \"Register patient\" the URL stays http://127.0.0.1:37445/dev/laboratory/patients",
+      "screenshot": "e2e/results/shots/0001-journey-a-1440x900-registering_opens_the_patient_page.png"
+    },
+    {
+      "theme": "light",
+      "suite": "journeys",
+      "check": "journey a",
+      "route": "/collection?q=LAB-20261006-00198&collect=smp_muwmdap80006m3i0",
+      "viewport": "1440x900",
+      "role": "phlebotomist",
+      "element": "specimen to report: check \"the default collection time is accepted\"",
+      "symptom": "expectation not met",
+      "detail": "refused within the same minute: error toast: Something went wrong Collection time cannot be before the order was placed (06 O",
+      "screenshot": "e2e/results/shots/0002-journey-a-1440x900-the_default_collection_time_is_accepted.png"
+    },
+    {
+      "theme": "light",
+      "suite": "journeys",
+      "check": "journey a",
+      "route": "/critical-results?alert=crit_muwmdpir0005ze78",
+      "viewport": "1440x900",
+      "role": "technician",
+      "element": "specimen to report: check \"the default call time is accepted\"",
+      "symptom": "expectation not met",
+      "detail": "refused within the same minute: error toast: Something went wrong Some details are missing or not valid.",
+      "screenshot": "e2e/results/shots/0003-journey-a-1440x900-the_default_call_time_is_accepted.png"
+    },
+    {
+      "theme": "light",
+      "suite": "journeys",
+      "check": "journey a",
+      "route": "/reports/rpt_muwmdap800082hx6",
+      "viewport": "1440x900",
+      "role": "pathologist",
+      "element": "specimen to report: step \"EXPLORE\"",
+      "symptom": "step failed",
+      "detail": "exploring (accessibility tree: e2e/results/trees/a-1440x900-EXPLORE.yaml)",
+      "screenshot": "e2e/results/shots/0004-journey-a-1440x900-EXPLORE.png"
+    }
+  ],
+  "notes": []
+}

@@ -6,7 +6,7 @@ import {
   PlusIcon,
 } from 'lucide-react'
 import { useDeferredValue, useMemo } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import {
   DEPARTMENTS,
   ENCOUNTER_TYPES,
@@ -17,12 +17,23 @@ import {
   type OrderStatus,
   type Priority,
 } from '@/domain/types'
-import { useUrlFilters } from '@/hooks/use-search-param'
+import { useOverlayParam, useUrlFilters } from '@/hooks/use-search-param'
+import { useTablePaging } from '@/hooks/use-table-paging'
 import { useEnum, useT } from '@/i18n/context'
 import { useFormat } from '@/i18n/format'
 import { useNow } from '@/hooks/use-now'
-import type { DatePreset, OrderRow } from '@/services/lab-api'
-import { useOrderableTests, useOrders, useReference } from '@/services/queries'
+import {
+  labApi,
+  type DatePreset,
+  type OrderFilters,
+  type OrderRow,
+} from '@/services/lab-api'
+import {
+  useOrderableTests,
+  useOrders,
+  useReference,
+  useSites,
+} from '@/services/queries'
 import { PageHeader } from '@/app/layout/page-header'
 import { ExportButton } from '@/components/lab/export-button'
 import { FilterBar } from '@/components/lab/filter-bar'
@@ -50,6 +61,7 @@ interface Filters {
   encounter: EncounterType | 'all'
   doctorId: string
   testId: string
+  siteId: string
 }
 
 const DATES = ['today', 'yesterday', '7d', '30d', 'all'] as const
@@ -62,6 +74,7 @@ const DEFAULTS: Filters = {
   encounter: 'all',
   doctorId: '',
   testId: '',
+  siteId: '',
 }
 
 export function Component() {
@@ -71,7 +84,6 @@ export function Component() {
   const f = useFormat()
   const now = useNow()
   const navigate = useNavigate()
-  const [params, setParams] = useSearchParams()
   // Filters live in the URL (linkable, survive reloads); unknown values in a
   // hand-edited link fall back to the defaults.
   const url = useUrlFilters(
@@ -92,7 +104,15 @@ export function Component() {
   const set = <K extends keyof Filters>(key: K, value: Filters[K]) =>
     url.set({ [key]: value })
 
-  const { data, isPending, isError, refetch } = useOrders({
+  const paging = useTablePaging(25, [
+    'order',
+    'patient',
+    'doctor',
+    'priority',
+    'status',
+    'tat',
+  ])
+  const listFilters: OrderFilters = {
     status: filters.status,
     date: filters.date,
     q,
@@ -101,19 +121,23 @@ export function Component() {
     ...(filters.encounter !== 'all' ? { encounter: filters.encounter } : {}),
     ...(filters.doctorId ? { doctorId: filters.doctorId } : {}),
     ...(filters.testId ? { testId: filters.testId } : {}),
+    ...(filters.siteId ? { siteId: filters.siteId } : {}),
+  }
+  const { data, isPending, isError, refetch } = useOrders({
+    ...listFilters,
+    ...paging.query,
   })
   const { data: reference } = useReference()
   const { data: tests } = useOrderableTests()
-  const activeOrder = params.get('order')
+  const { data: sites } = useSites()
+  const [activeOrder, showOrder] = useOverlayParam('order')
 
   const openOrder = (row: OrderRow) => {
     if (row.status === 'draft') {
       void navigate(`/orders/new?draft=${row.id}`)
       return
     }
-    const next = new URLSearchParams(params)
-    next.set('order', row.id)
-    setParams(next)
+    showOrder(row.id)
   }
 
   const columns = useMemo<Column<OrderRow>[]>(
@@ -121,7 +145,7 @@ export function Component() {
       {
         id: 'order',
         header: t('colOrder'),
-        sortValue: (r) => r.orderedAt ?? r.createdAt,
+        sortable: true,
         cell: (r) => (
           <div className="min-w-0">
             <p className="font-mono text-meta font-semibold whitespace-nowrap text-fg">
@@ -141,7 +165,7 @@ export function Component() {
       {
         id: 'patient',
         header: t('colPatient'),
-        sortValue: (r) => r.patient.name,
+        sortable: true,
         cell: (r) => <PatientCell patient={r.patient} showLocal={false} />,
       },
       {
@@ -160,7 +184,7 @@ export function Component() {
         id: 'doctor',
         tabletHidden: true,
         header: t('colDoctor'),
-        sortValue: (r) => r.doctor.name,
+        sortable: true,
         cell: (r) => (
           <div className="max-w-44 min-w-0">
             <p className="truncate text-meta font-medium text-fg">
@@ -178,13 +202,13 @@ export function Component() {
       {
         id: 'priority',
         header: t('colPriority'),
-        sortValue: (r) => PRIORITIES.indexOf(r.priority) * -1,
+        sortable: true,
         cell: (r) => <PriorityMark priority={r.priority} />,
       },
       {
         id: 'status',
         header: t('colStatus'),
-        sortValue: (r) => ORDER_STATUSES.indexOf(r.status),
+        sortable: true,
         cell: (r) => (
           <div className="flex flex-col items-start gap-1">
             <OrderStatusBadge status={r.status} size="sm" />
@@ -220,7 +244,7 @@ export function Component() {
       {
         id: 'tat',
         header: t('colTat'),
-        sortValue: (r) => r.tat?.ratio ?? -1,
+        sortable: true,
         cell: (r) => <TatIndicator tat={r.tat} />,
       },
     ],
@@ -251,6 +275,7 @@ export function Component() {
     filters.encounter !== 'all',
     Boolean(filters.doctorId),
     Boolean(filters.testId),
+    Boolean(filters.siteId),
   ].filter(Boolean).length
   const dirty =
     url.activeCount([
@@ -260,6 +285,7 @@ export function Component() {
       'encounter',
       'doctorId',
       'testId',
+      'siteId',
       'q',
     ]) > 0
 
@@ -271,8 +297,9 @@ export function Component() {
           <>
             <ExportButton
               filename={t('exportFile')}
+              entity="order"
               disabled={!data?.rows.length}
-              rows={() => [
+              rows={async () => [
                 [
                   t('colOrder'),
                   tc('orderedAt'),
@@ -283,7 +310,8 @@ export function Component() {
                   t('colStatus'),
                   t('colTests'),
                 ],
-                ...(data?.rows ?? []).map((r) => [
+                // Every matching order, not just the page on screen.
+                ...(await labApi.orders.list(listFilters)).rows.map((r) => [
                   r.orderNo,
                   r.orderedAt ? f.dateTime(r.orderedAt) : '',
                   r.patient.name,
@@ -372,7 +400,10 @@ export function Component() {
                 {moreCount ? <Count value={moreCount} tone="accent" /> : null}
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="start" className="grid w-80 gap-3 p-4">
+            <PopoverContent
+              align="start"
+              className="grid w-[min(20rem,calc(100vw-1rem))] gap-3 p-4"
+            >
               <Field label={t('filterEncounter')}>
                 <Select
                   value={filters.encounter}
@@ -419,6 +450,21 @@ export function Component() {
                   }))}
                 />
               </Field>
+              {(sites?.length ?? 0) > 1 ? (
+                <Field label={t('filterSite')}>
+                  <Select
+                    value={filters.siteId || 'all'}
+                    onValueChange={(v) => set('siteId', v === 'all' ? '' : v)}
+                    options={[
+                      { value: 'all', label: t('anySite') },
+                      ...(sites ?? []).map((x) => ({
+                        value: x.id,
+                        label: x.name,
+                      })),
+                    ]}
+                  />
+                </Field>
+              ) : null}
             </PopoverContent>
           </Popover>
         </FilterBar>
@@ -427,6 +473,7 @@ export function Component() {
             caption={t('title')}
             columns={columns}
             rows={data?.rows}
+            server={paging.table(data?.page)}
             getRowId={(r) => r.id}
             rowLabel={(r) => r.orderNo ?? r.patient.name}
             onRowClick={openOrder}

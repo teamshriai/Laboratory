@@ -32,6 +32,8 @@ async function received(testId: string) {
   await labApi.samples.collect(sampleId, {
     collectedAt: Date.now(),
     site: 'left-antecubital',
+    identity: 'name-dob' as const,
+    fasting: 'fasting' as const,
   })
   await labApi.samples.receive(sampleId)
   return { orderId, sampleId }
@@ -81,6 +83,8 @@ describe('safety rules', () => {
     await phlebotomist.samples.collect(sampleIds[0]!, {
       collectedAt: Date.now(),
       site: 'left-antecubital',
+      identity: 'name-dob' as const,
+      fasting: 'fasting' as const,
     })
     await expect(
       phlebotomist.samples.receive(sampleIds[0]!),
@@ -124,18 +128,24 @@ describe('safety rules', () => {
       labApi.samples.collect(id, {
         collectedAt: Date.now() + 5 * MINUTE,
         site: 'left-antecubital',
+        identity: 'name-dob' as const,
+        fasting: 'fasting' as const,
       }),
     ).rejects.toMatchObject({ code: 'collection-in-future' })
     await expect(
       labApi.samples.collect(id, {
         collectedAt: Date.now() - DAY,
         site: 'left-antecubital',
+        identity: 'name-dob' as const,
+        fasting: 'fasting' as const,
         timeReason: 'Recorded late',
       }),
     ).rejects.toMatchObject({ code: 'collection-before-order' })
     await labApi.samples.collect(id, {
       collectedAt: Date.now(),
       site: 'left-antecubital',
+      identity: 'name-dob' as const,
+      fasting: 'fasting' as const,
     })
     const sample = getDb().samples[id]!
     expect(sample.collectedBy).toBe(STAFF.technician)
@@ -218,6 +228,8 @@ describe('safety rules', () => {
     await labApi.samples.collect(sampleId, {
       collectedAt: Date.now(),
       site: 'left-antecubital',
+      identity: 'name-dob' as const,
+      fasting: 'fasting' as const,
     })
     await labApi.samples.receive(sampleId)
     const view = await labApi.results.entry(sampleId)

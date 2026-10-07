@@ -23,6 +23,13 @@
     scrollbar-gutter: stable;
   }
 
+  /* The gutter above already keeps the scrollbar's space while a dialog,
+     drawer or menu locks scrolling; Radix's lock would add the same width
+     again as a right margin and nudge the page left. */
+  html body[data-scroll-locked] {
+    margin-right: 0 !important;
+  }
+
   /* Indic scripts have taller glyphs; give their text more room. */
   html:is([lang='hi'], [lang='kn'], [lang='ta'], [lang='ml']) {
     --text-2xs--line-height: 1.15rem;
@@ -458,8 +465,25 @@ html[data-high-contrast].dark {
 /* Room at the end of every page for the AI launcher (48px, 20px from the
    corner), so the last row always scrolls clear of it. Not while the panel
    is open: the launcher is hidden then. */
+/* Phones have a bottom navigation bar (app/layout/bottom-nav.tsx); pages,
+   the AI launcher, sticky action bars and toasts stay above it. */
+@media (width < 48rem) {
+  :root {
+    --bottom-nav-h: calc(3.75rem + env(safe-area-inset-bottom, 0px));
+  }
+}
 :root:not([data-chat-open='true']) #main {
-  padding-bottom: calc(4.75rem + var(--fab-clearance, 0px));
+  padding-bottom: calc(
+    4.75rem + var(--fab-clearance, 0px) + var(--bottom-nav-h, 0px)
+  );
+}
+/* The assistant switched off in Settings: no launcher to clear. */
+:root[data-assistant-off='true'] #main {
+  padding-bottom: calc(1.5rem + var(--bottom-nav-h, 0px));
+}
+/* The assistant's sheet covers the screen on phones, bar included. */
+:root[data-chat-open='true'] .bottom-nav {
+  display: none;
 }
 @media print {
   :root #main {

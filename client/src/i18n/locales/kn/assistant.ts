@@ -123,4 +123,15 @@ export default {
   linkRejected: 'ತಿರಸ್ಕರಿಸಿದ ಮಾದರಿಗಳನ್ನು ತೆರೆಯಿರಿ',
   linkDelayed: 'ಅವಧಿ ಮೀರಿದ ಕೆಲಸ ತೆರೆಯಿರಿ',
   linkImaging: 'ರೋಗನಿರ್ಣಯ ಇಮೇಜಿಂಗ್ ತೆರೆಯಿರಿ',
+  // Where an answer came from ("Show query")
+  showQuery: 'ಕ್ವೆರಿ ತೋರಿಸಿ',
+  'query.readModel': 'ರೀಡ್ ಮಾಡೆಲ್: {model}',
+  'readModel.today': 'ಇಂದಿನ ಕೆಲಸ',
+  'query.at': '{time} ಕ್ಕೆ ಓದಲಾಗಿದೆ',
+  'query.rules': 'ನಿಯಮಗಳು: {rules}',
+  'query.intent': 'ಹೊಂದಿಕೆಯಾದ ತಪಾಸಣೆ: {question}',
+  queryNote:
+    'ಪ್ರಯೋಗಾಲಯದ ಸ್ವಂತ ದತ್ತಾಂಶದಿಂದ ನಿಯಮ ಆಧಾರಿತ ಉತ್ತರ; ವೈದ್ಯಕೀಯ ಸಲಹೆ ಅಲ್ಲ.',
+  offReply:
+    'ಪ್ರಯೋಗಾಲಯ ಸಹಾಯಕವನ್ನು ಸೆಟ್ಟಿಂಗ್‌ಗಳಲ್ಲಿ ಆಫ್ ಮಾಡಲಾಗಿದೆ, ಆದ್ದರಿಂದ ಅದು ಉತ್ತರಿಸಲಾರದು.',
 } as const

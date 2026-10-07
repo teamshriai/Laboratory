@@ -43,3 +43,18 @@ export function isFullName(text: string) {
     words.filter((w) => w.replace(/[^\p{L}]/gu, '').length >= 1).length >= 2
   )
 }
+
+/**
+ * The escalation step a critical value has reached: the last tier whose
+ * time has passed while it is still not communicated (tiers in order).
+ */
+export function escalationStep<T extends { afterMin: number }>(
+  minutesOpen: number,
+  tiers: readonly T[],
+): { index: number; tier: T } | null {
+  let reached: { index: number; tier: T } | null = null
+  tiers.forEach((tier, index) => {
+    if (minutesOpen >= tier.afterMin) reached = { index, tier }
+  })
+  return reached
+}

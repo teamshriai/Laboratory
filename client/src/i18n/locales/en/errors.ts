@@ -36,7 +36,7 @@ export default {
   'critical-unacknowledged':
     'Acknowledge the critical value first ({count} pending).',
   'equipment-unavailable': '{equipment} is not available right now.',
-  'duplicate-code': 'Test code {code} is already in use.',
+  'duplicate-code': 'The code {code} is already in use.',
   'insufficient-stock': 'Only {available} available.',
   'simulated-failure': 'The connection dropped (simulated). Please try again.',
   dataRefreshed:
@@ -90,4 +90,76 @@ export default {
     'This specimen was collected at {time}. It cannot be received before that.',
   'recipient-full-name':
     'Record the full name of the person you reached, for example "Dr. Asha Kiran". A first name alone is not enough.',
+  network:
+    'The laboratory server could not be reached. Check the connection and try again.',
+  timeout: 'The server took too long to answer. Please try again.',
+  unauthenticated: 'Your session has ended. Sign in again to continue.',
+  conflict:
+    'Someone else changed this record just now. Reload it to see the latest, then try again.',
+  'rate-limited':
+    'Too many requests in a short time. Wait a moment and try again.',
+  'server-error':
+    'The server could not complete that. Please try again; if it keeps happening, tell your administrator.',
+  'identity-not-confirmed':
+    'Confirm the patient with two identifiers (for example name and date of birth) before collecting.',
+  'fasting-status-required':
+    'Record whether the patient is fasting: a test on this specimen needs it.',
+  'consent-required':
+    "Record the patient's consent for {tests} before collecting.",
+  'collection-scheduled':
+    'This collection is due at {time}. Give a reason to collect it earlier.',
+  'stability-exceeded':
+    'The specimen is past its stability for {test}; collect a new one.',
+  'not-a-signatory':
+    '{name} is not on the signatory registry for {department}. Ask the lab manager to register them, or authorise as a registered signatory.',
+  'calculated-value':
+    'This value is calculated by the system and cannot be typed.',
+  'invalid-pin': 'Enter a 6-digit PIN code that does not start with 0.',
+  'invalid-abha':
+    'Enter a 14-digit ABHA number, or an ABHA address such as name@abdm.',
+  'invalid-mobile':
+    'Enter a 10-digit Indian mobile number starting with 6, 7, 8 or 9.',
+  'cannot-split':
+    'This specimen cannot be split like that: choose tests not yet started, and keep at least one on the original.',
+  'merge-same-patient': 'Choose two different patient records to merge.',
+  'patient-merged':
+    'This record was merged into another patient. Open the patient it was merged into.',
+  'send-out-state':
+    'This specimen cannot move to that send-out step. Check where it is now.',
+  'link-not-found':
+    'This link or code does not open a report. Check it, or ask the laboratory for a new one.',
+  'link-expired':
+    'This link has expired. Ask the laboratory to share the report again.',
+  'link-revoked':
+    'This link is no longer valid. The report may have been corrected; ask the laboratory for a new link.',
+  'link-locked':
+    'Too many wrong dates of birth. Try again in {minutes} minutes.',
+  'dob-mismatch': 'That date of birth does not match. {left} attempts left.',
+  'invoice-exists': 'This order already has an invoice. Open it instead.',
+  'amount-invalid': 'Enter an amount above zero and no more than what is due.',
+  'discount-pending':
+    "A discount on this invoice is waiting for a manager's authorisation. Authorise or decline it first.",
+  'reference-required': 'Enter the card slip or UPI transaction reference.',
+  'over-credit-limit':
+    'This would take {account} over its credit limit of {limit}.',
+  'invoice-has-payments':
+    'This invoice has payments. Refund them instead of cancelling or changing it.',
+  'refund-too-large': 'A refund cannot be more than what was received.',
+  'day-closed':
+    "Today's cash is already closed. Ask the manager before taking more.",
+  'slot-invalid':
+    'Choose a visit time from now up to 30 days ahead, 15 minutes to 4 hours long.',
+  'visit-state':
+    'This visit cannot move to that step. Check its state and who it is assigned to.',
+  'opted-out': 'The patient asked not to receive messages on this channel.',
+  'independent-approval':
+    'This needs sign-off by someone other than its author.',
+  'legal-hold': 'A legal hold stops this: release the hold first.',
+  'action-required': 'The reading is out of range: record the action taken.',
+  'too-few-checks':
+    'A verification run needs at least {min} released results to compare.',
+  'assistant-off': 'The Lab Assistant is switched off in Settings.',
+  'auditor-not-independent':
+    'An auditor may not audit their own department; choose someone from another department.',
+  'date-in-future': 'The date cannot be in the future.',
 } as const

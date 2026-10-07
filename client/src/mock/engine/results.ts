@@ -1,10 +1,10 @@
+import { computeFlag, isCriticalFlag, parseNumeric } from '@/domain/flags'
+import { computeCalculated } from '@/domain/calculated'
+import { isAnalyteRequired } from '@/domain/flags'
 import {
-  computeFlag,
-  isAbnormal,
-  isCriticalFlag,
-  parseNumeric,
-} from '@/domain/flags'
-import { canAuthoriseDepartment } from '@/domain/permissions'
+  canAuthoriseDepartment,
+  isRegisteredSignatory,
+} from '@/domain/permissions'
 import { uid } from '@/domain/ids'
 import { pickRange, rangeSnapshot } from '@/domain/reference-ranges'
 import type { Analyte, OrderItem, Result } from '@/domain/types'
@@ -25,6 +25,7 @@ import {
   type EngineCtx,
 } from './core'
 import { qcHoldFor } from './qc-gate'
+import { applyAutoCheck } from './autoverify'
 
 export interface ResultValueInput {
   value: string | null
@@ -69,19 +70,6 @@ function checkPlausible(analyte: Analyte, value: string | null) {
       low: low ?? '',
       high: high ?? '',
     })
-}
-
-/** Whether an analyte needs a value, given the other values in the same test. */
-export function isAnalyteRequired(
-  analyte: Analyte,
-  values: Record<string, string | null | undefined>,
-  analytes: Record<string, Analyte>,
-) {
-  if (!analyte.dependsOn) return true
-  const parent = analytes[analyte.dependsOn]
-  const parentValue = values[analyte.dependsOn]
-  if (!parent || !parentValue) return false
-  return isAbnormal(computeFlag(parent, parentValue, null))
 }
 
 function upsertResult(
@@ -266,6 +254,18 @@ export function saveResults(
     const values: Record<string, string | null> = {}
     for (const analyteId of item.analyteIds)
       values[analyteId] = entry.values[analyteId]?.value ?? null
+    // Calculated analytes come from the measured values, never from what
+    // was typed (domain/calculated.ts).
+    const computed = computeCalculated(
+      item.analyteIds,
+      values,
+      (id) => db.analytes[id]?.decimals ?? 0,
+    )
+    const inputs: Record<string, ResultValueInput> = { ...entry.values }
+    for (const [id, c] of Object.entries(computed)) {
+      values[id] = c.value
+      inputs[id] = { ...entry.values[id], value: c.value }
+    }
 
     // A submitted value is a result on record: changing it needs a reason.
     const changeReason = entry.changeReason?.trim()
@@ -284,6 +284,7 @@ export function saveResults(
         const analyte = db.analytes[id]
         return (
           analyte &&
+          !(id in computed) &&
           isAnalyteRequired(analyte, values, db.analytes) &&
           !values[id]?.trim()
         )
@@ -297,12 +298,13 @@ export function saveResults(
 
     for (const analyteId of item.analyteIds) {
       const analyte = must(db.analytes, analyteId, 'analyte')
-      const input = entry.values[analyteId]
+      const input = inputs[analyteId]
       if (!input) continue
       const before = resultsOfItem(db, item.id).find(
         (r) => r.analyteId === analyteId,
       )?.value
       const result = upsertResult(db, item, analyte, input, ctx, changeReason)
+      if (analyteId in computed) result.calculated = true
       if (item.status === 'entered' && before && before !== result.value)
         audit(db, ctx, 'result', item.id, 'value-changed', {
           from: before,
@@ -325,6 +327,7 @@ export function saveResults(
           to: 'entered',
           detail: { test: item.testName },
         })
+      applyAutoCheck(db, item, ctx)
     } else if (item.status === 'pending' || item.status === 'returned') {
       item.status = 'draft'
     }
@@ -463,6 +466,11 @@ export function validateItems(db: LabDb, itemIds: string[], ctx: EngineCtx) {
         name: staff.name,
         department: `enum:department.${staff.department ?? 'microbiology'}`,
         test: item.testName,
+      })
+    if (!isRegisteredSignatory(staff, item.department, ctx.now))
+      throw new LabApiError('not-a-signatory', {
+        name: staff.name,
+        department: `enum:department.${item.department}`,
       })
     const sample = ensureNotOnHold(db, item)
     ensureQcPassed(db, item)

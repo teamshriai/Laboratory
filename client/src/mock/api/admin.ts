@@ -2,9 +2,25 @@
 
 import { AUDIT_ENTITIES, type AuditEntity } from '@/domain/types'
 import type { LabDb } from '../db/schema'
-import { read } from './runtime'
+import { read, write } from './runtime'
 import type { AuditFilters, AuditList, AuditRow } from './types'
 import { inDateRange, matchesQuery, staffName } from './views'
+import { paginate, type Sorters } from './paging'
+import { recordAccess, type AccessInput } from '../engine/access'
+import { updateSignatory, type SignatoryInput } from '../engine/staff'
+
+/** Quality, privacy and interface records: their number and screen. */
+function describeRecord(
+  db: LabDb,
+  entity: 'quality' | 'privacy' | 'interface',
+  id: string,
+): { label: string; link?: string } {
+  if (entity === 'interface') {
+    const eq = db.equipment[id]
+    return eq ? { label: eq.name, link: '/interfaces' } : { label: id }
+  }
+  return { label: id, link: entity === 'quality' ? '/quality' : '/privacy' }
+}
 
 /** A human label and an app link for the record an entry is about. */
 function describe(
@@ -107,10 +123,42 @@ function describe(
           }
         : { label: id }
     }
+    case 'quality':
+    case 'privacy':
+    case 'interface':
+      return describeRecord(db, entity, id)
+    case 'invoice': {
+      // Invoices, and billing records filed under them (packages, accounts,
+      // price lists, the day's close).
+      const invoice = db.invoices[id]
+      if (invoice)
+        return {
+          label: `${invoice.invoiceNo} · ${db.patients[invoice.patientId]?.name ?? ''}`,
+          link: `/billing/${invoice.id}`,
+        }
+      const named =
+        db.packages[id]?.name ??
+        db.accounts[id]?.name ??
+        db.priceLists[id]?.name ??
+        (db.cashCloses[id] ? id : undefined)
+      return { label: named ?? id }
+    }
   }
 }
 
+const AUDIT_SORTERS: Sorters<AuditRow> = {
+  time: (r) => r.at,
+  action: (r) => r.action,
+  user: (r) => r.byName,
+}
+
 export const adminApi = {
+  /** Adds, changes or (with null) removes a person's signatory registration. */
+  updateSignatory: (staffId: string, input: SignatoryInput | null) =>
+    write((db, ctx) => void updateSignatory(db, staffId, input, ctx)),
+  /** Records a view, print or export of personal health information. */
+  recordAccess: (input: AccessInput) =>
+    write((db, ctx) => recordAccess(db, input, ctx)),
   /** The append-only audit log, newest first (read only: there is no edit). */
   audit: (filters: AuditFilters = {}) =>
     read((db, { now }): AuditList => {
@@ -138,7 +186,7 @@ export const adminApi = {
         rows.push({ ...entry, byName, record })
       }
       return {
-        rows,
+        ...paginate(rows, filters, AUDIT_SORTERS),
         total: db.audit.length,
         entities: [...AUDIT_ENTITIES],
         actions: [...actions].toSorted(),

@@ -5,9 +5,10 @@ import {
   PinOffIcon,
   BadgeCheckIcon,
 } from 'lucide-react'
-import { Link, useParams, useSearchParams } from 'react-router'
+import { Link, useParams } from 'react-router'
 import { toast } from 'sonner'
 import { usePreferences } from '@/app/preferences/context'
+import { useOverlayParam } from '@/hooks/use-search-param'
 import { useEnum, useT } from '@/i18n/context'
 import { useFormat } from '@/i18n/format'
 import type { SampleRow } from '@/services/lab-api'
@@ -38,7 +39,7 @@ export function Component() {
   const id = valid ? departmentId : undefined
   const { department: working, setDepartment, actorId } = usePreferences()
   const { data, isPending, isError, refetch, dataUpdatedAt } = useDepartment(id)
-  const [params, setParams] = useSearchParams()
+  const [sampleId, showSample] = useOverlayParam('sample')
 
   if (!id) {
     return (
@@ -69,11 +70,7 @@ export function Component() {
   const name = e('department', id)
   const isWorking = working === id
 
-  const openSample = (row: SampleRow) => {
-    const next = new URLSearchParams(params)
-    next.set('sample', row.id)
-    setParams(next)
-  }
+  const openSample = (row: SampleRow) => showSample(row.id)
 
   const toggleWorking = () => {
     if (isWorking) {
@@ -197,7 +194,7 @@ export function Component() {
 
           <QueueCard
             rows={data.queue}
-            activeId={params.get('sample')}
+            activeId={sampleId}
             onOpen={openSample}
           />
 

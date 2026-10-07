@@ -14,6 +14,12 @@ describe('CSV export', () => {
     )
   })
 
+  it('neutralises formulas that start like a number or after spaces', () => {
+    expect(toCsv([['-1+cmd|calc', '  =1+1', '-2-3', '-1.5e3']])).toBe(
+      "'-1+cmd|calc,'  =1+1,'-2-3,'-1.5e3",
+    )
+  })
+
   it('separates rows with CRLF', () => {
     expect(toCsv([['a'], ['b']])).toBe('a\r\nb')
   })

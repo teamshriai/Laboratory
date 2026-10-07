@@ -1,4 +1,11 @@
+import { ShieldCheckIcon } from 'lucide-react'
 import { useState } from 'react'
+import {
+  isAbhaAddress,
+  isPinCode,
+  normaliseAbhaNumber,
+  normaliseIndianMobile,
+} from '@/domain/collection'
 import { BLOOD_GROUPS, type BloodGroup } from '@/domain/types'
 import { useT } from '@/i18n/context'
 import { labApi, type PatientDetail } from '@/services/lab-api'
@@ -10,8 +17,6 @@ import { FormErrorSummary } from '@/components/ui/form-errors'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { focusFirstInvalid } from '@/lib/focus'
-
-const MOBILE = /^\+?[\d\s-]{10,15}$/
 
 /** Corrects registration details; every change is kept in the audit trail. */
 export function EditPatientDialog({
@@ -32,13 +37,28 @@ export function EditPatientDialog({
   const [allergies, setAllergies] = useState(patient.allergies.join(', '))
   const [city, setCity] = useState(patient.city)
   const [state, setState] = useState(patient.state)
+  const [pinCode, setPinCode] = useState(patient.pinCode ?? '')
+  const [abhaNumber, setAbhaNumber] = useState(patient.abha?.number ?? '')
+  const [abhaAddress, setAbhaAddress] = useState(patient.abha?.address ?? '')
   const [tried, setTried] = useState(false)
   const errors = {
     name: !name.trim() ? 'forms.required' : undefined,
-    mobile: !MOBILE.test(mobile.trim()) ? 'forms.invalidMobile' : undefined,
+    mobile: !normaliseIndianMobile(mobile)
+      ? 'errors.invalid-mobile'
+      : undefined,
     email:
       email.trim() && !/^\S+@\S+\.\S+$/.test(email.trim())
         ? 'forms.invalidEmail'
+        : undefined,
+    pinCode:
+      pinCode.trim() && !isPinCode(pinCode) ? 'errors.invalid-pin' : undefined,
+    abhaNumber:
+      abhaNumber.trim() && !normaliseAbhaNumber(abhaNumber)
+        ? 'errors.invalid-abha'
+        : undefined,
+    abhaAddress:
+      abhaAddress.trim() && !isAbhaAddress(abhaAddress)
+        ? 'errors.invalid-abha'
         : undefined,
   }
   const invalid = Object.values(errors).filter(Boolean).length
@@ -55,6 +75,15 @@ export function EditPatientDialog({
           .filter(Boolean),
         city: city.trim(),
         state: state.trim(),
+        ...(pinCode.trim() ? { pinCode: pinCode.trim() } : {}),
+        ...(abhaNumber.trim() || abhaAddress.trim()
+          ? {
+              abha: {
+                ...(abhaNumber.trim() ? { number: abhaNumber.trim() } : {}),
+                ...(abhaAddress.trim() ? { address: abhaAddress.trim() } : {}),
+              },
+            }
+          : {}),
       }),
     { success: () => t('updatedToast'), onSuccess: onClose },
   )
@@ -142,6 +171,58 @@ export function EditPatientDialog({
         <Field label={t('fieldState')}>
           <Input value={state} onChange={(ev) => setState(ev.target.value)} />
         </Field>
+        <Field
+          label={t('fieldPinCode')}
+          optionalLabel={tc('optional')}
+          error={err(errors.pinCode)}
+        >
+          <Input
+            value={pinCode}
+            inputMode="numeric"
+            maxLength={6}
+            autoComplete="postal-code"
+            className="tabular-nums"
+            onChange={(ev) => setPinCode(ev.target.value)}
+          />
+        </Field>
+        <div className="hidden sm:block" aria-hidden />
+        <Field
+          label={t('fieldAbhaNumber')}
+          optionalLabel={tc('optional')}
+          hint={t('abhaNumberHint')}
+          error={err(errors.abhaNumber)}
+        >
+          <Input
+            value={abhaNumber}
+            inputMode="numeric"
+            placeholder="12-3456-7890-1234"
+            autoComplete="off"
+            className="tabular-nums"
+            onChange={(ev) => setAbhaNumber(ev.target.value)}
+          />
+        </Field>
+        <Field
+          label={t('fieldAbhaAddress')}
+          optionalLabel={tc('optional')}
+          hint={t('abhaAddressHint')}
+          error={err(errors.abhaAddress)}
+        >
+          <Input
+            value={abhaAddress}
+            placeholder="name@abdm"
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            onChange={(ev) => setAbhaAddress(ev.target.value)}
+          />
+        </Field>
+        <p className="flex items-start gap-2 text-xs text-fg-muted sm:col-span-2">
+          <ShieldCheckIcon
+            className="mt-0.5 size-4 shrink-0 text-success-text"
+            aria-hidden
+          />
+          {t('identifierPrivacy')}
+        </p>
       </div>
     </Dialog>
   )

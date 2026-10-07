@@ -160,4 +160,20 @@ export default {
     'आप संस्करण {version} देख रहे हैं। संस्करण {latest} वर्तमान रिपोर्ट है।',
   viewCurrentVersion: 'वर्तमान संस्करण देखें',
   currentVersion: 'वर्तमान',
+  notAccreditedLabel: 'NABL मान्यता प्राप्त नहीं',
+  notAccreditedFootnote:
+    'यह टेस्ट प्रयोगशाला की NABL मान्यता के दायरे से बाहर है।',
+  performedByNabl: '{lab} द्वारा किया गया (NABL {certificate})',
+  performedByAccredited: '{lab} द्वारा किया गया (NABL मान्यता प्राप्त)',
+  performedByNotAccredited: '{lab} द्वारा किया गया (NABL मान्यता प्राप्त नहीं)',
+  patientSummaryTitle: 'मरीज़ के लिए सारांश',
+  patientSummaryIntro: 'ये परिणाम संदर्भ अंतराल से बाहर हैं:',
+  patientSummaryRow: '{test} {value}: {meaning}',
+  patientSummaryNone:
+    'रिपोर्ट किए गए सभी परिणाम अपने संदर्भ अंतराल के भीतर हैं।',
+  summaryHigher: 'संदर्भ अंतराल से अधिक',
+  summaryLower: 'संदर्भ अंतराल से कम',
+  summaryAbnormal: 'असामान्य',
+  patientSummaryDisclaimer:
+    'यह सारांश निदान नहीं है। कृपया अपने परिणामों पर अपने डॉक्टर से चर्चा करें।',
 } as const

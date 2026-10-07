@@ -165,4 +165,20 @@ export default {
     'நீங்கள் பதிப்பு {version} ஐப் பார்க்கிறீர்கள். பதிப்பு {latest} தற்போதைய அறிக்கை.',
   viewCurrentVersion: 'தற்போதைய பதிப்பைக் காண்க',
   currentVersion: 'தற்போதையது',
+  notAccreditedLabel: 'NABL அங்கீகாரம் இல்லை',
+  notAccreditedFootnote:
+    'இந்தப் பரிசோதனை ஆய்வகத்தின் NABL அங்கீகார வரம்புக்கு வெளியே உள்ளது.',
+  performedByNabl: '{lab} செய்தது (NABL {certificate})',
+  performedByAccredited: '{lab} செய்தது (NABL அங்கீகாரம் பெற்றது)',
+  performedByNotAccredited: '{lab} செய்தது (NABL அங்கீகாரம் இல்லை)',
+  patientSummaryTitle: 'நோயாளிக்கான சுருக்கம்',
+  patientSummaryIntro: 'இந்த முடிவுகள் குறிப்பு இடைவெளிக்கு வெளியே உள்ளன:',
+  patientSummaryRow: '{test} {value}: {meaning}',
+  patientSummaryNone:
+    'அறிவிக்கப்பட்ட அனைத்து முடிவுகளும் அவற்றின் குறிப்பு இடைவெளிக்குள் உள்ளன.',
+  summaryHigher: 'குறிப்பு இடைவெளியை விட அதிகம்',
+  summaryLower: 'குறிப்பு இடைவெளியை விட குறைவு',
+  summaryAbnormal: 'இயல்பற்றது',
+  patientSummaryDisclaimer:
+    'இந்தச் சுருக்கம் நோயறிதல் அல்ல. உங்கள் முடிவுகளைப் பற்றி உங்கள் மருத்துவருடன் கலந்துரையாடுங்கள்.',
 } as const

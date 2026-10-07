@@ -123,4 +123,10 @@ export default {
   activeFilters: 'செயலில் உள்ள வடிகட்டிகள்',
   removeFilter: 'வடிகட்டியை நீக்கு: {filter}',
   exportCsv: 'CSV ஏற்றுமதி',
+  sessionEndedTitle: 'உங்கள் அமர்வு முடிந்துவிட்டது',
+  sessionEndedBody:
+    'தொடர மீண்டும் உள்நுழையவும். இந்தப் பக்கத்தில் சேமிக்காத மாற்றங்கள் இழக்கப்படலாம்.',
+  signIn: 'உள்நுழை',
+  signOut: 'வெளியேறு',
+  sessionChecking: 'உங்கள் அமர்வு சரிபார்க்கப்படுகிறது',
 } as const

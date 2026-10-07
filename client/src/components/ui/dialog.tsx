@@ -1,10 +1,10 @@
 import { XIcon } from 'lucide-react'
 import { Dialog as D } from 'radix-ui'
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { useT } from '@/i18n/context'
 import { cn } from '@/lib/cn'
 import { Button } from './button'
-import { useReturnFocus } from './return-focus'
+import { focusOnOpen, useReturnFocus } from './return-focus'
 
 interface OverlayProps {
   open: boolean
@@ -63,7 +63,8 @@ function Surface({
   bodyClassName,
 }: SurfaceProps) {
   const t = useT('common')
-  const focus = useReturnFocus(open)
+  const panel = useRef<HTMLDivElement>(null)
+  const focus = useReturnFocus(open, panel)
   const [confirming, setConfirming] = useState(false)
   const guard = (ev: Event) => {
     if (!dirty) return
@@ -72,7 +73,9 @@ function Surface({
   }
   return (
     <D.Content
+      ref={panel}
       {...focus}
+      onOpenAutoFocus={focusOnOpen}
       onEscapeKeyDown={guard}
       onInteractOutside={guard}
       className={contentClassName}
@@ -106,7 +109,7 @@ function Surface({
       {confirming ? (
         <div
           role="alert"
-          className="flex flex-wrap items-center justify-end gap-2 border-t border-warning-text/25 bg-warning-soft px-6 py-3.5"
+          className="flex flex-wrap items-center justify-end gap-2 border-t border-warning-text/25 bg-warning-soft px-6 pt-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))]"
         >
           <p className="mr-auto text-meta font-medium text-warning-text">
             {t('unsavedTitle')}
@@ -123,7 +126,7 @@ function Surface({
           </Button>
         </div>
       ) : footer ? (
-        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line bg-surface-2/60 px-6 py-3.5">
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line bg-surface-2/60 px-6 pt-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))]">
           {footer}
         </div>
       ) : null}

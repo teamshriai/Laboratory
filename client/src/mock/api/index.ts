@@ -18,14 +18,27 @@ import { resultsApi, validationApi } from './results'
 import { samplesApi } from './samples'
 import { analyticsReportApi } from './analytics'
 import { workQueueListApi } from './work-queue'
-import { referenceApi, systemApi } from './system'
+import { referenceApi, sessionApi, systemApi } from './system'
 import { adminApi } from './admin'
 import { assistantApi } from './assistant'
 import { imagingApi } from './imaging'
 import { portalApi } from './portal'
 import { todayApi } from './today'
+import { billingApi } from './billing'
+import { doctorApi } from './doctor'
+import { networkApi } from './network'
+import { qualityApi } from './quality'
+import { registersApi } from './registers'
+import {
+  autoVerifyApi,
+  insightsApi,
+  interfacesApi,
+  privacyApi,
+  sitesApi,
+} from './compliance'
 
 export const labApi = {
+  session: sessionApi,
   dashboard: dashboardApi,
   workQueue: { ...workQueueApi, ...workQueueListApi },
   patients: patientsApi,
@@ -51,6 +64,16 @@ export const labApi = {
   assistant: assistantApi,
   imaging: imagingApi,
   portal: portalApi,
+  billing: billingApi,
+  doctor: doctorApi,
+  network: networkApi,
+  quality: qualityApi,
+  registers: registersApi,
+  privacy: privacyApi,
+  interfaces: interfacesApi,
+  sites: sitesApi,
+  autoVerify: autoVerifyApi,
+  insights: insightsApi,
 }
 
 export type LabApi = typeof labApi
@@ -68,6 +91,7 @@ export type {
   TestInput,
 } from './operations'
 export type { DemoSettings } from './runtime'
+export type { AccessInput, AccessKind } from '../engine/access'
 export {
   getActor,
   getDemoSettings,
@@ -77,4 +101,3 @@ export {
 } from './runtime'
 export { LabApiError, type ErrorCode } from '../engine/core'
 export { onStorageResult, wasDataRefreshed } from '../db/store'
-export { isAnalyteRequired } from '../engine/results'

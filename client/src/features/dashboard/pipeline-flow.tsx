@@ -111,10 +111,6 @@ export function PipelineFlow({
               ) : null}
               <Link
                 to={s.to}
-                aria-label={t('stageLabel', {
-                  stage: e('stage', s.stage),
-                  count,
-                })}
                 className={cn(
                   'focus-ring group relative z-[1] flex w-full min-w-0 items-center gap-3 rounded-xl border p-2.5 transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:shadow-card-md md:h-full md:flex-col md:items-start md:gap-2 md:p-3',
                   isLargest

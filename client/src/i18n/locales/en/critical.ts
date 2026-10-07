@@ -90,4 +90,8 @@ export default {
   exportNotifiedAt: 'Notified at',
   exportMinutes: 'Minutes to notify',
   exportReadBack: 'Read back',
+  escalationDue: 'Escalate to {target}',
+  escalationDueSince: '{minutes} min since detection',
+  escalationDueReason:
+    'Not communicated within {minutes} minutes of detection (escalation step {step}).',
 } as const

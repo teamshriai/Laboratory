@@ -1,5 +1,11 @@
-import { useCallback } from 'react'
-import { useSearchParams } from 'react-router'
+import { useCallback, useEffect } from 'react'
+import {
+  NavigationType,
+  useLocation,
+  useNavigate,
+  useNavigationType,
+  useSearchParams,
+} from 'react-router'
 
 type Values = Record<string, string>
 
@@ -28,6 +34,8 @@ export function useUrlFilters<T extends Values>(
     setParams(
       (prev) => {
         const next = new URLSearchParams(prev)
+        // A different set of rows starts on its first page.
+        next.delete('page')
         for (const [k, v] of Object.entries(patch) as [
           string,
           string | undefined,
@@ -44,6 +52,7 @@ export function useUrlFilters<T extends Values>(
     setParams(
       (prev) => {
         const next = new URLSearchParams(prev)
+        next.delete('page')
         for (const k of only ?? keys) next.delete(k)
         return next
       },
@@ -82,4 +91,56 @@ export function useSearchParam<V extends string>(
     [key, fallback, setParams],
   )
   return [value, set] as const
+}
+
+/** History entries (by location key) that opened an overlay with a push. */
+const pushedOverlays = new Map<string, string>()
+
+/**
+ * A dialog or drawer opened from the URL (`?order=id`, `?nc=id`, `?new=1`).
+ * Opening adds a history entry, so it can be linked and the phone's Back
+ * button closes it. Closing goes back when this session opened it (by a
+ * click, a link or `open`), and otherwise (a pasted link) removes the
+ * parameter in place, so Back never reopens it or does nothing once.
+ */
+export function useOverlayParam(key: string) {
+  const [params, setParams] = useSearchParams()
+  const location = useLocation()
+  const navigationType = useNavigationType()
+  const navigate = useNavigate()
+  const raw = params.get(key)
+  const value = raw === null || raw === '' ? null : raw
+  useEffect(() => {
+    if (value !== null && navigationType === NavigationType.Push)
+      pushedOverlays.set(location.key, key)
+  }, [value, navigationType, location.key, key])
+  const open = useCallback(
+    (id: string) =>
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev)
+          next.set(key, id)
+          return next
+        },
+        // Switching from one record to another keeps a single entry.
+        { replace: params.has(key) },
+      ),
+    [key, params, setParams],
+  )
+  const close = useCallback(() => {
+    if (pushedOverlays.get(location.key) === key) {
+      pushedOverlays.delete(location.key)
+      void navigate(-1)
+      return
+    }
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete(key)
+        return next
+      },
+      { replace: true },
+    )
+  }, [key, location.key, navigate, setParams])
+  return [value, open, close] as const
 }

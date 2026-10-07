@@ -29,6 +29,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState, ErrorState } from '@/components/ui/states'
 import { focusWhenScrollable } from '@/lib/scroll-focus'
 import { MODALITY_NAV, MODALITY_PATH } from './modality'
+import { useRecordView } from '@/hooks/use-record-view'
 
 /** An imaging report as a document, with print, PDF, share and versions. */
 export function Component() {
@@ -38,6 +39,7 @@ export function Component() {
   const tc = useT('common')
   const f = useFormat()
   const { studyId } = useParams()
+  useRecordView('imaging', studyId)
   const [versionParam, setVersionParam] = useSearchParam<string>('version', '')
   const version = Number(versionParam) || undefined
   const {
@@ -57,7 +59,7 @@ export function Component() {
   if (isPending)
     return (
       <div className="grid gap-5">
-        <Skeleton className="h-8 w-72" />
+        <Skeleton className="h-8 w-72 max-w-full" />
         <Skeleton className="h-20 rounded-xl" />
         <div className="grid gap-5 xl:grid-cols-[1fr_20rem]">
           <Skeleton className="h-[40rem] rounded-xl" />
@@ -213,9 +215,12 @@ export function Component() {
           title={tp('shareTitle', { report: report.reportNo })}
         >
           <ShareLinkPanel
-            reportNo={report.reportNo}
-            link={report.shareLink}
-            create={() => labApi.imaging.shareLink(report.id)}
+            links={report.shareLinks}
+            defaultDays={lab?.shareLinkDays ?? 7}
+            create={(days) =>
+              labApi.imaging.createShareLink(report.id, { days })
+            }
+            revoke={(id) => labApi.imaging.revokeShareLink(id)}
           />
         </Dialog>
       ) : null}

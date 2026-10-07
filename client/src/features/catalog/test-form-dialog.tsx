@@ -18,7 +18,7 @@ import {
   type NewAnalyteInput,
 } from '@/services/lab-api'
 import { useLabMutation } from '@/services/mutations'
-import { useAnalytes } from '@/services/queries'
+import { useAnalytes, useReference } from '@/services/queries'
 import { Button } from '@/components/ui/button'
 import { GuardedButton } from '@/components/lab/guarded-button'
 import { Combobox } from '@/components/ui/combobox'
@@ -90,6 +90,10 @@ const schema = z
     price: numberText('catalog.priceInvalid'),
     priceInsurance: numberText('catalog.priceInvalid', { optional: true }),
     analyteIds: z.array(z.string()),
+    consentRequired: z.boolean(),
+    accredited: z.boolean(),
+    sendOutLabId: z.string(),
+    commentTemplates: z.string().max(4000, 'forms.tooLong'),
   })
   .refine((v) => Number(v.statTatHours) <= Number(v.tatHours), {
     path: ['statTatHours'],
@@ -99,10 +103,20 @@ const schema = z
 type FormIn = z.input<typeof schema>
 type FormOut = z.output<typeof schema>
 
+/** Select value for "done in this lab" (Radix Select has no empty value). */
+const IN_HOUSE = 'in-house'
+
+const templateLines = (text: string) =>
+  text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+
 const SECTIONS = [
   'general',
   'specimen',
   'processing',
+  'policy',
   'result',
   'range',
   'billing',
@@ -129,6 +143,32 @@ function Group({
   )
 }
 
+function SwitchRow({
+  id,
+  label,
+  hint,
+  checked,
+  onCheckedChange,
+}: {
+  id: string
+  label: string
+  hint: string
+  checked: boolean
+  onCheckedChange: (checked: boolean) => void
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 rounded-xl border border-line p-3.5">
+      <div className="min-w-0">
+        <label htmlFor={id} className="text-sm font-medium text-fg">
+          {label}
+        </label>
+        <p className="mt-0.5 text-xs text-fg-muted">{hint}</p>
+      </div>
+      <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} />
+    </div>
+  )
+}
+
 export function TestFormDialog({
   test,
   onClose,
@@ -143,6 +183,7 @@ export function TestFormDialog({
   const e = useEnum()
   const msg = useFormMessage()
   const { data: analytes } = useAnalytes()
+  const { data: reference } = useReference()
   const [section, setSection] = useState<Section>('general')
   const [newParam, setNewParam] = useState<{
     name: string
@@ -178,6 +219,10 @@ export function TestFormDialog({
       price: test?.price.toString() ?? '',
       priceInsurance: test?.priceInsurance?.toString() ?? '',
       analyteIds: test?.analyteIds ?? [],
+      consentRequired: test?.consentRequired ?? false,
+      accredited: test?.accredited ?? true,
+      sendOutLabId: test?.sendOutLabId || IN_HOUSE,
+      commentTemplates: (test?.commentTemplates ?? []).join('\n'),
     },
   })
   const { register, control, handleSubmit, formState, setValue } = form
@@ -190,6 +235,8 @@ export function TestFormDialog({
   const save = useLabMutation(
     (v: FormOut) => {
       const num = (s: string) => (s.trim() === '' ? undefined : Number(s))
+      const lab = v.sendOutLabId === IN_HOUSE ? '' : v.sendOutLabId
+      const templates = templateLines(v.commentTemplates)
       const input = {
         name: v.name,
         code: v.code,
@@ -222,6 +269,18 @@ export function TestFormDialog({
           .split(',')
           .map((k) => k.trim())
           .filter(Boolean),
+        // Only send what is set or changed, so an untouched default does not
+        // count as an edit (and a new version) of an existing test.
+        ...(v.consentRequired || test?.consentRequired !== undefined
+          ? { consentRequired: v.consentRequired }
+          : {}),
+        ...(!v.accredited || test?.accredited !== undefined
+          ? { accredited: v.accredited }
+          : {}),
+        ...(lab || test?.sendOutLabId ? { sendOutLabId: lab } : {}),
+        ...(templates.length || test?.commentTemplates
+          ? { commentTemplates: templates }
+          : {}),
       }
       const extra: NewAnalyteInput | undefined = newParam
         ? {
@@ -287,6 +346,7 @@ export function TestFormDialog({
       volumeMl: 'specimen',
       tatHours: 'processing',
       statTatHours: 'processing',
+      commentTemplates: 'policy',
       price: 'billing',
     }
     const target = map[first ?? ''] ?? 'general'
@@ -308,6 +368,7 @@ export function TestFormDialog({
     general: t('formSectionGeneral'),
     specimen: t('sectionSpecimen'),
     processing: t('sectionProcessing'),
+    policy: t('formSectionPolicy'),
     result: t('formSectionResult'),
     range: t('formSectionRange'),
     billing: t('formSectionBilling'),
@@ -317,7 +378,7 @@ export function TestFormDialog({
     <Dialog
       open
       onOpenChange={(o) => !o && onClose()}
-      dirty={formState.isDirty && !formState.isSubmitSuccessful}
+      dirty={formState.isDirty}
       size="xl"
       title={test ? t('formEditTitle', { test: test.name }) : t('formNewTitle')}
       description={test ? t('formEditDescription') : undefined}
@@ -641,6 +702,77 @@ export function TestFormDialog({
               className="sm:col-span-2"
             >
               <Input {...register('keywords')} />
+            </Field>
+          </Group>
+
+          <Group id="tf-policy" title={sectionLabel.policy}>
+            <Controller
+              control={control}
+              name="consentRequired"
+              render={({ field }) => (
+                <SwitchRow
+                  id="tf-consent-required"
+                  label={t('consentRequiredLabel')}
+                  hint={t('consentRequiredHint')}
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              )}
+            />
+            <Controller
+              control={control}
+              name="accredited"
+              render={({ field }) => (
+                <SwitchRow
+                  id="tf-accredited"
+                  label={t('accreditedLabel')}
+                  hint={t('accreditedHint')}
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              )}
+            />
+            <Field
+              label={t('sendOutLabLabel')}
+              hint={t('sendOutLabHint')}
+              className="sm:col-span-2"
+            >
+              <Controller
+                control={control}
+                name="sendOutLabId"
+                render={({ field }) => (
+                  <Select
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    options={[
+                      { value: IN_HOUSE, label: t('sendOutInHouse') },
+                      ...(reference?.referralLabs ?? [])
+                        .filter((l) => l.active || l.id === field.value)
+                        .map((l) => ({
+                          value: l.id,
+                          label: l.nablAccredited
+                            ? t('referralLabOption', {
+                                name: l.name,
+                                city: l.city,
+                              })
+                            : t('referralLabOptionNotNabl', {
+                                name: l.name,
+                                city: l.city,
+                              }),
+                        })),
+                    ]}
+                  />
+                )}
+              />
+            </Field>
+            <Field
+              label={t('commentTemplatesLabel')}
+              hint={t('commentTemplatesHint')}
+              optionalLabel={tc('optional')}
+              error={err('commentTemplates')}
+              className="sm:col-span-2"
+            >
+              <Textarea {...register('commentTemplates')} rows={4} />
             </Field>
           </Group>
 

@@ -128,3 +128,16 @@ export function flagSeverity(flag: Flag | null | undefined) {
       return 0
   }
 }
+
+/** Whether an analyte needs a value, given the other values in the same test. */
+export function isAnalyteRequired(
+  analyte: Analyte,
+  values: Record<string, string | null | undefined>,
+  analytes: Record<string, Analyte>,
+) {
+  if (!analyte.dependsOn) return true
+  const parent = analytes[analyte.dependsOn]
+  const parentValue = values[analyte.dependsOn]
+  if (!parent || !parentValue) return false
+  return isAbnormal(computeFlag(parent, parentValue, null))
+}

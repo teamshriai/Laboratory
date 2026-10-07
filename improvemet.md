@@ -588,3 +588,173 @@ Accession · Collect / Collect All · Print Labels · Receive · Reject · Recol
 30. [CrelioHealth LIMS Reviews 2026: Details, Pricing, & Features](https://www.g2.com/products/creliohealth-for-diagnostics-product/reviews)
 31. [Attune Lab Information System](https://www.slideshare.net/slideshow/attune-lab-information-system/59961864)
 32. [Drlogy Pathology Lab Software - Trusted by 30,000+ Labs](https://www.drlogy.com/pathology-lab-software)
+
+
+---
+
+## Appendix: implementation status (frontend phase, 3 Oct 2026)
+
+This appendix records what was built against this audit and how each §31 criterion stands. "Verified" means checked by an automated test (`npm run test:run`, 170 tests) or by a browser script against the packaged build served by nginx with the production CSP.
+
+**What the statuses mean**
+- **PASS:** met in this build and verified.
+- **PARTIAL:** met in part; the gap is stated.
+- **BLOCKED:** needs the backend or an outside system, which this frontend phase deliberately does not build.
+
+All data is demo data kept in the browser. The role switcher ("acting as") shows how the workflow is controlled; it is not security.
+
+### §31 acceptance criteria
+
+| # | Criterion | Status | Evidence / gap |
+|---|---|---|---|
+| **Discovery** | | | |
+| 1 | Appendix lists every route, nav item, page, modal, table, form and status enum, from source | PARTIAL | A.1 to A.4 below are generated from the source code. Modals appear through their form fields rather than as a separate list. |
+| 2 | Every NOT VERIFIABLE cell replaced or confirmed absent | PARTIAL | Answered at criterion level in this table. The original cells above are left as written. |
+| **Workflow integrity** | | | |
+| 3 | Every workflow has a start, an end and a visible next action | PASS | Statuses are derived in `domain/workflow.ts`. Next actions appear on work-queue rows and in the Dashboard's Needs action. |
+| 4 | Order Completed is derived and needs all live tests released | PASS | `deriveOrderStatus` with reports; test "releases preliminary, then final; completes only when all is final". |
+| 5 | No result entry for unreceived, rejected or cancelled specimens or tests | PASS | Engine refusals (`sample-not-in-lab`, `invalid-transition`); seed rule D2. |
+| 6 | No release without authorised results; authoriser name and time printed | PASS | `releaseReport`. The printed report shows "Medical authorisation: name, qualification (time)" and the signer. |
+| 7 | Rejection needs a reason, creates a linked recollection with a new accession, order stays open | PASS | Journey E test (`journeys.test.ts`). |
+| 8 | Amendment creates version n+1 marked AMENDED with a reason; prior version viewable | PASS | Versions are kept with snapshots; `?version=n` shows an earlier version on the report page and the portal; the print shows the AMENDED REPORT banner with the reason. |
+| 9 | D5 chronology holds; future times refused; seed passes D1 to D14 | PASS | `integrity.test.ts` on fresh and time-shifted data, now including imaging studies. |
+| **Patient safety** | | | |
+| 10 | One source of patient identity; identity banner on every patient-scoped screen | PASS | `patientSummary` everywhere; `PatientBanner` on result entry, verification, report, specimen, imaging report and the drawers. |
+| 11 | Criticals show HH/LL, come first on the Dashboard, and need full name, role, time, lab person, method and read-back to close | PASS | Journey D test. Criticals lead the KPI row and Needs action. |
+| 12 | Abnormal flags from the stored interval; unit and interval on every quantitative result | PASS | Journey C test. "Not established" is printed when no interval exists. |
+| **Reports** | | | |
+| 13 | Every §15 element, including page x of y and collection and issue dates on each page; Preliminary/Final/Amended visible | PARTIAL | All elements are present. The running header and footer (patient, UHID, dates, report ID and version, page x of y) use CSS page margin boxes, which Chrome and Edge print. Firefox and Safari print without them; page 1 still carries everything. QR verification is not built (BLOCKED, needs the backend). |
+| **Roles and audit** | | | |
+| 14 | Role switcher or login; actions follow §5; performer is not authoriser when enabled | PASS | `domain/permissions.ts`, enforced in every mutation (`guards.test.ts`). It is a demo switcher; real login is BLOCKED. |
+| 15 | A browser-local storage notice is shown | PASS | A demo strip under the header; the Settings "What this demo is" box. |
+| 16 | Audit records who, what, when, before and after, and the reason for every state change, and cannot be edited | PARTIAL | Complete and append-only through the app (Audit Log screen, CSV). The data lives in browser storage, so it is not tamper-evident. A shared, tamper-evident audit is BLOCKED (backend). |
+| **Search and tables** | | | |
+| 17 | Global search finds UHID, order ID, accession and name; an exact ID opens the record | PASS | `search.resolve`; Enter on a scanned ID opens the record even before results load. |
+| 18 | Filters combine, show as chips and persist in the URL; STAT first; counts match | PASS | URL filters on every list, chips for filters hidden under "More filters", STAT-first worklists. Dashboard counts are tested against the queues. |
+| 19 | At 390px and 375px tables are usable with no hidden primary action | PASS | Stacked records below 768px. Sweep: no overflow at 320 to 1920px. |
+| **Forms and states** | | | |
+| 20 | Required marked; errors say how to fix; focus on first error; unsaved-changes guard | PASS | Error summary and `focusInvalid` on long forms. Unsaved-changes guard on pages (navigation and tab close) and in dialogs (Esc, outside click or the close button ask first, verified in the browser). The footer Cancel button closes without asking. |
+| 21 | Empty, loading and error states everywhere; corrupt storage recoverable | PASS | `store.test.ts`; route error elements; skeletons. |
+| 22 | Destructive actions confirm with a reason | PASS | Cancel order and test, reject, withdraw, correction, void critical, catalog changes, rerun. |
+| **Consistency, accessibility, navigation** | | | |
+| 23 | One glossary file; no forbidden variants | PASS | `domain/glossary.ts` and `terminology.test.ts` (English); translators used the same terms. |
+| 24 | One date-time format (DD-MMM-YYYY HH:mm); one badge component per entity | PARTIAL | Dates read "02 Oct 2026, 3:04 pm": 12-hour by your decision. One badge component per entity. |
+| 25 | axe: no serious or critical violations; full keyboard use; dialogs trap and restore focus | PASS | Browser audit of the packaged build (production CSP): 35 routes at 10 widths (320 to 1920px) plus dark mode, 420 checks with no overflow or errors; axe (WCAG 2.2 AA and best practice) on every route at 1440px light and dark and at 390px: no violations of any severity. Dialogs trap focus and return it (verified); the dashboard calendar works by keyboard (arrow keys, Home and End). |
+| 26 | Deep-link refresh on every route; every ID links; no dead ends | PASS | nginx test (SPA fallback, old-link redirects); `RecordLink` for UHID, order, accession, report and imaging numbers. |
+
+### Blocked: needs the backend or outside systems
+- Real authentication and server-enforced roles; sessions.
+- A shared, tamper-evident audit trail and multi-user data.
+- QR report verification; access-controlled, expiring share links.
+- Patient and doctor portals (the data shape `PatientReportEntry` and the `/report/:reportNo` page are ready).
+- HL7/ASTM analyzer interfaces, RIS/PACS (DICOM) for imaging, server-generated PDFs.
+- SMS, email and WhatsApp delivery; a real AI assistant (the "AI" assistant is rule-based); autoverification.
+
+### A.1 Routes (from `app/routes.tsx`, under the base `/dev/laboratory/`)
+
+`/laboratory/*` (old links, redirect to the new path), `/report/:reportNo` (patient-facing report behind a share link, outside the staff shell), `/` (redirects to /dashboard), `/dashboard`, `/work-queue`, `/patients`, `/patients/:patientId`, `/orders`, `/orders/new`, `/collection`, `/reception`, `/specimens/:sampleId`, `/worklists`, `/results` (redirects to /worklists), `/results/:sampleId`, `/verification`, `/reports`, `/reports/:reportId`, `/critical-results`, `/imaging`, `/imaging/ct`, `/imaging/mri`, `/imaging/x-ray`, `/imaging/reports/:studyId`, `/test-catalog`, `/departments`, `/departments/:departmentId`, `/inventory`, `/reagents`, `/consumables`, `/equipment`, `/quality-control`, `/tat`, `/analytics`, `/users`, `/audit-log`, `/settings`, `/*` (not found)
+
+Drawers open on any route with `?order=<id>` or `?sample=<id>`. `?new=1` opens the create dialog on Patients, Quality Control and Reagents. `?version=n` shows an earlier report version. On the Dashboard, `?cal=month` and `?day=YYYY-MM-DD` set the calendar's view and chosen day.
+
+### A.2 Navigation (from `app/layout/nav-config.tsx`)
+
+- **LAB_NAV**: Dashboard (`/dashboard`); Work Queue (`/work-queue`); Patients (`/patients`); Orders (`/orders`); Collection (`/collection`); Reception (`/reception`); Worklists (`/worklists`); Verification (`/verification`); Critical Results (`/critical-results`); Reports (`/reports`)
+- **INVENTORY_NAV**: Inventory Overview (`/inventory`); Reagents (`/reagents`); Consumables (`/consumables`); Equipment (`/equipment`)
+- **OPERATIONS_NAV**: Quality Control (`/quality-control`); TAT Monitoring (`/tat`); Analytics (`/analytics`)
+- **IMAGING_NAV**: Imaging Overview (`/imaging`); CT (`/imaging/ct`); MRI (`/imaging/mri`); X-Ray (`/imaging/x-ray`)
+- **ADMIN_NAV**: Test Catalog (`/test-catalog`); Users & Roles (`/users`); Audit Log (`/audit-log`)
+
+### A.3 Status enums
+
+Status-like `as const` arrays in `domain/types.ts`, in source order, with English labels from `i18n/locales/en/enums.ts` (or the namespace named in brackets where `enums` has no group).
+
+- **PRIORITIES**: `routine` Routine, `urgent` Urgent, `stat` STAT
+- **ORDER_STATES** (stored order state, no label group): `draft`, `active`, `cancelled`
+- **ORDER_STATUSES**: `draft` Draft, `new` Awaiting collection, `partially-collected` Partially collected, `collected` Collected, `processing` In process, `pending-result` Awaiting results, `awaiting-review` Awaiting verification, `awaiting-validation` Awaiting authorisation, `awaiting-release` Awaiting release, `partially-reported` Partially reported, `completed` Completed, `cancelled` Cancelled, `rejected` Rejected
+- **RESULT_STATUSES**: `pending` Awaiting result, `draft` Draft saved, `entered` Awaiting verification, `reviewed` Awaiting authorisation, `validated` Authorised, `returned` Sent back, `held` On hold, `void` Not performed
+- **SAMPLE_STATUSES**: `pending_collection` Pending collection, `collected` Collected, `received` Received, `processing` Processing, `on_hold` On hold, `completed` Completed, `rejected` Rejected, `discarded` Discarded
+- **CRITICAL_STATUSES**: `open` Awaiting notification, `notified` Awaiting acknowledgement, `acknowledged` Acknowledged, `voided` Voided
+- **CRITICAL_STATES**: `open` Not yet communicated, `contacting` Contacting, `notified` Awaiting acknowledgement, `escalated` Escalated, `acknowledged` Acknowledged, `voided` Closed
+- **REPORT_STATUSES**: `draft` Draft, `pending-validation` Awaiting authorisation, `validated` Ready to release, `preliminary` Preliminary, `released` Final, `amendment-pending` Amendment awaiting authorisation, `corrected` Amended, `withdrawn` Withdrawn
+- **ReportVersion.kind** (inline union, also on imaging report versions) [reports]: `preliminary` Preliminary report, `final` Final report, `amended` Amended report
+- **MODALITIES** [imaging]: `ct` CT, `mri` MRI, `xray` X-Ray
+- **IMAGING_STATUSES** [imaging]: `scheduled` Scheduled, `acquired` Awaiting report, `reported` Preliminary, `final` Final, `amended` Amended
+- **LOT_STATES**: `active` Available, `quarantined` Quarantined, `expired` Expired, `depleted` Used up, `disposed` Disposed
+- **STOCK_STATUSES**: `in-stock` In stock, `low-stock` Low stock, `expiring-soon` Expiring soon, `expired` Expired, `quarantined` Quarantined, `out-of-stock` Out of stock
+- **QC_LOT_STATUSES**: `passed` QC passed, `pending` QC pending, `failed` QC failed
+- **EQUIPMENT_STATUSES**: `operational` Online, `standby` Standby, `maintenance` Maintenance, `calibration-due` Calibration due, `out-of-service` Error
+- **QC_RESULTS**: `pass` Passed, `warning` Warning, `fail` Failed
+- **QC_EVENT_STATUSES** [qc]: `open` Open, `investigating` Investigating, `corrective` Corrective action, `repeat-pending` Repeat pending, `resolved` Resolved
+
+### A.4 Tables and forms
+
+Tables (`DataTable` and hand-written `<table>` in `features/`), headers in English in column order; "(wide screens)" = `tabletHidden`, shown from 1536px. No column uses `mobileHidden`.
+
+- **features/admin/audit-log-page.tsx** (Audit Log): Time, Record, Action, Change, Reason (wide screens), Person
+- **features/admin/users-page.tsx** (Users & Roles, staff list): Name, Role, Department, Qualification (wide screens), Actions (visually hidden)
+- **features/admin/users-page.tsx** (Users & Roles, "Who can do what" matrix, hand-written): Action, Phlebotomist, Lab technician, Pathologist, Microbiologist, Lab manager, Front desk (one column per role, one row per permission)
+- **features/analytics/analytics-sections.tsx** (Analytics, "Department volume and turnaround", hand-written): Department, Tests, Average TAT, On time
+- **features/catalog/catalog-page.tsx** (Test Catalog): Test, Department, Specimen, Method (wide screens), TAT, Price, Orders (30 days), Status
+- **features/catalog/test-drawer.tsx** (Test Catalog drawer, reference intervals per parameter, hand-written, no header row): sex, age band, specimen, interval
+- **features/collection/collection-page.tsx** (Collection, "Pending collection" tab): Patient, Order (wide screens), Tests, Specimen, Priority, Waiting, Actions (visually hidden)
+- **features/collection/collection-page.tsx** (Collection, "Collected, awaiting receipt" tab): Accession No., Patient, Tests, Department, Priority, Collected, In transit, Actions (visually hidden)
+- **features/dashboard/sections.tsx** (Dashboard, "Department workload", hand-written): Department, bar column (screen-reader label "Department workload", hidden on phones), Awaiting receipt, In lab, Done
+- **features/departments/department-widgets.tsx** (Department page, "Active specimens"): Specimen, Patient, Tests, Status, Priority, TAT
+- **features/departments/department-widgets.tsx** (Department page, "Tests in this department"): Test, Container, TAT target, Price (wide screens), Ordered today
+- **features/equipment/equipment-drawer.tsx** (Equipment drawer, calibration history, hand-written): Date performed, Certificate, Result, Performed by, Next due
+- **features/equipment/equipment-page.tsx** (Equipment): Equipment, Department, Current status, Utilisation (wide screens), QC today, Maintenance (wide screens), Calibration
+- **features/imaging/modality-page.tsx** (Imaging: CT, MRI, X-Ray): Examination, Patient, Accession No. (wide screens), Priority, Status, Study date, Reported (wide screens), Actions (visually hidden)
+- **features/inventory/consumables-page.tsx** (Consumables, hand-written): Item, On hand, Cover, Location, Nearest expiry, Status, Actions (visually hidden)
+- **features/inventory/inventory-page.tsx** (Inventory Overview): Item, SKU, On hand, Location (wide screens), Nearest expiry, Status
+- **features/inventory/reagents-page.tsx** (Reagents, lots of each reagent, hand-written): Lot, Received, Opened, Expiry date, On hand, Location, QC, Status, Actions (visually hidden)
+- **features/orders/orders-page.tsx** (Orders): Order, Patient, Tests, Ordering doctor (wide screens), Priority, Status, TAT
+- **features/patients/patient-sections.tsx** (Patient page, results table, hand-written): Parameter, Result, Range, Flag, Date
+- **features/patients/patients-page.tsx** (Patients): Patient, Contact, Encounter, Latest order, Flags, Last visit (wide screens)
+- **features/qc/qc-page.tsx** (Quality Control): Date, Analyzer, Test / control lot, Result, Mean, SD, Status, Operator (wide screens)
+- **features/reports/report-page.tsx** (Report page, "Correct report" dialog, hand-written): Parameter, Reported, Corrected value
+- **features/reports/report-sheet.tsx** (printed report, specimen block, hand-written): Accession No., Specimen, Collected, Received
+- **features/reports/report-sheet.tsx** (printed report, results, hand-written): Test, Result, Unit, Reference interval, Flag
+- **features/reports/reports-page.tsx** (Reports): Report, Patient, Department, Flags, Doctor (wide screens), Released, Status
+- **features/results/result-entry-page.tsx** (Enter results, hand-written): Parameter, Result, Unit, Reference interval, Flag, Previous
+- **features/results/worklist-page.tsx** (Worklists): Priority, Accession No., Patient, Tests, Department (wide screens), Specimen, Received (wide screens), Status, Time in queue, Actions (visually hidden)
+- **features/samples/processing-page.tsx** (Reception): Accession No., Patient, Department (wide screens), Tests, Received (wide screens), Priority, Status, TAT, Actions (visually hidden)
+- **features/samples/sample-sections.tsx** (Specimen page, tests, hand-written, header row visually hidden): Test, Result, Reference interval, Flag
+- **features/tat/tat-page.tsx** (TAT Monitoring, "By test"): Test, Target, Average, Median (wide screens), Completed, In progress (wide screens), Delayed, Average vs target, On time
+- **features/validation/validation-page.tsx** (Verification, selected test, hand-written): Parameter, Result, Reference interval, Flag (visually hidden), Previous, Change
+- **features/work-queue/work-queue-page.tsx** (Work Queue): Accession No., Patient, Tests, Collected / received, Status / TAT, Assigned to (wide screens), Actions (visually hidden)
+
+Forms (react-hook-form `useForm` or dialogs built from `Field`), labels in English in order; `*` = required (Field `required` or a zod rule with a required/min message).
+
+- **components/lab/reason-dialog.tsx** (shared reason dialog for hold, cancel, remove test and reject): {reason label}*, Remarks (* when the reason is Other)
+- **components/lab/reject-sample-dialog.tsx** (rejects a specimen, or records "Unable to collect"): Reason*, Remarks (* when Other), Request recollection (switch)
+- **components/lab/rerun-dialog.tsx** (requests a repeat of a test): Why is it being repeated?*, Dilution
+- **features/catalog/range-editor.tsx** (edits a parameter's reference intervals and critical limits): per row Sex, Age from (years), Age to (years), Specimen, Low, High; Reason for change*; Critical low, Critical high
+- **features/catalog/test-drawer.tsx** (activates or deactivates a test): Reason for change*
+- **features/catalog/test-form-dialog.tsx** (creates or edits a catalog test): General: Test name*, Code*, Short name*, Department*, Category, Method, LOINC code, Description; Specimen: Specimen*, Container*, Volume (mL), Minimum volume (mL), Stability (hours), Storage before testing, Fasting required, Special instructions; Processing: TAT, routine (hours)*, TAT, STAT (hours)*, Search keywords; Result configuration: Search parameters, new parameter Parameter name*, Unit, Result type, Decimals; Reference interval: range rows as above; Billing: Price (INR)*, Insurance / TPA price (INR); Reason for change* (editing only)
+- **features/collection/collect-drawer.tsx** (records a specimen collection): Accession No. (read-only), Collection site*, Collection time*, Why is the collection time earlier?* (only when backdated), Collected by (read-only), Remarks
+- **features/critical/critical-page.tsx** (Communicate critical value / Record acknowledgement): Person informed* (not in acknowledgement-only mode), Role, Method, Outcome, Time*, Clinician acknowledged the value on this call (checkbox), The clinician read the value back correctly (checkbox, * when acknowledging), Remarks
+- **features/critical/critical-page.tsx** (Escalate critical value / Close this alert): Escalated to* (escalate only), Reason*
+- **features/equipment/equipment-dialogs.tsx** (Schedule maintenance): Type, Due date*, Work to be done*, Engineer or vendor
+- **features/equipment/equipment-dialogs.tsx** (Complete maintenance): Date performed*, Engineer or vendor, Work performed*, Downtime (minutes), Next due*, Remarks
+- **features/equipment/equipment-dialogs.tsx** (Record calibration): Date performed*, Calibration result (Pass / Fail), Certificate or reference number*, Calibration due* (when passed), Remarks
+- **features/equipment/equipment-dialogs.tsx** (Report breakdown / Record service visit / Add note): Note*
+- **features/equipment/equipment-drawer.tsx** (takes an analyzer offline or brings it back online): Reason*
+- **features/inventory/adjust-dialog.tsx** (Adjust stock): Change (remove / add), Amount ({unit})*, Reason*, Note (* when Other)
+- **features/inventory/lot-dialogs.tsx** (quarantine, release or dispose a lot): Reason* (quarantine) / Verification (release, optional) / Reason and method* (dispose)
+- **features/inventory/receive-consumable-dialog.tsx** (Receive stock): Item*, Quantity ({unit})*, Expiry date, Note
+- **features/inventory/receive-lot-dialog.tsx** (Receive reagent lot): Reagent*, Lot number*, Quantity ({unit})*, Expiry date*, Received on*, Supplier, Storage location*, Lot QC, Note
+- **features/inventory/transfer-dialog.tsx** (Transfer stock): From (read-only), To*, Quantity ({unit})*, Note
+- **features/orders/new-order-page.tsx** (New lab order, 5-step wizard): Patient: Find the patient* (search); Ordering information: Ordering doctor*, Ordering department*, Encounter type*, Ward / unit and Bed (IPD, ICU and Emergency only), Priority*, Clinical notes; Select tests: Common panels, test picker (at least one test*); Specimen requirements and Review have no inputs
+- **features/orders/order-drawer.tsx** (Cancel order / Remove test, via ReasonDialog): Reason for cancelling*, Remarks (* when Other)
+- **features/patients/edit-patient-dialog.tsx** (Edit patient details): Full name*, Mobile*, Email, Blood group, Allergies, City, State
+- **features/patients/register-patient-dialog.tsx** (Register new patient): Full name*, Name in regional script, Sex*, Date of birth*, Mobile number*, Email, Blood group, Allergies, Encounter type*, Ordering department*, City*, State*
+- **features/qc/qc-event-drawer.tsx** (QC failure workflow, one note per step): Issue found* (open) / Action taken* (investigating) / Remarks* (corrective action)
+- **features/qc/record-run-dialog.tsx** (Record QC run / Repeat QC after corrective action): Analyzer, Analyte, Control level, Observed value (unit)
+- **features/reports/report-page.tsx** (Share report): Channel, Send to*
+- **features/reports/report-page.tsx** (Withdraw report): Why is it being withdrawn?*
+- **features/reports/report-page.tsx** (Correct report): Values to correct (Corrected value per parameter, at least one change), Reason*, Comments*
+- **features/results/result-entry-page.tsx** (Enter results): Result per parameter (* for required parameters), Remarks per parameter (via Add remark); Change a submitted result dialog: Reason for the change*
+- **features/samples/sample-actions.tsx** (Put a specimen on hold, via ReasonDialog): Hold reason*, Remarks (* when Other)
+- **features/settings/settings-page.tsx** (laboratory settings): Laboratory name*, Report header*, Report footer*, Address on reports, Registration number, Accreditation, Independent technical review (switch), Hold release until critical values are communicated (switch), Flag specimens in transit after, Critical value notification limit, Approaching TAT at, Critical delay at, Accession No. prefix (2 to 5 letters), Default working department, Default report language
+- **features/settings/settings-page.tsx** (Reset demo data): Type RESET to confirm. (confirm stays disabled until it reads RESET)
+- **features/validation/validation-page.tsx** (Send back / Hold a test): Reason*

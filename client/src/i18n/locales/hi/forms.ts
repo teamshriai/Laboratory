@@ -1,0 +1,25 @@
+export default {
+  required: 'यह फ़ील्ड आवश्यक है',
+  errorSummary_one: 'सेव करने से पहले {count} फ़ील्ड पर ध्यान देना आवश्यक है।',
+  errorSummary_other:
+    'सेव करने से पहले {count} फ़ील्ड पर ध्यान देना आवश्यक है।',
+  goToFirstError: 'पहले वाले पर जाएँ',
+  selectOne: 'एक विकल्प चुनें',
+  tooLong: 'इसे {max} अक्षरों से कम रखें',
+  invalidNumber: 'संख्या दर्ज करें',
+  positive: 'शून्य से अधिक मान दर्ज करें',
+  invalidMobile: '10 अंकों का मोबाइल नंबर दर्ज करें',
+  invalidEmail: 'मान्य ईमेल पता दर्ज करें',
+  futureTime: 'समय भविष्य का नहीं हो सकता',
+  invalidDate: 'मान्य तारीख दर्ज करें',
+  pastDate: 'तारीख भविष्य की होनी चाहिए',
+  futureDate: 'तारीख भविष्य की नहीं हो सकती',
+  invalid: 'यह मान जाँचें',
+  rangeOrder: 'निम्न, उच्च से कम होना चाहिए',
+  ageOrder: '"आयु से", "आयु तक" से कम होनी चाहिए',
+  atLeastOneTest: 'कम से कम एक टेस्ट चुनें',
+  reasonRequired: 'कारण चुनें',
+  remarksRequired: 'कारण "अन्य" होने पर टिप्पणी जोड़ें',
+  timeReasonRequired:
+    'बताएँ कि संग्रह का समय 10 मिनट से अधिक पहले का क्यों है।',
+} as const

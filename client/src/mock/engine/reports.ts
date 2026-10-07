@@ -3,6 +3,7 @@ import { uid } from '@/domain/ids'
 import type {
   CorrectionReason,
   PendingAmendment,
+  Report,
   ReportedValue,
   ShareChannel,
 } from '@/domain/types'
@@ -24,6 +25,8 @@ import {
   type EngineCtx,
 } from './core'
 import { syncCriticalAlert } from './results'
+import { issueVerification, revokeLinksFor } from './share'
+import { sendMessage } from './messaging'
 
 const reportLink = (id: string) => `/reports/${id}`
 
@@ -47,6 +50,39 @@ function ensureCriticalsCommunicated(db: LabDb, reportId: string) {
 function ensureNotWithdrawn(report: { withdrawn?: unknown; reportNo: string }) {
   if (report.withdrawn)
     throw new LabApiError('report-withdrawn', { report: report.reportNo })
+}
+
+/**
+ * Seals the version just issued: the SHA-256 of its content (printed on the
+ * report) and a verification page behind a random token (its QR code).
+ */
+function sealLatestVersion(db: LabDb, report: Report) {
+  const latest = report.versions.at(-1)!
+  const patient = db.patients[report.patientId]
+  const verification = issueVerification(db, {
+    kind: 'laboratory',
+    targetId: report.id,
+    reportNo: report.reportNo,
+    version: latest.version,
+    issuedAt: latest.releasedAt,
+    content: {
+      reportNo: report.reportNo,
+      version: latest.version,
+      kind: latest.kind ?? 'final',
+      releasedAt: latest.releasedAt,
+      patient: patient
+        ? { uhid: patient.uhid, name: patient.name, dob: patient.dob }
+        : null,
+      values: (latest.snapshot ?? []).map((v) => [
+        v.analyteName,
+        v.value,
+        v.unit,
+        v.flag ?? '',
+      ]),
+    },
+  })
+  latest.digest = verification.digest
+  latest.verifyToken = verification.token
 }
 
 /** The released values of a report, for a version snapshot. */
@@ -109,6 +145,7 @@ export function releaseReport(
     releasedBy: ctx.by,
     snapshot: snapshotOf(db, reportId),
   })
+  sealLatestVersion(db, report)
   const patient = db.patients[report.patientId]
   const params = { report: report.reportNo, patient: patient?.name ?? '' }
   audit(db, ctx, 'report', report.id, 'released', {
@@ -241,6 +278,9 @@ export function authoriseCorrection(
     requestedAt: pending.requestedAt,
     snapshot: snapshotOf(db, reportId),
   })
+  sealLatestVersion(db, report)
+  // Links to the version that was wrong stop working.
+  revokeLinksFor(db, { kind: 'laboratory', id: report.id }, 'amended', ctx)
   delete report.pendingAmendment
   if (report.shareLog.length > 0) report.renotifyPending = true
   const patient = db.patients[report.patientId]
@@ -312,6 +352,27 @@ export function shareReport(
     version: report.versions.at(-1)!.version,
   })
   report.renotifyPending = false
+  // To the patient's phone or email: through the outbox (not sent without
+  // a gateway, and never to a channel the patient opted out of).
+  if (input.channel !== 'doctor') {
+    const patient = db.patients[report.patientId]
+    sendMessage(
+      db,
+      {
+        event: 'report-ready',
+        channel: input.channel,
+        to: recipient,
+        patientId: report.patientId,
+        relatedId: report.id,
+        params: {
+          name: patient?.name ?? '',
+          report: report.reportNo,
+          lab: db.settings.labName,
+        },
+      },
+      ctx,
+    )
+  }
   audit(db, ctx, 'report', report.id, 'sent', {
     detail: {
       report: report.reportNo,
@@ -334,6 +395,9 @@ export function recordPrint(db: LabDb, reportId: string, ctx: EngineCtx) {
   const report = must(db.reports, reportId, 'report')
   report.printCount += 1
   report.lastPrintedAt = ctx.now
+  audit(db, ctx, 'report', report.id, 'printed', {
+    detail: { copy: report.printCount },
+  })
   return report
 }
 
@@ -381,6 +445,7 @@ export function withdrawReport(
   if (!text) throw new LabApiError('reason-required')
   const from = deriveReportStatus(report, itemsOfReport(db, reportId))
   report.withdrawn = { at: ctx.now, by: ctx.by, reason: text }
+  revokeLinksFor(db, { kind: 'laboratory', id: report.id }, 'withdrawn', ctx)
   if (report.shareLog.length > 0) report.renotifyPending = true
   audit(db, ctx, 'report', report.id, 'withdrawn', {
     reason: text,
@@ -398,29 +463,4 @@ export function withdrawReport(
     reportLink(report.id),
   )
   return report
-}
-
-/**
- * Creates (or refreshes) the share link for a released report. Demo only:
- * the link carries the report number and opens in this browser; real access
- * control and expiry belong to the backend.
- */
-export function createReportLink(db: LabDb, reportId: string, ctx: EngineCtx) {
-  requirePermission(db, ctx, 'report.share')
-  const report = must(db.reports, reportId, 'report')
-  ensureNotWithdrawn(report)
-  if (!isReportReleased(report)) throw new LabApiError('report-not-released')
-  const version = report.versions.at(-1)!.version
-  db.reportLinks[report.reportNo] = {
-    reportNo: report.reportNo,
-    kind: 'laboratory',
-    targetId: report.id,
-    createdAt: ctx.now,
-    createdBy: ctx.by,
-    version,
-  }
-  audit(db, ctx, 'report', report.id, 'link-created', {
-    detail: { report: report.reportNo, version },
-  })
-  return db.reportLinks[report.reportNo]!
 }

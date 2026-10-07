@@ -127,4 +127,15 @@ export default {
   linkRejected: 'നിരസിച്ച സാമ്പിളുകൾ തുറക്കുക',
   linkDelayed: 'സമയം കഴിഞ്ഞ ജോലി തുറക്കുക',
   linkImaging: 'ഡയഗ്നോസ്റ്റിക് ഇമേജിംഗ് തുറക്കുക',
+  // Where an answer came from ("Show query")
+  showQuery: 'ക്വറി കാണിക്കുക',
+  'query.readModel': 'റീഡ് മോഡൽ: {model}',
+  'readModel.today': 'ഇന്നത്തെ ജോലി',
+  'query.at': '{time} ന് വായിച്ചത്',
+  'query.rules': 'നിയമങ്ങൾ: {rules}',
+  'query.intent': 'പൊരുത്തപ്പെട്ട പരിശോധന: {question}',
+  queryNote:
+    'ലാബിന്റെ സ്വന്തം ഡാറ്റയിൽ നിന്നുള്ള നിയമാധിഷ്ഠിത ഉത്തരം; വൈദ്യോപദേശമല്ല.',
+  offReply:
+    'ലാബ് അസിസ്റ്റന്റ് ക്രമീകരണങ്ങളിൽ ഓഫാണ്, അതിനാൽ ഉത്തരം നൽകാനാവില്ല.',
 } as const

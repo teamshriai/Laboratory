@@ -20,7 +20,9 @@ function saveWork(db: unknown) {
   )
 }
 
-describe('persisted store', () => {
+// These seed the full demo day more than once; under a parallel test run
+// that takes longer than the default 5 s.
+describe('persisted store', { timeout: 30_000 }, () => {
   beforeEach(() => localStorage.clear())
   afterEach(() => localStorage.clear())
 

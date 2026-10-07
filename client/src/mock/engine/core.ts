@@ -1,6 +1,7 @@
 // Shared plumbing for the in-browser "backend": the execution context, typed
 // errors, lookups and the activity / notification feeds.
 
+import { ApiError as LabApiError } from '@/domain/errors'
 import { uid } from '@/domain/ids'
 import { hasPermission, rolesWith, type Permission } from '@/domain/permissions'
 import { ageInYears } from '@/domain/time'
@@ -26,71 +27,11 @@ export interface EngineCtx {
   by: string
 }
 
-/** Error codes map to `errors.<code>` in the i18n catalog. */
-export const ERROR_CODES = [
-  'not-found',
-  'invalid-transition',
-  'validation-failed',
-  'order-empty',
-  'test-inactive',
-  'duplicate-test',
-  'order-has-validated-results',
-  'item-already-validated',
-  'sample-not-collected',
-  'sample-already-received',
-  'sample-not-in-lab',
-  'results-incomplete',
-  'not-authorized-validator',
-  'report-not-validated',
-  'report-not-released',
-  'critical-unacknowledged',
-  'equipment-unavailable',
-  'duplicate-code',
-  'insufficient-stock',
-  'simulated-failure',
-  'storage-full',
-  'not-authorized-reviewer',
-  'not-authorized-releaser',
-  'self-review-not-allowed',
-  'not-reviewed',
-  'sample-on-hold',
-  'reason-required',
-  'readback-required',
-  'analyzer-offline',
-  'qc-hold',
-  'lot-not-usable',
-  'order-closed',
-  'amendment-pending',
-  'no-amendment-pending',
-  'not-permitted',
-  'outside-discipline',
-  'possible-duplicate',
-  'implausible-value',
-  'not-numeric',
-  'order-in-lab',
-  'test-resulted',
-  'not-yet-collected',
-  'nothing-authorised',
-  'report-withdrawn',
-  'collection-in-future',
-  'collection-before-order',
-  'collection-time-reason',
-  'received-before-collected',
-  'recipient-full-name',
-] as const
-export type ErrorCode = (typeof ERROR_CODES)[number]
-
-export class LabApiError extends Error {
-  code: ErrorCode
-  params: Record<string, string | number>
-
-  constructor(code: ErrorCode, params: Record<string, string | number> = {}) {
-    super(code)
-    this.name = 'LabApiError'
-    this.code = code
-    this.params = params
-  }
-}
+export {
+  ApiError as LabApiError,
+  ERROR_CODES,
+  type ErrorCode,
+} from '@/domain/errors'
 
 export function must<T>(
   table: Table<T>,

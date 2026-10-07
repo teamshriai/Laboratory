@@ -63,6 +63,7 @@ import {
   staffName,
 } from './views'
 import { equipmentRows, inventorySnapshot, qcRows } from './operations'
+import { hasPermission } from '@/domain/permissions'
 
 const PRIORITY_RANK: Record<Priority, number> = {
   stat: 0,
@@ -176,7 +177,8 @@ export function todayStat(db: LabDb, index: DbIndex, now: number): DailyStat {
 
 export const dashboardApi = {
   get: () =>
-    read((db, { index, now }): DashboardView => {
+    read((db, { index, now, actor }): DashboardView => {
+      const seesRevenue = hasPermission(db.staff[actor], 'revenue.view')
       const today = startOfIstDay(now)
       const hourNow = istHour(now)
       const share = dayShareUntilHour(hourNow, (now % HOUR) / HOUR)
@@ -350,7 +352,7 @@ export const dashboardApi = {
           delayedPct: history.map((d) => d.delayedPct),
           rejected: history.map((d) => d.rejected),
           completed: history.map((d) => d.completed),
-          revenue: history.map((d) => d.revenue),
+          revenue: seesRevenue ? history.map((d) => d.revenue) : [],
         },
         tatByDepartment: DEPARTMENTS.map((d) =>
           departmentSummary(db, index, d, now),
@@ -366,10 +368,14 @@ export const dashboardApi = {
               ],
         ),
         encounterMix: todaySoFar.byEncounter,
-        revenue: {
-          today: todaySoFar.revenue,
-          yesterday: atThisTime(y?.revenue),
-        },
+        ...(seesRevenue
+          ? {
+              revenue: {
+                today: todaySoFar.revenue,
+                yesterday: atThisTime(y?.revenue),
+              },
+            }
+          : {}),
         workload,
         pipeline,
         criticals: open
@@ -591,9 +597,11 @@ function exactRecord(db: LabDb, term: string): SearchExact | null {
       label: order.orderNo!,
       patientName: db.patients[order.patientId]?.name ?? '',
     }
-  const patient = Object.values(db.patients).find(
+  const found = Object.values(db.patients).find(
     (p) => p.uhid.toUpperCase() === id,
   )
+  // A merged duplicate's UHID leads to the record that stayed.
+  const patient = found?.mergedInto ? db.patients[found.mergedInto] : found
   if (patient)
     return {
       kind: 'patient',
@@ -635,7 +643,9 @@ export const searchApi = {
         }
       const lower = term.toLowerCase()
       const patients = Object.values(db.patients)
-        .filter((p) => matchesQuery(term, patientSearchFields(p)))
+        .filter(
+          (p) => !p.mergedInto && matchesQuery(term, patientSearchFields(p)),
+        )
         .slice(0, 6)
         .map(patientSummary)
       const orders = Object.values(db.orders)

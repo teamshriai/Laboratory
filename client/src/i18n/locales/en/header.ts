@@ -22,4 +22,7 @@ export default {
   demoNotice:
     'Demo system: data is stored only in this browser and is not for clinical use.',
   demoNoticeMore: 'What this means',
+  offline:
+    'You are offline. Nothing can be saved or refreshed until the connection returns.',
+  backOnline: 'Back online. The latest data is loading.',
 } as const

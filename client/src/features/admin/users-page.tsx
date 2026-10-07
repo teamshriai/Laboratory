@@ -1,6 +1,7 @@
 import { CheckIcon, MinusIcon, ShieldIcon, UsersIcon } from 'lucide-react'
 import { PageHeader } from '@/app/layout/page-header'
 import { usePreferences } from '@/app/preferences/context'
+import { demo } from '@/services/lab-api'
 import { PERMISSIONS, ROLE_PERMISSIONS } from '@/domain/permissions'
 import { STAFF_ROLES, type Staff } from '@/domain/types'
 import { useEnum, useT } from '@/i18n/context'
@@ -11,6 +12,7 @@ import { Card, CardHeader } from '@/components/ui/card'
 import { DataTable, type Column } from '@/components/ui/data-table'
 import { EmptyState } from '@/components/ui/states'
 import { focusWhenScrollable } from '@/lib/scroll-focus'
+import { SignatoryRegistry } from './signatory-registry'
 
 export function Component() {
   const t = useT('admin')
@@ -56,18 +58,23 @@ export function Component() {
         <span className="text-meta text-fg-muted">{s.qualification ?? ''}</span>
       ),
     },
-    {
-      id: 'actions',
-      header: <span className="sr-only">{tc('actions')}</span>,
-      cell: (s) =>
-        s.id === actorId ? (
-          <Badge tone="accent">{t('actingNow')}</Badge>
-        ) : (
-          <Button size="xs" onClick={() => setActorId(s.id)}>
-            {t('actAs')}
-          </Button>
-        ),
-    },
+    // "Act as" is the demo's stand-in for signing in.
+    ...(demo.enabled
+      ? ([
+          {
+            id: 'actions',
+            header: <span className="sr-only">{tc('actions')}</span>,
+            cell: (s) =>
+              s.id === actorId ? (
+                <Badge tone="accent">{t('actingNow')}</Badge>
+              ) : (
+                <Button size="xs" onClick={() => setActorId(s.id)}>
+                  {t('actAs')}
+                </Button>
+              ),
+          },
+        ] satisfies Column<Staff>[])
+      : []),
   ]
 
   return (
@@ -102,6 +109,7 @@ export function Component() {
             empty={<EmptyState icon={<UsersIcon />} title={t('staff')} />}
           />
         </Card>
+        <SignatoryRegistry />
         <Card>
           <CardHeader title={t('matrixTitle')} description={t('matrixHint')} />
           <div ref={focusWhenScrollable} className="focus-ring overflow-x-auto">

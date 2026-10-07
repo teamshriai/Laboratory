@@ -27,6 +27,14 @@ import {
   WorkloadChart,
 } from './analytics-sections'
 
+const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/
+
+/** A real calendar day as YYYY-MM-DD (2026-00-10 or 2026-02-30 is not). */
+const isDayKey = (day: string) => {
+  const ms = dayMs(day)
+  return DAY_KEY.test(day) && Number.isFinite(ms) && istDay(ms) === day
+}
+
 const PRESETS: RangePreset[] = ['today', 'yesterday', '7d', '30d', 'custom']
 
 type Totals = AnalyticsReport['totals']
@@ -85,12 +93,17 @@ function Metrics({ report }: { report: AnalyticsReport }) {
       label: t('criticals'),
       value: f.number(c.criticals),
     },
-    {
-      key: 'v',
-      label: t('revenue'),
-      value: f.compactCurrency(c.revenue),
-      change: <Change current={c.revenue} previous={p.revenue} />,
-    },
+    // Revenue only reaches roles allowed to see it (the server sends null).
+    ...(c.revenue === null
+      ? []
+      : [
+          {
+            key: 'v',
+            label: t('revenue'),
+            value: f.compactCurrency(c.revenue),
+            change: <Change current={c.revenue} previous={p.revenue} />,
+          },
+        ]),
   ]
   return <MetricStrip className="mb-5" items={items} />
 }
@@ -106,8 +119,15 @@ export function Component() {
       : '7d'
   ) as RangePreset
   const today = istDay(now)
-  const from = params.get('from') ?? istDay(now - 13 * DAY)
-  const to = params.get('to') ?? today
+  // A hand-edited or broken bound falls back to its default.
+  const dayParam = (key: string, fallback: string) => {
+    const value = params.get(key)
+    return value !== null && isDayKey(value) && value <= today
+      ? value
+      : fallback
+  }
+  const from = dayParam('from', istDay(now - 13 * DAY))
+  const to = dayParam('to', today)
   const range: AnalyticsRange =
     preset === 'custom' ? { preset, from, to } : { preset }
   const { data, isPending, isError, refetch, isPlaceholderData } =

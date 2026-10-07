@@ -125,4 +125,13 @@ export default {
   linkRejected: 'अस्वीकृत नमूने खोलें',
   linkDelayed: 'विलंबित काम खोलें',
   linkImaging: 'डायग्नोस्टिक इमेजिंग खोलें',
+  // उत्तर कहाँ से आया ("क्वेरी दिखाएँ")
+  showQuery: 'क्वेरी दिखाएँ',
+  'query.readModel': 'रीड मॉडल: {model}',
+  'readModel.today': 'आज का काम',
+  'query.at': '{time} पर पढ़ा गया',
+  'query.rules': 'नियम: {rules}',
+  'query.intent': 'मिलान हुई जाँच: {question}',
+  queryNote: 'लैब के अपने डेटा से नियम-आधारित उत्तर; चिकित्सा सलाह नहीं।',
+  offReply: 'लैब सहायक सेटिंग्स में बंद है, इसलिए यह उत्तर नहीं दे सकता।',
 } as const

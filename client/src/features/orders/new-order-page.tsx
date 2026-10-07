@@ -182,13 +182,15 @@ function PatientStep({
   const [query, setQuery] = useState('')
   const q = useDeferredValue(query)
   const enabled = q.trim().length >= 2
-  const { data, isFetching } = usePatients(enabled ? { q } : { q: '__none__' })
+  const { data, isFetching } = usePatients(
+    enabled ? { q, pageSize: 20 } : { q: '__none__', pageSize: 1 },
+  )
   const [changing, setChanging] = useState(!value)
   if (value && !changing)
     return (
       <SelectedPatient patientId={value} onChange={() => setChanging(true)} />
     )
-  const results: PatientRow[] = enabled ? (data ?? []) : []
+  const results: PatientRow[] = enabled ? (data?.rows ?? []) : []
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -624,12 +626,17 @@ export function Component() {
                           placeholder={t('doctorPlaceholder')}
                           searchPlaceholder={t('searchDoctors')}
                           emptyText={t('noDoctors')}
-                          options={(reference?.doctors ?? []).map((d) => ({
-                            value: d.id,
-                            label: d.name,
-                            description: e('clinicalDepartment', d.department),
-                            group: e('clinicalDepartment', d.department),
-                          }))}
+                          options={(reference?.doctors ?? [])
+                            .filter((d) => d.active !== false)
+                            .map((d) => ({
+                              value: d.id,
+                              label: d.name,
+                              description: e(
+                                'clinicalDepartment',
+                                d.department,
+                              ),
+                              group: e('clinicalDepartment', d.department),
+                            }))}
                         />
                       )}
                     />
@@ -794,7 +801,7 @@ export function Component() {
                   tests={catalog ?? []}
                   selected={testIds}
                   onToggle={toggleTest}
-                  maxHeight="calc(100dvh - 30rem)"
+                  maxHeight="max(16rem, calc(100dvh - 30rem))"
                 />
                 {err('testIds') ? (
                   <p className="text-xs font-medium text-danger-text">
@@ -970,7 +977,7 @@ export function Component() {
           </div>
         </Card>
 
-        <aside className="xl:sticky xl:top-24 xl:self-start">
+        <aside className="xl:sticky xl:top-[calc(var(--header-h,4rem)+2rem)] xl:self-start">
           <Card>
             <CardHeader
               title={t('selectedTests')}

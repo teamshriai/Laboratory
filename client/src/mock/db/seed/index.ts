@@ -79,8 +79,13 @@ import {
 } from './stats'
 import { antibiogramFor, generateItemValues } from './values'
 
-import { enrichDatabase } from './enrich'
+import { applyCatalogPolicies, enrichDatabase } from './enrich'
 import { seedImaging } from './imaging'
+import { seedBilling } from './billing'
+import { seedNetwork } from './network'
+import { seedQuality } from './quality'
+import { issueVerification } from '../../engine/share'
+import { recordConsent, testsMissingConsent } from '../../engine/consent'
 const SEED = 20260928
 
 const PHLEBOTOMISTS = ['st_kavya', 'st_ravi', 'st_sumathi', 'st_joseph']
@@ -621,10 +626,36 @@ function scheduleFlow(db: LabDb, sched: Scheduler, plan: FlowPlan, rng: Rng) {
         // One phlebotomist labels and draws the specimen.
         const collector = rng.pick(PHLEBOTOMISTS)
         printLabel(db, sample().id, ctxAt(times.collect, collector))
+        // Tests that need consent (HIV, invasive) have it on record first.
+        const needConsent = testsMissingConsent(
+          db,
+          itemsOfSample(db, sample().id).filter(isItemLive),
+        )
+        if (needConsent.length)
+          recordConsent(
+            db,
+            sample().patientId,
+            {
+              purpose: 'test-procedure',
+              status: 'granted',
+              method: 'written',
+              language: 'en',
+              at: times.collect - 5 * MINUTE,
+              orderItemIds: needConsent.map((i) => i.id),
+            },
+            ctxAt(times.collect - 5 * MINUTE, collector),
+          )
         collectSample(
           db,
           sample().id,
-          { collectedAt: times.collect, site: siteFor(req.container, rng) },
+          {
+            collectedAt: times.collect,
+            site: siteFor(req.container, rng),
+            identity: rng.pick(['name-dob', 'name-uhid', 'wristband'] as const),
+            fasting: req.testIds.some((id) => db.tests[id]?.fasting)
+              ? 'fasting'
+              : 'unknown',
+          },
           ctxAt(times.collect, collector),
         )
       })
@@ -1033,6 +1064,7 @@ export function seedDatabase(
   for (const t of TESTS) db.tests[t.id] = structuredClone(t)
   for (const a of ANALYTES) db.analytes[a.id] = structuredClone(a)
   for (const r of REFERENCE_RANGES) db.ranges[r.id] = { ...r }
+  applyCatalogPolicies(db)
   for (const s of STAFF) db.staff[s.id] = { ...s }
   for (const d of DOCTORS) db.doctors[d.id] = { ...d }
   for (const e of seedEquipment(now)) db.equipment[e.id] = e
@@ -1050,8 +1082,30 @@ export function seedDatabase(
   const generated = generatePatients(70 * scale, rng)
   for (const p of [...NAMED_PATIENTS, ...SCENARIO_PATIENTS, ...generated])
     db.patients[p.id] = toPatient(p, now, rng)
-  for (const study of seedImaging(now, (name) => named[name]?.id))
+  for (const study of seedImaging(now, (name) => named[name]?.id)) {
     db.imaging[study.id] = study
+    // Each issued imaging version gets its digest and verification page,
+    // as a release does for laboratory reports.
+    for (const v of study.versions) {
+      const seal = issueVerification(db, {
+        kind: 'imaging',
+        targetId: study.id,
+        reportNo: study.reportNo ?? study.accessionNo,
+        version: v.version,
+        issuedAt: v.releasedAt,
+        content: {
+          reportNo: study.reportNo,
+          version: v.version,
+          kind: v.kind,
+          releasedAt: v.releasedAt,
+          findings: v.findings,
+          impression: v.impression,
+        },
+      })
+      v.digest = seal.digest
+      v.verifyToken = seal.token
+    }
+  }
 
   const sched = new Scheduler()
   const flow = (plan: FlowPlan) => scheduleFlow(db, sched, plan, rng)
@@ -1831,6 +1885,9 @@ export function seedDatabase(
     })
 
   sched.run(now)
+  seedBilling(db, now, rng)
+  seedNetwork(db, now)
+  seedQuality(db, now, rng)
   enrichDatabase(db, now, rng)
 
   const todayKey = istDay(now)

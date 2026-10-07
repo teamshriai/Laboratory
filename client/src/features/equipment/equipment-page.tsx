@@ -1,8 +1,7 @@
 import { WrenchIcon } from 'lucide-react'
 import { PageHeader } from '@/app/layout/page-header'
 import { useDeferredValue, useState } from 'react'
-import { useSearchParams } from 'react-router'
-import { useUrlFilters } from '@/hooks/use-search-param'
+import { useOverlayParam, useUrlFilters } from '@/hooks/use-search-param'
 import { FilterBar } from '@/components/lab/filter-bar'
 import { Select } from '@/components/ui/select'
 import { DAY } from '@/domain/time'
@@ -39,7 +38,6 @@ export function Component() {
   const e = useEnum()
   const f = useFormat()
   const now = useNow()
-  const [params, setParams] = useSearchParams()
   const [query, setQuery] = useState('')
   const q = useDeferredValue(query)
   const filters = useUrlFilters(
@@ -63,14 +61,7 @@ export function Component() {
     department === 'all'
       ? statusRows
       : statusRows?.filter((r) => r.department === department)
-  const openId = params.get('equipment')
-  const setOpen = (id: string | null) =>
-    setParams((prev) => {
-      const next = new URLSearchParams(prev)
-      if (id) next.set('equipment', id)
-      else next.delete('equipment')
-      return next
-    })
+  const [openId, setOpen, closeOpen] = useOverlayParam('equipment')
 
   if (isError) return <ErrorState onRetry={() => void refetch()} />
   const rows = all.data ?? []
@@ -303,9 +294,7 @@ export function Component() {
           }
         />
       </Card>
-      {openId ? (
-        <EquipmentDrawer id={openId} onClose={() => setOpen(null)} />
-      ) : null}
+      {openId ? <EquipmentDrawer id={openId} onClose={closeOpen} /> : null}
     </>
   )
 }

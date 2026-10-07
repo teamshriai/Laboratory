@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import { ShieldCheckIcon } from 'lucide-react'
 import { Controller, useForm } from 'react-hook-form'
 import { z } from '@/features/shared/zod'
 import {
@@ -8,6 +9,12 @@ import {
   SEXES,
 } from '@/domain/types'
 import { istDay } from '@/domain/time'
+import {
+  isAbhaAddress,
+  isPinCode,
+  normaliseAbhaNumber,
+  normaliseIndianMobile,
+} from '@/domain/collection'
 import { useNow } from '@/hooks/use-now'
 import { useEnum, useT } from '@/i18n/context'
 import { labApi } from '@/services/lab-api'
@@ -36,12 +43,22 @@ const schema = z.object({
     ),
   mobile: z
     .string()
+    .refine((v) => normaliseIndianMobile(v) !== null, 'errors.invalid-mobile'),
+  pinCode: z
+    .string()
+    .trim()
+    .refine((v) => v === '' || isPinCode(v), 'errors.invalid-pin'),
+  abhaNumber: z
+    .string()
+    .trim()
     .refine(
-      (v) =>
-        /^\d{10}$/.test(v.replace(/\D/g, '').slice(-10)) &&
-        v.replace(/\D/g, '').length >= 10,
-      'forms.invalidMobile',
+      (v) => v === '' || normaliseAbhaNumber(v) !== null,
+      'errors.invalid-abha',
     ),
+  abhaAddress: z
+    .string()
+    .trim()
+    .refine((v) => v === '' || isAbhaAddress(v), 'errors.invalid-abha'),
   email: z.union([z.literal(''), z.email('forms.invalidEmail')]),
   bloodGroup: z.union([z.literal('unknown'), z.enum(BLOOD_GROUPS)]),
   allergies: z.string().max(200, 'forms.tooLong'),
@@ -85,6 +102,9 @@ export function RegisterPatientDialog({
       sex: 'F',
       dob: '',
       mobile: '',
+      pinCode: '',
+      abhaNumber: '',
+      abhaAddress: '',
       email: '',
       bloodGroup: 'unknown',
       allergies: '',
@@ -99,14 +119,13 @@ export function RegisterPatientDialog({
 
   const mutation = useLabMutation(
     (v: FormOut) => {
-      const digits = v.mobile.replace(/\D/g, '').slice(-10)
       const lang = detectLang(v.nameLocal)
       return labApi.patients
         .register({
           name: v.name,
           sex: v.sex,
           dob: v.dob,
-          mobile: `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`,
+          mobile: normaliseIndianMobile(v.mobile) ?? v.mobile,
           allergies: v.allergies
             .split(',')
             .map((a) => a.trim())
@@ -115,6 +134,15 @@ export function RegisterPatientDialog({
           state: v.state,
           encounter: { type: v.encounter, department: v.department },
           ...(v.email ? { email: v.email } : {}),
+          ...(v.pinCode ? { pinCode: v.pinCode } : {}),
+          ...(v.abhaNumber || v.abhaAddress
+            ? {
+                abha: {
+                  ...(v.abhaNumber ? { number: v.abhaNumber } : {}),
+                  ...(v.abhaAddress ? { address: v.abhaAddress } : {}),
+                },
+              }
+            : {}),
           ...(v.bloodGroup !== 'unknown' ? { bloodGroup: v.bloodGroup } : {}),
           ...(v.nameLocal && lang
             ? { nameLocal: { lang, text: v.nameLocal } }
@@ -136,7 +164,7 @@ export function RegisterPatientDialog({
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      dirty={formState.isDirty && !formState.isSubmitSuccessful}
+      dirty={formState.isDirty}
       size="lg"
       title={t('registerTitle')}
       description={t('registerDescription')}
@@ -280,6 +308,56 @@ export function RegisterPatientDialog({
         <Field label={t('state')} required error={err('state')}>
           <Input {...register('state')} />
         </Field>
+        <Field
+          label={t('pinCode')}
+          optionalLabel={tc('optional')}
+          error={err('pinCode')}
+        >
+          <Input
+            {...register('pinCode')}
+            inputMode="numeric"
+            maxLength={6}
+            placeholder="560001"
+            autoComplete="postal-code"
+            className="tabular-nums"
+          />
+        </Field>
+        <div className="hidden sm:block" aria-hidden />
+        <Field
+          label={t('abhaNumber')}
+          optionalLabel={tc('optional')}
+          hint={t('abhaNumberHint')}
+          error={err('abhaNumber')}
+        >
+          <Input
+            {...register('abhaNumber')}
+            inputMode="numeric"
+            placeholder="12-3456-7890-1234"
+            autoComplete="off"
+            className="tabular-nums"
+          />
+        </Field>
+        <Field
+          label={t('abhaAddress')}
+          optionalLabel={tc('optional')}
+          hint={t('abhaAddressHint')}
+          error={err('abhaAddress')}
+        >
+          <Input
+            {...register('abhaAddress')}
+            placeholder="name@abdm"
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
+          />
+        </Field>
+        <p className="flex items-start gap-2 text-xs text-fg-muted sm:col-span-2">
+          <ShieldCheckIcon
+            className="mt-0.5 size-4 shrink-0 text-success-text"
+            aria-hidden
+          />
+          {t('identifierPrivacy')}
+        </p>
       </form>
     </Dialog>
   )

@@ -1,4 +1,5 @@
 import {
+  CalendarClockIcon,
   RefreshCwIcon,
   ClipboardListIcon,
   EllipsisIcon,
@@ -11,11 +12,10 @@ import {
   CircleXIcon,
 } from 'lucide-react'
 import { useDeferredValue, useState } from 'react'
-import { useSearchParams } from 'react-router'
 import { PRIORITIES, type Priority } from '@/domain/types'
 import { usePreferences } from '@/app/preferences/context'
 import { useNow } from '@/hooks/use-now'
-import { useSearchParam } from '@/hooks/use-search-param'
+import { useOverlayParam, useSearchParam } from '@/hooks/use-search-param'
 import { useEnum, useT } from '@/i18n/context'
 import { useFormat } from '@/i18n/format'
 import { labApi, type SampleRow } from '@/services/lab-api'
@@ -60,7 +60,6 @@ export function Component() {
   const f = useFormat()
   const now = useNow()
   const { department } = usePreferences()
-  const [params, setParams] = useSearchParams()
   // Tab and filters live in the URL so a view can be linked and reloaded.
   const [tab, setTab] = useSearchParam<Tab>('tab', 'pending', TABS)
   const [priority, setPriority] = useSearchParam<Priority | 'all'>(
@@ -77,30 +76,33 @@ export function Component() {
   })
   const [labelFor, setLabelFor] = useState<SampleRow | null>(null)
   const [rejecting, setRejecting] = useState<SampleRow | null>(null)
-  const collectId = params.get('collect')
-
-  const setCollect = (id: string | null) => {
-    const next = new URLSearchParams(params)
-    if (id) next.set('collect', id)
-    else next.delete('collect')
-    setParams(next, { replace: !id })
-  }
-  const openOrder = (orderId: string) => {
-    const next = new URLSearchParams(params)
-    next.set('order', orderId)
-    setParams(next)
-  }
+  const [collectId, openCollect, closeCollect] = useOverlayParam('collect')
+  const [, openOrder] = useOverlayParam('order')
+  const [, openSample] = useOverlayParam('sample')
 
   const receive = useLabMutation((ref: string) => labApi.samples.receive(ref), {
     success: (r) => t('received', { accession: r.accessionNo ?? '' }),
   })
 
-  const pending = data?.pending
+  // A deferred collection (post-prandial, timed) is not due yet: it sinks
+  // below the tubes to draw now, soonest first.
+  const notDue = (r: SampleRow) =>
+    r.scheduledFor !== undefined && r.scheduledFor > now
+  const pending = data?.pending.toSorted((a, b) => {
+    const da = notDue(a)
+    const db = notDue(b)
+    if (da && db) return (a.scheduledFor ?? 0) - (b.scheduledFor ?? 0)
+    return Number(da) - Number(db)
+  })
   const collected = data?.collected
-  const stat = pending?.filter((s) => s.priority === 'stat').length ?? 0
-  const longest = pending?.length
-    ? Math.max(...pending.map((s) => now - s.createdAt))
+  const due = pending?.filter((s) => !notDue(s)) ?? []
+  const scheduled = (pending?.length ?? 0) - due.length
+  const stat = due.filter((s) => s.priority === 'stat').length
+  const longest = due.length
+    ? Math.max(...due.map((s) => now - s.createdAt))
     : 0
+  const dueTime = (at: number) =>
+    at - now > 12 * 3_600_000 ? f.dateTime(at) : f.time(at)
   const recollections = pending?.filter((s) => s.isRecollection).length ?? 0
 
   const pendingColumns: Column<SampleRow>[] = [
@@ -187,18 +189,35 @@ export function Component() {
       id: 'waiting',
       header: t('colWaiting'),
       sortValue: (r) => r.createdAt,
-      cell: (r) => (
-        <div>
-          <Waiting
-            since={r.createdAt}
-            warnAfterMin={r.priority === 'stat' ? 5 : 30}
-            dangerAfterMin={r.priority === 'stat' ? 10 : 60}
-          />
-          <p className="mt-0.5 text-xs text-fg-subtle">
-            {f.time(r.orderedAt ?? r.createdAt)}
-          </p>
-        </div>
-      ),
+      cell: (r) =>
+        notDue(r) && r.scheduledFor !== undefined ? (
+          <div className="grid max-w-48 justify-items-start gap-1">
+            <Badge tone="info" size="sm" title={r.scheduleReason}>
+              <CalendarClockIcon aria-hidden />
+              <span className="sr-only">{t('notYetDue')}: </span>
+              {t('dueAt', { time: dueTime(r.scheduledFor) })}
+            </Badge>
+            {r.scheduleReason ? (
+              <p
+                className="max-w-full truncate text-xs text-fg-muted"
+                title={r.scheduleReason}
+              >
+                {r.scheduleReason}
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <div>
+            <Waiting
+              since={r.createdAt}
+              warnAfterMin={r.priority === 'stat' ? 5 : 30}
+              dangerAfterMin={r.priority === 'stat' ? 10 : 60}
+            />
+            <p className="mt-0.5 text-xs text-fg-subtle">
+              {f.time(r.orderedAt ?? r.createdAt)}
+            </p>
+          </div>
+        ),
     },
     {
       id: 'actions',
@@ -209,7 +228,7 @@ export function Component() {
           className="flex items-center justify-end gap-1"
           onClick={(ev) => ev.stopPropagation()}
         >
-          <Button size="xs" variant="primary" onClick={() => setCollect(r.id)}>
+          <Button size="xs" variant="primary" onClick={() => openCollect(r.id)}>
             <SyringeIcon />
             {t('collectShort')}
           </Button>
@@ -254,7 +273,7 @@ export function Component() {
       header: t('colSample'),
       sortValue: (r) => r.accessionNo ?? '',
       cell: (r) => (
-        <div className="grid gap-1">
+        <div className="grid justify-items-start gap-1">
           <RecordLink
             kind="specimen"
             id={r.id}
@@ -348,14 +367,7 @@ export function Component() {
               <MenuItem icon={<PrinterIcon />} onSelect={() => setLabelFor(r)}>
                 {t('printLabel')}
               </MenuItem>
-              <MenuItem
-                icon={<EyeIcon />}
-                onSelect={() => {
-                  const next = new URLSearchParams(params)
-                  next.set('sample', r.id)
-                  setParams(next)
-                }}
-              >
+              <MenuItem icon={<EyeIcon />} onSelect={() => openSample(r.id)}>
                 {tc('viewSample')}
               </MenuItem>
               <MenuSeparator />
@@ -383,6 +395,11 @@ export function Component() {
               {stat ? (
                 <span className="font-medium text-danger-text">
                   {t('kpiStat')}: {stat}
+                </span>
+              ) : null}
+              {scheduled ? (
+                <span>
+                  {t('kpiScheduled')}: {scheduled}
                 </span>
               ) : null}
               {recollections ? (
@@ -444,7 +461,7 @@ export function Component() {
               rows={pending}
               getRowId={(r) => r.id}
               rowLabel={(r) => r.patient.name}
-              onRowClick={(r) => setCollect(r.id)}
+              onRowClick={(r) => openCollect(r.id)}
               activeRowId={collectId}
               isLoading={isPending}
               isError={isError}
@@ -481,7 +498,7 @@ export function Component() {
       </Card>
 
       {collectId ? (
-        <CollectDrawer sampleId={collectId} onClose={() => setCollect(null)} />
+        <CollectDrawer sampleId={collectId} onClose={closeCollect} />
       ) : null}
       {labelFor ? (
         <LabelPrintDialog

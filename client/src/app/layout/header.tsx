@@ -11,6 +11,9 @@ import {
   LayoutGridIcon,
   SunIcon,
   LanguagesIcon,
+  SunMoonIcon,
+  LogOutIcon,
+  WifiOffIcon,
   XIcon,
 } from 'lucide-react'
 import { Fragment, useEffect, useRef } from 'react'
@@ -19,6 +22,9 @@ import { DEPARTMENTS, LANGUAGES, type StaffRole } from '@/domain/types'
 import { useEnum, useLanguage, useT } from '@/i18n/context'
 import { LANGUAGE_NAMES, type TKey } from '@/i18n/core'
 import { INDOSTATES } from '@/lib/brand'
+import { env } from '@/lib/env'
+import { demo } from '@/services/lab-api'
+import { useOnline } from '@/hooks/use-online'
 import { cn } from '@/lib/cn'
 import { IndostatesLogo } from '@/components/ui/logo'
 import { useReference } from '@/services/queries'
@@ -33,6 +39,9 @@ import {
   MenuRadioGroup,
   MenuRadioItem,
   MenuSeparator,
+  MenuSub,
+  MenuSubContent,
+  MenuSubTrigger,
   MenuTrigger,
 } from '@/components/ui/menu'
 import { useTheme } from '../theme/context'
@@ -155,10 +164,12 @@ function LanguageMenu() {
         <MenuTrigger asChild>
           <button
             type="button"
-            aria-label={t('language')}
             className="focus-ring inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-fg-muted hover:bg-surface-2 hover:text-fg"
           >
-            <LanguagesIcon className="size-[18px]" />
+            <LanguagesIcon aria-hidden className="size-[18px]" />
+            {/* The name is "Language" plus the visible language name, so
+                what is read includes what is shown (WCAG 2.5.3). */}
+            <span className="sr-only">{t('language')}: </span>
             <span className="hidden xl:inline" lang={language}>
               {LANGUAGE_NAMES[language]}
             </span>
@@ -248,10 +259,13 @@ const ROLE_ORDER: StaffRole[] = [
   'phlebotomist',
   'lab-manager',
   'receptionist',
+  'owner',
+  'doctor',
 ]
 
 function ProfileMenu() {
   const t = useT('header')
+  const tc = useT('common')
   const e = useEnum()
   const navigate = useNavigate()
   const { actorId, setActorId } = usePreferences()
@@ -265,9 +279,14 @@ function ProfileMenu() {
         <button
           type="button"
           className="focus-ring flex min-h-11 min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-surface-2"
-          aria-label={t('actingAs')}
         >
-          <Avatar name={actor?.name ?? t('staffIdentity')} size="sm" />
+          <span className="sr-only">{t('actingAs')}: </span>
+          <span aria-hidden className="contents">
+            <Avatar name={actor?.name ?? t('staffIdentity')} size="sm" />
+          </span>
+          <span className="sr-only xl:hidden">
+            {actor?.name ?? t('staffIdentity')}
+          </span>
           <span className="hidden leading-tight xl:block">
             <span className="block max-w-40 truncate text-sm font-medium text-fg">
               {actor?.name ?? t('staffIdentity')}
@@ -294,52 +313,76 @@ function ProfileMenu() {
             </p>
           </div>
         </div>
-        <MenuSeparator />
-        <MenuLabel>{t('actingAs')}</MenuLabel>
-        <p className="px-2.5 pb-1.5 text-xs text-fg-muted">
-          {t('actingAsHint')}
-        </p>
-        <div className="max-h-72 scrollbar-thin overflow-y-auto">
-          <MenuRadioGroup value={actorId} onValueChange={setActorId}>
-            {ROLE_ORDER.flatMap((role) =>
-              (data?.staff ?? [])
-                .filter((s) => s.role === role)
-                .map((s) => (
-                  <MenuRadioItem key={s.id} value={s.id}>
-                    <span className="block truncate">{s.name}</span>
-                    <span className="block text-xs text-fg-muted">
-                      {e('staffRole', s.role)}
-                    </span>
-                  </MenuRadioItem>
-                )),
-            )}
-          </MenuRadioGroup>
-        </div>
+        {/* "Acting as" exists only in the demo, which has no login. */}
+        {demo.enabled ? (
+          <>
+            <MenuSeparator />
+            <MenuLabel>{t('actingAs')}</MenuLabel>
+            <p className="px-2.5 pb-1.5 text-xs text-fg-muted">
+              {t('actingAsHint')}
+            </p>
+            <div className="max-h-[min(18rem,40dvh)] scrollbar-thin overflow-y-auto overscroll-contain">
+              <MenuRadioGroup value={actorId} onValueChange={setActorId}>
+                {ROLE_ORDER.flatMap((role) =>
+                  (data?.staff ?? [])
+                    .filter((s) => s.role === role)
+                    .map((s) => (
+                      <MenuRadioItem key={s.id} value={s.id}>
+                        <span className="block truncate">{s.name}</span>
+                        <span className="block text-xs text-fg-muted">
+                          {e('staffRole', s.role)}
+                        </span>
+                      </MenuRadioItem>
+                    )),
+                )}
+              </MenuRadioGroup>
+            </div>
+          </>
+        ) : null}
+        {/* Phones have no room for the header's theme and language
+            buttons; nested menus keep this one short enough to fit. */}
         <div className="sm:hidden">
           <MenuSeparator />
-          <MenuLabel>{t('theme')}</MenuLabel>
-          <MenuRadioGroup
-            value={preference}
-            onValueChange={(v) => setPreference(v as typeof preference)}
-          >
-            {(['light', 'dark', 'system'] as const).map((p) => (
-              <MenuRadioItem key={p} value={p}>
-                {e('theme', p)}
-              </MenuRadioItem>
-            ))}
-          </MenuRadioGroup>
-          <MenuSeparator />
-          <MenuLabel>{t('language')}</MenuLabel>
-          <MenuRadioGroup
-            value={language}
-            onValueChange={(v) => setLanguage(v as typeof language)}
-          >
-            {LANGUAGES.map((l) => (
-              <MenuRadioItem key={l} value={l}>
-                <span lang={l}>{LANGUAGE_NAMES[l]}</span>
-              </MenuRadioItem>
-            ))}
-          </MenuRadioGroup>
+          <MenuSub>
+            <MenuSubTrigger
+              icon={<SunMoonIcon />}
+              hint={e('theme', preference)}
+            >
+              {t('theme')}
+            </MenuSubTrigger>
+            <MenuSubContent>
+              <MenuRadioGroup
+                value={preference}
+                onValueChange={(v) => setPreference(v as typeof preference)}
+              >
+                {(['light', 'dark', 'system'] as const).map((p) => (
+                  <MenuRadioItem key={p} value={p}>
+                    {e('theme', p)}
+                  </MenuRadioItem>
+                ))}
+              </MenuRadioGroup>
+            </MenuSubContent>
+          </MenuSub>
+          <MenuSub>
+            <MenuSubTrigger
+              icon={<LanguagesIcon />}
+              hint={<span lang={language}>{LANGUAGE_NAMES[language]}</span>}
+            >
+              {t('language')}
+            </MenuSubTrigger>
+            <MenuSubContent>
+              <MenuRadioGroup
+                value={language}
+                onValueChange={(v) => setLanguage(v as typeof language)}
+              >
+                {LANGUAGES.map((l) => (
+                  <MenuRadioItem key={l} value={l}>
+                    <span lang={l}>{LANGUAGE_NAMES[l]}</span>
+                  </MenuRadioItem>
+                ))}
+              </MenuRadioGroup>
+            </MenuSubContent>
+          </MenuSub>
         </div>
         <MenuSeparator />
         <MenuItem
@@ -348,8 +391,30 @@ function ProfileMenu() {
         >
           {t('settings')}
         </MenuItem>
+        {demo.enabled ? null : (
+          <MenuItem
+            icon={<LogOutIcon />}
+            onSelect={() => window.location.assign(env.logoutUrl)}
+          >
+            {tc('signOut')}
+          </MenuItem>
+        )}
       </MenuContent>
     </Menu>
+  )
+}
+
+/** Shown while the browser has no connection: nothing can be saved. */
+function OfflineNotice() {
+  const t = useT('header')
+  return (
+    <p
+      role="status"
+      className="flex items-center gap-2 border-t border-line bg-warning-soft px-4 py-1.5 text-xs font-medium text-warning-text md:px-6"
+    >
+      <WifiOffIcon className="size-3.5 shrink-0" aria-hidden />
+      {t('offline')}
+    </p>
   )
 }
 
@@ -389,6 +454,7 @@ export function Header({
   const { department, setDepartment } = usePreferences()
   const e = useEnum()
   const ref = useRef<HTMLElement>(null)
+  const online = useOnline()
   // Sticky content below the header (patient banners) sits under it; the
   // header's height changes with the notice strips, so it is published.
   useEffect(() => {
@@ -475,7 +541,8 @@ export function Header({
           </button>
         </div>
       ) : null}
-      <DemoNotice />
+      {online ? null : <OfflineNotice />}
+      {demo.enabled ? <DemoNotice /> : null}
     </header>
   )
 }

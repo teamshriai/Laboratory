@@ -123,4 +123,10 @@ export default {
   activeFilters: 'Active filters',
   removeFilter: 'Remove filter: {filter}',
   exportCsv: 'Export CSV',
+  sessionEndedTitle: 'Your session has ended',
+  sessionEndedBody:
+    'Sign in again to continue. Unsaved changes on this page may be lost.',
+  signIn: 'Sign in',
+  signOut: 'Sign out',
+  sessionChecking: 'Checking your session',
 } as const

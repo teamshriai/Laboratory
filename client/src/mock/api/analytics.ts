@@ -23,6 +23,16 @@ import { todayStat } from './overview'
 import { read } from './runtime'
 import { dayShareUntilHour } from '../db/seed/stats'
 import type { AnalyticsRange, AnalyticsReport } from './types'
+import { hasPermission } from '@/domain/permissions'
+import { LabApiError } from '../engine/core'
+
+const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/
+
+/** A real calendar day as YYYY-MM-DD (2026-00-10 or 2026-02-30 is not). */
+const isDayKey = (day: string) => {
+  const ms = Date.parse(`${day}T12:00:00+05:30`)
+  return DAY_KEY.test(day) && Number.isFinite(ms) && istDay(ms) === day
+}
 
 function resolveRange(range: AnalyticsRange, now: number) {
   const todayKey = istDay(now)
@@ -38,6 +48,9 @@ function resolveRange(range: AnalyticsRange, now: number) {
     case '30d':
       return { from: key(today - 29 * DAY), to: todayKey }
     case 'custom': {
+      for (const day of [range.from, range.to])
+        if (day !== undefined && day !== '' && !isDayKey(day))
+          throw new LabApiError('validation-failed', { field: 'range' })
       const earliest = key(today - 30 * DAY)
       let from = range.from && range.from >= earliest ? range.from : earliest
       let to = range.to && range.to <= todayKey ? range.to : todayKey
@@ -110,7 +123,10 @@ function hourlyBuckets(
 
 export const analyticsReportApi = {
   report: (range: AnalyticsRange) =>
-    read((db, { index, now }): AnalyticsReport => {
+    read((db, { index, now, actor }): AnalyticsReport => {
+      const seesRevenue = hasPermission(db.staff[actor], 'revenue.view')
+      const gate = <T extends { revenue: number | null }>(x: T): T =>
+        seesRevenue ? x : { ...x, revenue: null }
       const today = todayStat(db, index, now)
       const all = [...db.dailyStats.filter((d) => d.day !== today.day), today]
       const { from, to } = resolveRange(range, now)
@@ -272,8 +288,8 @@ export const analyticsReportApi = {
         range: { from, to, days: length, label: range.preset },
         buckets,
         bucketUnit: single ? 'hour' : 'day',
-        totals: t,
-        previous: prevDays.length ? totals(prevDays) : null,
+        totals: gate(t),
+        previous: prevDays.length ? gate(totals(prevDays)) : null,
         byDepartment,
         rejectionsByReason: [...reasons.entries()]
           .map(([reason, count]) => ({ reason, count }))

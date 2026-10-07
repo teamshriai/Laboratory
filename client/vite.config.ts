@@ -21,9 +21,24 @@ export default defineConfig(({ mode }) => {
     base: basePath(env.BASE_PATH),
     plugins: [react(), tailwindcss()],
     resolve: {
-      alias: {
-        '@': fileURLToPath(new URL('./src', import.meta.url)),
-      },
+      alias: [
+        // VITE_DATA_SOURCE=http builds against the laboratory backend: the
+        // data source becomes the HTTP adapter and the mock is not bundled.
+        ...(env.VITE_DATA_SOURCE === 'http'
+          ? [
+              {
+                find: /^@\/services\/source$/,
+                replacement: fileURLToPath(
+                  new URL('./src/services/source/http.ts', import.meta.url),
+                ),
+              },
+            ]
+          : []),
+        {
+          find: '@',
+          replacement: fileURLToPath(new URL('./src', import.meta.url)),
+        },
+      ],
     },
     build: {
       // Source maps are two thirds of the build and browsers never load

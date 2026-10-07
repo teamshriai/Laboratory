@@ -54,4 +54,47 @@ export default {
   copied: 'Link copied',
   openPortal: 'Open patient view',
   linkCreatedAt: 'Created {time} by {name}',
+  dobTitle: "Confirm the patient's date of birth",
+  dobBody:
+    "To protect the patient's privacy, enter their date of birth to open this report.",
+  dobLabel: 'Date of birth',
+  openReport: 'Open report',
+  linkVersion: 'This link shows version {version} of the report.',
+  oldLinkTitle: 'This link no longer works',
+  oldLinkBody:
+    'Report links now use a secure code. Ask the laboratory to share the report again.',
+  verifyTitle: 'Report verification',
+  verifyGenuine: 'Genuine report issued by {lab}',
+  verifySuperseded:
+    'This version has been replaced by a later one. Ask the laboratory for the latest report.',
+  verifyWithdrawn:
+    'The laboratory has withdrawn this report. Do not rely on it.',
+  verifyNotFound:
+    'This code does not match any report issued by this laboratory.',
+  verifyDigestHelp:
+    'The report code printed on the report must match this one exactly.',
+  digest: 'Report code (SHA-256)',
+  issued: 'Issued',
+  reportNumber: 'Report number',
+  scanToVerify: 'Scan to verify this report',
+  shareBodyLinks:
+    "Anyone with a link and the patient's date of birth can open the released report until the link expires. Five wrong dates lock the link for 30 minutes. Demo: links open in this browser only.",
+  linkDays: 'Valid for',
+  daysOption_one: '{count} day',
+  daysOption_other: '{count} days',
+  linkOnce:
+    'Copy the link now. It is shown only once: the laboratory keeps only a fingerprint of it.',
+  linksTitle: 'Links',
+  'state.active': 'Active',
+  'state.expired': 'Expired',
+  'state.revoked': 'Revoked',
+  'state.locked': 'Locked',
+  expiresAt: 'Expires {time}',
+  openedCount_one: 'Opened {count} time',
+  openedCount_other: 'Opened {count} times',
+  revoke: 'Revoke',
+  linkRevoked: 'Link revoked',
+  accessLog: 'Access log',
+  noLinks: 'No links yet.',
+  noAccess: 'Not opened yet.',
 } as const

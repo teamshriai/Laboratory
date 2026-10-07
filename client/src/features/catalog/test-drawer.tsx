@@ -13,12 +13,8 @@ import { Input } from '@/components/ui/input'
 import { Drawer } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ErrorState } from '@/components/ui/states'
-import {
-  RESULT_TYPE_LABEL,
-  sortRanges,
-  useAgeBand,
-  useCatalogTest,
-} from './catalog-helpers'
+import { RESULT_TYPE_LABEL, sortRanges, useAgeBand } from './catalog-helpers'
+import { useCatalogTest, useReference } from '@/services/queries'
 import { RangeEditorDialog } from './range-editor'
 import { TestFormDialog } from './test-form-dialog'
 
@@ -62,6 +58,10 @@ function Body({ test }: { test: CatalogTest }) {
   const e = useEnum()
   const f = useFormat()
   const age = useAgeBand()
+  const { data: reference } = useReference()
+  const referralLab = test.sendOutLabId
+    ? reference?.referralLabs.find((l) => l.id === test.sendOutLabId)
+    : undefined
   const [editing, setEditing] = useState<
     CatalogTest['analytes'][number] | null
   >(null)
@@ -141,6 +141,57 @@ function Body({ test }: { test: CatalogTest }) {
             [t('fieldTatStat'), f.hours(test.statTatHours)],
           ]}
         />
+      </Section>
+      <Section title={t('formSectionPolicy')}>
+        <Facts
+          items={[
+            [
+              t('fieldConsent'),
+              test.consentRequired ? t('consentNeeded') : t('consentNotNeeded'),
+            ],
+            [
+              t('fieldNablScope'),
+              test.accredited === false ? t('nablOutside') : t('nablWithin'),
+            ],
+            [
+              t('fieldSendOutLab'),
+              test.sendOutLabId ? (
+                <span key="lab">
+                  {referralLab
+                    ? t('referralLabOption', {
+                        name: referralLab.name,
+                        city: referralLab.city,
+                      })
+                    : test.sendOutLabId}
+                  {referralLab && !referralLab.nablAccredited ? (
+                    <span className="block text-xs text-warning-text">
+                      {t('notNablAccredited')}
+                    </span>
+                  ) : null}
+                </span>
+              ) : (
+                t('sendOutInHouse')
+              ),
+            ],
+          ]}
+        />
+        <p className="mt-3 mb-1.5 text-xs text-fg-muted">
+          {t('commentTemplatesLabel')}
+        </p>
+        {test.commentTemplates?.length ? (
+          <ul className="grid gap-1.5">
+            {test.commentTemplates.map((c, i) => (
+              <li
+                key={i}
+                className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-meta text-fg"
+              >
+                {c}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-meta text-fg-subtle">{t('noCommentTemplates')}</p>
+        )}
       </Section>
       <Section
         title={`${t('sectionResult')} · ${t('parametersCount', { count: test.analytes.length })}`}

@@ -1,6 +1,6 @@
 import { itemTat } from '@/domain/tat'
 import type { CancelReason, OrderStatus, Priority } from '@/domain/types'
-import { ORDER_STATUSES } from '@/domain/types'
+import { ORDER_STATUSES, PRIORITIES } from '@/domain/types'
 import { must } from '../engine/core'
 import {
   addTests,
@@ -31,12 +31,25 @@ import {
   testChip,
 } from './views'
 import { deriveReportStatus } from '@/domain/workflow'
+import { paginate, type Sorters } from './paging'
 
 export type { OrderInput }
+
+const ORDER_SORTERS: Sorters<OrderRow> = {
+  order: (r) => r.orderedAt ?? r.createdAt,
+  patient: (r) => r.patient.name,
+  doctor: (r) => r.doctor.name,
+  priority: (r) => PRIORITIES.indexOf(r.priority) * -1,
+  status: (r) => ORDER_STATUSES.indexOf(r.status),
+  tat: (r) => r.tat?.ratio ?? -1,
+}
 
 export const ordersApi = {
   list: (filters: OrderFilters = {}) =>
     read((db, { index, now }): OrderListResult => {
+      const mainSite = Object.values(db.sites).find(
+        (x) => x.kind === 'main',
+      )?.id
       const rows: OrderRow[] = []
       for (const order of Object.values(db.orders)) {
         const at = order.orderedAt ?? order.createdAt
@@ -45,6 +58,9 @@ export const ordersApi = {
         if (filters.priority && order.priority !== filters.priority) continue
         if (filters.doctorId && order.doctorId !== filters.doctorId) continue
         if (filters.encounter && order.encounter !== filters.encounter) continue
+        // Orders without a site belong to the main laboratory.
+        if (filters.siteId && (order.siteId ?? mainSite) !== filters.siteId)
+          continue
         const patient = db.patients[order.patientId]!
         const row = orderRow(db, index, order, now)
         if (filters.department && !row.departments.includes(filters.department))
@@ -79,12 +95,10 @@ export const ordersApi = {
       const filtered = rows.filter((r) =>
         status === 'all' ? r.status !== 'draft' : r.status === status,
       )
-      return {
-        rows: filtered.toSorted(
-          (a, b) => (b.orderedAt ?? b.createdAt) - (a.orderedAt ?? a.createdAt),
-        ),
-        counts,
-      }
+      const newestFirst = filtered.toSorted(
+        (a, b) => (b.orderedAt ?? b.createdAt) - (a.orderedAt ?? a.createdAt),
+      )
+      return { ...paginate(newestFirst, filters, ORDER_SORTERS), counts }
     }),
 
   get: (id: string) =>
@@ -182,7 +196,8 @@ export const ordersApi = {
     write((db, ctx) => void setPriority(db, id, priority, ctx)),
 
   addTests: (id: string, testIds: string[]) =>
-    write((db, ctx) => void addTests(db, id, testIds, ctx)),
+    // Tests that needed a new specimen (the drawn one is past stability).
+    write((db, ctx) => addTests(db, id, testIds, ctx).freshSpecimens),
 
   removeTest: (itemId: string, reason: CancelReason) =>
     write((db, ctx) => void removeItem(db, itemId, { reason }, ctx)),

@@ -1,0 +1,36 @@
+- paragraph: RPT-20261006-0175 · SHRI HEALTH
+- region "Notifications alt+T":
+  - list:
+    - listitem: Share link ready
+    - listitem: Report RPT-20261006-0175 released to Dr. Ramesh Iyer
+- dialog "Share report RPT-20261006-0175":
+  - heading "Share report RPT-20261006-0175" [level=2]
+  - paragraph: Share report RPT-20261006-0175
+  - button "Close"
+  - paragraph: Share
+  - paragraph: "Anyone with a link and the patient's date of birth can open the released report until the link expires. Five wrong dates lock the link for 30 minutes. Demo: links open in this browser only."
+  - text: Valid for
+  - combobox "Valid for": 7 days
+  - button "Create share link"
+  - paragraph: "Copy the link now. It is shown only once: the laboratory keeps only a fingerprint of it."
+  - textbox "Share": http://127.0.0.1:37445/dev/laboratory/r/kaRk1BH77Tg8RP7aCBi9MQ
+  - button "Copy link"
+  - link "Open patient view":
+    - /url: http://127.0.0.1:37445/dev/laboratory/r/kaRk1BH77Tg8RP7aCBi9MQ
+  - paragraph: Links
+  - list:
+    - listitem:
+      - text: Active Created 06 Oct 2026, 5:24 pm by Dr. Kavitha Rao
+      - button "Revoke"
+      - paragraph: Expires 13 Oct 2026, 5:24 pm · Opened 0 times · Version 1
+      - group: Access log
+  - text: Channel
+  - radiogroup:
+    - radio "SMS"
+    - radio "WhatsApp" [checked]
+    - radio "Email"
+    - radio "Ordering doctor"
+  - text: Send to
+  - textbox "Send to": +91 98450 12345
+  - button "Cancel"
+  - button "Share"

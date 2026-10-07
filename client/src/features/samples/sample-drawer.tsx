@@ -20,6 +20,8 @@ import {
 } from './sample-sections'
 import { TestTubeIcon } from 'lucide-react'
 import { isLabApiError } from '@/services/lab-api'
+import { showAliquots, showSendOut } from './handling-rules'
+import { SampleAliquots, SampleSendOut } from './sample-handling'
 
 function Section({
   title,
@@ -160,6 +162,16 @@ export default function SampleDrawer({
           <Section title={t('sectionOrder')}>
             <SampleOrderLinks sample={sample} />
           </Section>
+          {showAliquots(sample) ? (
+            <Section title={t('sectionAliquots')}>
+              <SampleAliquots sample={sample} />
+            </Section>
+          ) : null}
+          {showSendOut(sample) ? (
+            <Section title={t('sectionReferral')}>
+              <SampleSendOut sample={sample} />
+            </Section>
+          ) : null}
           <Section title={t('sectionTimeline')}>
             <SampleTimeline sample={sample} />
           </Section>

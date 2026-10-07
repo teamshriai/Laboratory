@@ -1,4 +1,9 @@
-import { RefreshCwIcon, CirclePauseIcon, CircleXIcon } from 'lucide-react'
+import {
+  RefreshCwIcon,
+  CirclePauseIcon,
+  CircleXIcon,
+  ThermometerIcon,
+} from 'lucide-react'
 import { Link } from 'react-router'
 import { useEnum, useT } from '@/i18n/context'
 import { useFormat } from '@/i18n/format'
@@ -9,6 +14,7 @@ import { RangeText, ResultFlag, valueTone } from '@/components/lab/result'
 import { ContainerChip } from '@/components/lab/sample'
 import { ResultStatusBadge } from '@/components/lab/status'
 import { TatIndicator } from '@/components/lab/tat'
+import { Badge } from '@/components/ui/badge'
 import { Detail } from '@/components/ui/card'
 
 export function SampleAlerts({ sample }: { sample: SampleDetail }) {
@@ -65,6 +71,27 @@ export function SampleAlerts({ sample }: { sample: SampleDetail }) {
           </div>
         </div>
       ) : null}
+      {sample.temperatureDeviation &&
+      ['received', 'processing', 'on_hold'].includes(sample.status) ? (
+        <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning-soft/70 p-4">
+          <ThermometerIcon
+            className="mt-0.5 size-5 shrink-0 text-warning-text"
+            aria-hidden
+          />
+          <div className="text-meta">
+            <p className="font-semibold text-warning-text">
+              {t('temperatureMismatch')}
+            </p>
+            <p className="mt-0.5 text-fg">
+              {t('temperatureAlert', {
+                temperature: sample.receiptTemperature
+                  ? e('receiptTemperature', sample.receiptTemperature)
+                  : '-',
+              })}
+            </p>
+          </div>
+        </div>
+      ) : null}
       {sample.isRecollection && sample.recollectionOf ? (
         <div className="flex items-center gap-2 rounded-xl border border-line bg-surface-2 px-4 py-3 text-meta text-fg">
           <RefreshCwIcon className="size-4 text-warning-text" />
@@ -101,6 +128,30 @@ export function SampleDetails({ sample }: { sample: SampleDetail }) {
           ? e('collectionSite', sample.collectionSite)
           : '-'}
       </Detail>
+      <Detail label={t('fastingStatus')}>
+        {sample.fastingStatus
+          ? e('fastingStatus', sample.fastingStatus)
+          : sample.collectedAt
+            ? t('notRecorded')
+            : '-'}
+      </Detail>
+      <Detail label={t('identityCheck')} className="col-span-2">
+        {sample.identityCheck ? (
+          <span className="block truncate">
+            {e('identityMethod', sample.identityCheck.method)}
+            <span className="block truncate text-xs font-normal text-fg-muted">
+              {t('identityCheckBy', {
+                by: sample.identityCheck.byName,
+                time: f.dateTime(sample.identityCheck.at),
+              })}
+            </span>
+          </span>
+        ) : sample.collectedAt ? (
+          t('notRecorded')
+        ) : (
+          '-'
+        )}
+      </Detail>
       <Detail label={tc('receivedAt')}>
         {sample.receivedAt ? f.dateTime(sample.receivedAt) : '-'}
       </Detail>
@@ -108,6 +159,23 @@ export function SampleDetails({ sample }: { sample: SampleDetail }) {
         {sample.processingStartedAt
           ? f.dateTime(sample.processingStartedAt)
           : '-'}
+      </Detail>
+      <Detail label={t('receiptTemperature')} className="col-span-2">
+        {sample.receiptTemperature ? (
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1 whitespace-normal">
+            {e('receiptTemperature', sample.receiptTemperature)}
+            {sample.temperatureDeviation ? (
+              <Badge tone="warning" size="sm">
+                <ThermometerIcon aria-hidden />
+                {t('temperatureMismatch')}
+              </Badge>
+            ) : null}
+          </span>
+        ) : sample.receivedAt ? (
+          t('notRecorded')
+        ) : (
+          '-'
+        )}
       </Detail>
       <Detail label={t('equipment')}>{sample.equipment?.name ?? '-'}</Detail>
       <Detail label={t('tat')}>

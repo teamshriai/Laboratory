@@ -1,18 +1,8 @@
-import { useQuery } from '@tanstack/react-query'
 import { useCallback } from 'react'
 import type { ReferenceRange, ResultType } from '@/domain/types'
 import { useLanguage, useT } from '@/i18n/context'
 import { translate, type Namespace, type TKey } from '@/i18n/core'
 import { useFormat } from '@/i18n/format'
-import { labApi } from '@/services/lab-api'
-
-/** One catalog test with analytes and their current ranges. */
-export const useCatalogTest = (id: string | null) =>
-  useQuery({
-    queryKey: ['lab', 'catalog-test', id],
-    queryFn: () => labApi.catalog.get(id!),
-    enabled: Boolean(id),
-  })
 
 export const RESULT_TYPE_LABEL: Record<ResultType, TKey<'catalog'>> = {
   numeric: 'resultTypeNumeric',

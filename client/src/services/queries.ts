@@ -4,6 +4,7 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import type { DepartmentId } from '@/domain/types'
 import {
+  demo,
   labApi,
   type CatalogFilters,
   type CriticalFilters,
@@ -18,9 +19,23 @@ import {
   type InventoryKind,
   type WorkQueueFilters,
   type ImagingFilters,
+  type InvoiceFilters,
+  type HomeVisitFilters,
+  type PageQuery,
 } from './lab-api'
 
 const keep = { placeholderData: keepPreviousData }
+
+/**
+ * Screens where someone signs, releases or acknowledges never act on a
+ * cached copy: they refetch whenever they open or regain focus, and treat
+ * data as stale at once (another person may have changed it).
+ */
+const fresh = {
+  staleTime: 0,
+  refetchOnMount: 'always',
+  refetchOnWindowFocus: true,
+} as const
 
 export const useReference = () =>
   useQuery({
@@ -107,6 +122,7 @@ export const useResultEntry = (sampleId: string | undefined) =>
     queryKey: ['lab', 'entry', sampleId],
     queryFn: () => labApi.results.entry(sampleId!),
     enabled: Boolean(sampleId),
+    ...fresh,
   })
 export const useValidationQueue = (filters: {
   department?: DepartmentId
@@ -117,6 +133,7 @@ export const useValidationQueue = (filters: {
     queryKey: ['lab', 'validation', filters],
     queryFn: () => labApi.validation.queue(filters),
     ...keep,
+    ...fresh,
   })
 
 export const useValidationStages = (filters: { department?: DepartmentId }) =>
@@ -139,6 +156,15 @@ export const useReport = (id: string | undefined, version?: number) =>
       labApi.reports.get(id!, version !== undefined ? { version } : {}),
     enabled: Boolean(id),
     ...keep,
+    ...fresh,
+  })
+
+/** One catalog test with analytes and their current ranges. */
+export const useCatalogTest = (id: string | null) =>
+  useQuery({
+    queryKey: ['lab', 'catalog-test', id],
+    queryFn: () => labApi.catalog.get(id!),
+    enabled: Boolean(id),
   })
 
 export const useCriticals = (filters: CriticalFilters) =>
@@ -146,6 +172,7 @@ export const useCriticals = (filters: CriticalFilters) =>
     queryKey: ['lab', 'criticals', filters],
     queryFn: () => labApi.critical.list(filters),
     ...keep,
+    ...fresh,
   })
 
 export const useCatalog = (filters: CatalogFilters) =>
@@ -291,8 +318,21 @@ export const useLabSettings = () =>
     queryFn: labApi.system.settings,
     staleTime: 60_000,
   })
+/**
+ * Who is signed in (backend builds). Its key sits outside ['lab'] so data
+ * refreshes after a mutation do not refetch it.
+ */
+export const useSession = (enabled = true) =>
+  useQuery({
+    queryKey: ['session'],
+    queryFn: labApi.session.get,
+    enabled,
+    staleTime: 5 * 60_000,
+    retry: false,
+  })
+
 export const useDbStats = () =>
-  useQuery({ queryKey: ['lab', 'db-stats'], queryFn: labApi.system.stats })
+  useQuery({ queryKey: ['lab', 'db-stats'], queryFn: () => demo.stats() })
 export const useAuditLog = (filters: AuditFilters) =>
   useQuery({
     queryKey: ['lab', 'audit', filters],
@@ -339,15 +379,176 @@ export const useImagingReport = (id: string | undefined, version?: number) =>
     ...keep,
   })
 
-export const usePortalReport = (
-  reportNo: string | undefined,
-  version?: number,
-) =>
+/** The public verification page behind a report's QR code. */
+export const useVerification = (token: string | undefined) =>
   useQuery({
-    queryKey: ['lab', 'portal', reportNo, version ?? 'current'],
-    queryFn: () =>
-      labApi.portal.report(reportNo!, version !== undefined ? { version } : {}),
-    enabled: Boolean(reportNo),
+    queryKey: ['public', 'verify', token],
+    queryFn: () => labApi.portal.verify(token!),
+    enabled: Boolean(token),
     retry: false,
+  })
+
+// ---------- Billing ----------
+
+export const useInvoices = (filters: InvoiceFilters) =>
+  useQuery({
+    queryKey: ['lab', 'billing', 'list', filters],
+    queryFn: () => labApi.billing.list(filters),
     ...keep,
   })
+
+/** Payments and refunds are taken against what the invoice says now. */
+export const useInvoice = (id: string | undefined) =>
+  useQuery({
+    queryKey: ['lab', 'billing', 'invoice', id],
+    queryFn: () => labApi.billing.get(id!),
+    enabled: Boolean(id),
+    ...fresh,
+  })
+
+export const useOrderInvoice = (orderId: string | undefined) =>
+  useQuery({
+    queryKey: ['lab', 'billing', 'order', orderId],
+    queryFn: () => labApi.billing.forOrder(orderId!),
+    enabled: Boolean(orderId),
+  })
+
+export const useDayBook = (day?: string) =>
+  useQuery({
+    queryKey: ['lab', 'billing', 'day-book', day ?? 'today'],
+    queryFn: () => labApi.billing.dayBook(day),
+    ...fresh,
+  })
+
+export const useBillingMasters = () =>
+  useQuery({
+    queryKey: ['lab', 'billing', 'masters'],
+    queryFn: labApi.billing.masters,
+  })
+
+// ---------- Network: doctors, centres, home visits, messages ----------
+
+export const useNetworkMasters = () =>
+  useQuery({
+    queryKey: ['lab', 'network', 'masters'],
+    queryFn: labApi.network.masters,
+  })
+
+export const useHomeVisits = (filters: HomeVisitFilters) =>
+  useQuery({
+    queryKey: ['lab', 'network', 'home-visits', filters],
+    queryFn: () => labApi.network.homeVisits(filters),
+    ...keep,
+  })
+
+export const useMessaging = () =>
+  useQuery({
+    queryKey: ['lab', 'network', 'messaging'],
+    queryFn: labApi.network.messaging,
+  })
+
+// ---------- Doctor portal ----------
+
+export const useDoctorPatients = (filters: PageQuery & { q?: string }) =>
+  useQuery({
+    queryKey: ['lab', 'doctor', 'patients', filters],
+    queryFn: () => labApi.doctor.patients(filters),
+    ...keep,
+  })
+
+export const useDoctorPatient = (id: string | undefined) =>
+  useQuery({
+    queryKey: ['lab', 'doctor', 'patient', id],
+    queryFn: () => labApi.doctor.patient(id!),
+    enabled: Boolean(id),
+  })
+
+// ---------- Quality, registers, privacy, interfaces (Wave 3) ----------
+
+export const useQualityOverview = () =>
+  useQuery({
+    queryKey: ['lab', 'quality', 'overview'],
+    queryFn: labApi.quality.overview,
+  })
+export const useEqa = () =>
+  useQuery({ queryKey: ['lab', 'quality', 'eqa'], queryFn: labApi.quality.eqa })
+export const useNcs = () =>
+  useQuery({ queryKey: ['lab', 'quality', 'ncs'], queryFn: labApi.quality.ncs })
+export const useControlledDocuments = () =>
+  useQuery({
+    queryKey: ['lab', 'quality', 'documents'],
+    queryFn: labApi.quality.documents,
+  })
+export const useInternalAudits = () =>
+  useQuery({
+    queryKey: ['lab', 'quality', 'audits'],
+    queryFn: labApi.quality.audits,
+  })
+export const useRisks = () =>
+  useQuery({
+    queryKey: ['lab', 'quality', 'risks'],
+    queryFn: labApi.quality.risks,
+  })
+export const useLisVerifications = () =>
+  useQuery({
+    queryKey: ['lab', 'quality', 'lis'],
+    queryFn: labApi.quality.lisVerifications,
+  })
+export const useUncertainty = () =>
+  useQuery({
+    queryKey: ['lab', 'quality', 'uncertainty'],
+    queryFn: labApi.quality.uncertainty,
+  })
+export const useQualifications = (equipmentId?: string) =>
+  useQuery({
+    queryKey: ['lab', 'quality', 'qualifications', equipmentId ?? 'all'],
+    queryFn: () => labApi.quality.qualifications(equipmentId),
+  })
+export const useColdUnits = () =>
+  useQuery({
+    queryKey: ['lab', 'quality', 'cold'],
+    queryFn: labApi.quality.coldUnits,
+  })
+export const useAutoVerifyRules = () =>
+  useQuery({
+    queryKey: ['lab', 'autoverify'],
+    queryFn: labApi.autoVerify.rules,
+  })
+
+export const useFormIII = (month: string, query: PageQuery) =>
+  useQuery({
+    queryKey: ['lab', 'registers', 'form-iii', month, query],
+    queryFn: () => labApi.registers.formIII(month, query),
+    ...keep,
+  })
+export const useDailyRegister = (day: string, query: PageQuery) =>
+  useQuery({
+    queryKey: ['lab', 'registers', 'daily', day, query],
+    queryFn: () => labApi.registers.daily(day, query),
+    ...keep,
+  })
+export const useIqcRegister = (month: string, query: PageQuery) =>
+  useQuery({
+    queryKey: ['lab', 'registers', 'iqc', month, query],
+    queryFn: () => labApi.registers.iqc(month, query),
+    ...keep,
+  })
+export const useCollectionRegister = (day: string, query: PageQuery) =>
+  useQuery({
+    queryKey: ['lab', 'registers', 'collection', day, query],
+    queryFn: () => labApi.registers.collection(day, query),
+    ...keep,
+  })
+
+export const usePrivacy = () =>
+  useQuery({ queryKey: ['lab', 'privacy'], queryFn: labApi.privacy.overview })
+export const useInterfaces = () =>
+  useQuery({
+    queryKey: ['lab', 'interfaces'],
+    queryFn: labApi.interfaces.overview,
+    refetchInterval: 60_000,
+  })
+export const useSites = () =>
+  useQuery({ queryKey: ['lab', 'sites'], queryFn: labApi.sites.list })
+export const useInsights = () =>
+  useQuery({ queryKey: ['lab', 'insights'], queryFn: labApi.insights.list })

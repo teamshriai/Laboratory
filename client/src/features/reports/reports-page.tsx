@@ -9,9 +9,15 @@ import {
   type ReportStatus,
 } from '@/domain/types'
 import { useUrlFilters } from '@/hooks/use-search-param'
+import { useTablePaging } from '@/hooks/use-table-paging'
 import { useEnum, useT } from '@/i18n/context'
 import { useFormat } from '@/i18n/format'
-import type { DatePreset, ReportRow } from '@/services/lab-api'
+import {
+  labApi,
+  type DatePreset,
+  type ReportFilters,
+  type ReportRow,
+} from '@/services/lab-api'
 import { useReports } from '@/services/queries'
 import { ExportButton } from '@/components/lab/export-button'
 import { FilterBar } from '@/components/lab/filter-bar'
@@ -51,18 +57,23 @@ export function Component() {
   const setDepartment = (d: DepartmentId | 'all') =>
     filters.set({ department: d })
   const q = useDeferredValue(query)
-  const { data, isPending, isError, refetch } = useReports({
+  const paging = useTablePaging(25, ['report', 'patient', 'flags', 'released'])
+  const listFilters: ReportFilters = {
     status,
     date,
     q,
     ...(department !== 'all' ? { department } : {}),
+  }
+  const { data, isPending, isError, refetch } = useReports({
+    ...listFilters,
+    ...paging.query,
   })
 
   const columns: Column<ReportRow>[] = [
     {
       id: 'report',
       header: t('colReport'),
-      sortValue: (r) => r.reportNo,
+      sortable: true,
       cell: (r) => (
         <div>
           <RecordLink
@@ -75,7 +86,7 @@ export function Component() {
           <RecordLink
             kind="order"
             id={r.orderId}
-            className="block text-xs text-fg-subtle"
+            className="flex w-fit text-xs text-fg-subtle"
           >
             {r.orderNo}
           </RecordLink>
@@ -85,7 +96,7 @@ export function Component() {
     {
       id: 'patient',
       header: t('colPatient'),
-      sortValue: (r) => r.patient.name,
+      sortable: true,
       cell: (r) => <PatientCell patient={r.patient} showLocal={false} />,
     },
     {
@@ -103,7 +114,7 @@ export function Component() {
     {
       id: 'flags',
       header: t('colFlags'),
-      sortValue: (r) => r.criticalCount * 100 + r.abnormalCount,
+      sortable: true,
       cell: (r) => (
         <div className="flex flex-wrap gap-1">
           {r.criticalCount ? (
@@ -132,7 +143,7 @@ export function Component() {
     {
       id: 'released',
       header: t('colReleased'),
-      sortValue: (r) => r.releasedAt ?? 0,
+      sortable: true,
       cell: (r) => (
         <span className="text-meta whitespace-nowrap">
           {r.releasedAt ? f.dateTime(r.releasedAt) : '-'}
@@ -175,8 +186,9 @@ export function Component() {
         actions={
           <ExportButton
             filename={t('exportFile')}
+            entity="report"
             disabled={!data?.rows.length}
-            rows={() => [
+            rows={async () => [
               [
                 t('colReport'),
                 t('colPatient'),
@@ -188,7 +200,8 @@ export function Component() {
                 t('colReleased'),
                 tc('orderNo'),
               ],
-              ...(data?.rows ?? []).map((r) => [
+              // Every matching report, not just the page on screen.
+              ...(await labApi.reports.list(listFilters)).rows.map((r) => [
                 `${r.reportNo} v${r.version}`,
                 r.patient.name,
                 r.patient.uhid,
@@ -260,6 +273,7 @@ export function Component() {
             caption={t('title')}
             columns={columns}
             rows={data?.rows}
+            server={paging.table(data?.page)}
             getRowId={(r) => r.id}
             rowLabel={(r) => r.reportNo}
             onRowClick={(r) => void navigate(`/reports/${r.id}`)}

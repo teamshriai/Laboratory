@@ -5,6 +5,7 @@ import { hasPermission } from '@/domain/permissions'
 import { usePermissions } from '@/hooks/use-permission'
 import { useEnum, useT } from '@/i18n/context'
 import { useReference } from '@/services/queries'
+import { demo } from '@/services/lab-api'
 import { Select } from '@/components/ui/select'
 
 /**
@@ -52,18 +53,21 @@ export function SigningAs({
         <ShieldAlertIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
         <span>{why(permission)}</span>
       </p>
-      <Select
-        size="sm"
-        aria-label={t('switchActingAs')}
-        placeholder={t('switchActingAs')}
-        value={undefined}
-        onValueChange={setActorId}
-        options={eligible.map((s) => ({
-          value: s.id,
-          label: s.name,
-          description: e('staffRole', s.role),
-        }))}
-      />
+      {/* The demo can switch who it acts as; a backend user cannot. */}
+      {demo.enabled ? (
+        <Select
+          size="sm"
+          aria-label={t('switchActingAs')}
+          placeholder={t('switchActingAs')}
+          value={undefined}
+          onValueChange={setActorId}
+          options={eligible.map((s) => ({
+            value: s.id,
+            label: s.name,
+            description: e('staffRole', s.role),
+          }))}
+        />
+      ) : null}
     </div>
   )
 }

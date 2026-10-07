@@ -265,4 +265,30 @@ export default {
   changeReasonPlaceholder: 'For example: new analyzer method from 1 November',
   changeReasonRequired:
     'Give a reason for this change. Catalog changes are kept in the audit log.',
+  // Consent, accreditation and referral
+  formSectionPolicy: 'Consent, accreditation and referral',
+  consentRequiredLabel: 'Needs patient consent',
+  consentRequiredHint:
+    'The specimen is not collected until consent is recorded, for example for HIV or invasive procedures.',
+  accreditedLabel: 'Within NABL scope',
+  accreditedHint:
+    'Turn off for tests outside the scope of accreditation; reports mark them.',
+  sendOutLabLabel: 'Default referral lab',
+  sendOutLabHint:
+    'Where this test is normally sent when it is not done in this lab.',
+  sendOutInHouse: 'Done in this lab',
+  referralLabOption: '{name}, {city}',
+  referralLabOptionNotNabl: '{name}, {city} (not NABL accredited)',
+  notNablAccredited: 'Not NABL accredited',
+  commentTemplatesLabel: 'Comment templates',
+  commentTemplatesHint:
+    'One comment per line. Staff can insert them when entering results.',
+  noCommentTemplates: 'No comment templates',
+  fieldConsent: 'Patient consent',
+  consentNeeded: 'Needed before collection',
+  consentNotNeeded: 'Not needed',
+  fieldNablScope: 'NABL scope',
+  nablWithin: 'Within scope',
+  nablOutside: 'Outside scope, marked on reports',
+  fieldSendOutLab: 'Referral lab',
 } as const

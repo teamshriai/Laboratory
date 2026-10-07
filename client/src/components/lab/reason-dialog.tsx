@@ -38,6 +38,17 @@ export function ReasonDialog<R extends string>({
   const [reason, setReason] = useState<R | undefined>()
   const [remarks, setRemarks] = useState('')
   const [touched, setTouched] = useState(false)
+  // Every opening starts empty: a reason never carries over to the next
+  // patient or specimen, even when the parent closed the dialog itself.
+  const [wasOpen, setWasOpen] = useState(open)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) {
+      setReason(undefined)
+      setRemarks('')
+      setTouched(false)
+    }
+  }
   const needsRemarks = reason === ('other' as R) && !remarks.trim()
   const error = touched && !reason ? tf('reasonRequired') : undefined
   const remarksError =
@@ -45,14 +56,8 @@ export function ReasonDialog<R extends string>({
   return (
     <ConfirmDialog
       open={open}
-      onOpenChange={(o) => {
-        onOpenChange(o)
-        if (!o) {
-          setReason(undefined)
-          setRemarks('')
-          setTouched(false)
-        }
-      }}
+      onOpenChange={onOpenChange}
+      dirty={Boolean(reason || remarks.trim())}
       title={title}
       description={description}
       confirmLabel={confirmLabel}

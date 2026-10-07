@@ -21,6 +21,8 @@ import {
   SampleTimeline,
 } from './sample-sections'
 import { Button } from '@/components/ui/button'
+import { showAliquots, showSendOut } from './handling-rules'
+import { SampleAliquots, SampleSendOut } from './sample-handling'
 
 export function Component() {
   const { sampleId } = useParams()
@@ -39,7 +41,7 @@ export function Component() {
   if (isPending)
     return (
       <div className="grid gap-5">
-        <Skeleton className="h-10 w-72" />
+        <Skeleton className="h-10 w-72 max-w-full" />
         <Skeleton className="h-28 rounded-xl" />
         <div className="grid gap-5 xl:grid-cols-3">
           <CardSkeleton className="xl:col-span-2" lines={10} />
@@ -156,6 +158,22 @@ export function Component() {
                 <SampleOrderLinks sample={sample} />
               </CardBody>
             </Card>
+            {showAliquots(sample) ? (
+              <Card>
+                <CardHeader title={t('sectionAliquots')} />
+                <CardBody>
+                  <SampleAliquots sample={sample} />
+                </CardBody>
+              </Card>
+            ) : null}
+            {showSendOut(sample) ? (
+              <Card>
+                <CardHeader title={t('sectionReferral')} />
+                <CardBody>
+                  <SampleSendOut sample={sample} />
+                </CardBody>
+              </Card>
+            ) : null}
           </div>
         </div>
       </div>

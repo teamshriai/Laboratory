@@ -65,6 +65,24 @@ describe.skipIf(!import.meta.env.PERF)(
       ],
       ['TAT', () => labApi.tat.get('7d')],
       ['audit log', () => labApi.admin.audit({ date: 'all', q: '' })],
+      [
+        'orders, one sorted page',
+        () =>
+          labApi.orders.list({
+            q: '',
+            pageSize: 25,
+            page: 3,
+            sort: '-patient',
+          }),
+      ],
+      [
+        'patients, one sorted page',
+        () => labApi.patients.list({ pageSize: 25, sort: 'patient' }),
+      ],
+      [
+        'audit log, one page',
+        () => labApi.admin.audit({ date: 'all', q: '', pageSize: 50 }),
+      ],
     ] as const)('%s reads within budget', async (name, fn) => {
       const ms = await timed(fn as () => Promise<unknown>)
       console.info(`${name}: ${ms.toFixed(1)} ms`)

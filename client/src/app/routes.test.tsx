@@ -1,11 +1,12 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type { LabDb } from '@/mock/db/schema'
 import { AppProviders } from '@/app/providers'
 import { routes } from '@/app/routes'
 import { legacyPath } from '@/app/legacy-paths'
-import { startMemoryDb } from '@/mock/db/store'
+import { getDb, startMemoryDb } from '@/mock/db/store'
+import { actingAs, STAFF } from '@/mock/api/testing'
 
 function renderAt(path: string) {
   const router = createMemoryRouter(routes, { initialEntries: [path] })
@@ -70,6 +71,56 @@ const DETAIL: [string, () => string][] = [
     () =>
       `/imaging/reports/${Object.values(db.imaging).find((s) => s.versions.length > 0)!.id}`,
   ],
+  ['billing', () => '/billing'],
+  ['invoice', () => `/billing/${firstId(db.invoices)}`],
+  ['day book', () => '/billing/day-book'],
+  ['billing masters', () => '/billing/masters'],
+  ['home collection', () => '/home-collection'],
+  ['messages', () => '/messages'],
+  ['messages templates', () => '/messages?tab=templates'],
+  ['referrers', () => '/referrers'],
+  ['centres', () => '/referrers?tab=centres'],
+  // A technician sees the "for referring doctors" notice, not a crash.
+  ['doctor portal', () => '/my-patients'],
+  ...[
+    'overview',
+    'eqa',
+    'capa',
+    'documents',
+    'audits',
+    'risks',
+    'lis',
+    'uncertainty',
+    'autoverify',
+  ].map((tab): [string, () => string] => [
+    `quality ${tab}`,
+    () => `/quality?tab=${tab}`,
+  ]),
+  ['cold storage', () => '/cold-storage'],
+  ...['form-iii', 'daily', 'iqc', 'collection'].map(
+    (tab): [string, () => string] => [
+      `registers ${tab}`,
+      () => `/registers?tab=${tab}`,
+    ],
+  ),
+  ...['requests', 'incidents', 'holds', 'retention'].map(
+    (tab): [string, () => string] => [
+      `privacy ${tab}`,
+      () => `/privacy?tab=${tab}`,
+    ],
+  ),
+  ...['monitor', 'messages', 'mappings', 'coding'].map(
+    (tab): [string, () => string] => [
+      `interfaces ${tab}`,
+      () => `/interfaces?tab=${tab}`,
+    ],
+  ),
+  ...['profile', 'sites', 'modules', 'assistant'].map(
+    (section): [string, () => string] => [
+      `settings ${section}`,
+      () => `/settings?section=${section}`,
+    ],
+  ),
 ]
 
 describe('routes', () => {
@@ -169,7 +220,7 @@ describe('routes', () => {
     ).toBeInTheDocument()
   })
 
-  it('shows the shared report page only for a shared report', async () => {
+  it('explains that an old report-number link no longer works', async () => {
     const report = Object.values(db.reports).find(
       (r) => r.versions.length > 0 && !r.withdrawn,
     )!
@@ -177,27 +228,29 @@ describe('routes', () => {
     expect(
       await screen.findByRole(
         'heading',
-        { name: /report not available/i },
+        { name: /this link no longer works/i },
         { timeout: 8000 },
       ),
     ).toBeInTheDocument()
-    // The portal has no staff shell.
+    // The public pages have no staff shell.
     expect(screen.queryByRole('navigation', { name: /main/i })).toBeNull()
   })
 
-  it('opens a shared report outside the staff shell', async () => {
-    const report = Object.values(db.reports).find(
+  it('opens a shared report after the date of birth', async () => {
+    const current = getDb()
+    const report = Object.values(current.reports).find(
       (r) => r.versions.length > 0 && !r.withdrawn && !r.pendingAmendment,
     )!
-    db.reportLinks[report.reportNo] = {
-      reportNo: report.reportNo,
-      kind: 'laboratory',
-      targetId: report.id,
-      createdAt: Date.now(),
-      createdBy: 'st_shruthi',
-      version: report.versions.length,
-    }
-    renderAt(`/report/${report.reportNo}`)
+    const dob = current.patients[report.patientId]!.dob
+    const { token } = await actingAs(STAFF.reception).reports.createShareLink(
+      report.id,
+    )
+    renderAt(`/r/${token}`)
+    const input = await screen.findByLabelText(/date of birth/i, undefined, {
+      timeout: 8000,
+    })
+    fireEvent.change(input, { target: { value: dob } })
+    fireEvent.click(screen.getByRole('button', { name: /open report/i }))
     expect(
       await screen.findByRole(
         'button',
@@ -206,5 +259,18 @@ describe('routes', () => {
       ),
     ).toBeInTheDocument()
     expect(screen.getAllByText(report.reportNo).length).toBeGreaterThan(0)
+  })
+
+  it('verifies a report from its QR code', async () => {
+    const report = Object.values(getDb().reports).find(
+      (r) => r.versions.at(-1)?.verifyToken && !r.withdrawn,
+    )!
+    renderAt(`/v/${report.versions.at(-1)!.verifyToken}`)
+    expect(
+      await screen.findByText(/genuine report issued by/i, undefined, {
+        timeout: 8000,
+      }),
+    ).toBeInTheDocument()
+    expect(screen.getByText(report.reportNo)).toBeInTheDocument()
   })
 })

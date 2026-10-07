@@ -1,5 +1,4 @@
 import { PrinterIcon } from 'lucide-react'
-import { toast } from 'sonner'
 import { useNow } from '@/hooks/use-now'
 import { useEnum, useT } from '@/i18n/context'
 import { useFormat } from '@/i18n/format'
@@ -135,7 +134,6 @@ export function LabelPrintDialog({
           </div>,
         )
       },
-      onError: () => toast.dismiss(),
     },
   )
   return (

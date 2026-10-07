@@ -123,4 +123,10 @@ export default {
   activeFilters: 'ಸಕ್ರಿಯ ಫಿಲ್ಟರ್‌ಗಳು',
   removeFilter: 'ಫಿಲ್ಟರ್ ತೆಗೆದುಹಾಕಿ: {filter}',
   exportCsv: 'CSV ರಫ್ತು ಮಾಡಿ',
+  sessionEndedTitle: 'ನಿಮ್ಮ ಸೆಷನ್ ಮುಕ್ತಾಯವಾಗಿದೆ',
+  sessionEndedBody:
+    'ಮುಂದುವರಿಸಲು ಮತ್ತೆ ಸೈನ್ ಇನ್ ಮಾಡಿ. ಈ ಪುಟದಲ್ಲಿ ಉಳಿಸದ ಬದಲಾವಣೆಗಳು ಕಳೆದುಹೋಗಬಹುದು.',
+  signIn: 'ಸೈನ್ ಇನ್',
+  signOut: 'ಸೈನ್ ಔಟ್',
+  sessionChecking: 'ನಿಮ್ಮ ಸೆಷನ್ ಪರಿಶೀಲಿಸಲಾಗುತ್ತಿದೆ',
 } as const

@@ -87,30 +87,40 @@ describe('share links and the report portal', () => {
     startMemoryDb()
   })
 
-  it('shares only released reports, and the portal needs the link', async () => {
+  const releasedReport = async () => {
     const reports = await labApi.reports.list({ date: 'all', q: '' })
     const released = reports.rows.find((r) => r.status === 'released')!
-    const unreleased = reports.rows.find((r) => r.status === 'validated')!
+    const dob = getDb().patients[getDb().reports[released.id]!.patientId]!.dob
+    return { released, dob, reports }
+  }
 
-    await expect(labApi.portal.report(released.reportNo)).rejects.toMatchObject(
-      { code: 'not-found' },
-    )
-    await expect(tech.reports.shareLink(unreleased.id)).rejects.toMatchObject({
-      code: 'report-not-released',
-    })
+  it('shares only released reports, behind the date of birth', async () => {
+    const { released, dob, reports } = await releasedReport()
+    const unreleased = reports.rows.find((r) => r.status === 'validated')!
+    await expect(
+      tech.reports.createShareLink(unreleased.id),
+    ).rejects.toMatchObject({ code: 'report-not-released' })
     // Receptionists may share; phlebotomists may not.
     await expect(
-      actingAs(STAFF.phlebotomist).reports.shareLink(released.id),
+      actingAs(STAFF.phlebotomist).reports.createShareLink(released.id),
     ).rejects.toMatchObject({ code: 'not-permitted' })
 
-    const link = await actingAs(STAFF.reception).reports.shareLink(released.id)
-    expect(link.reportNo).toBe(released.reportNo)
-    const view = await labApi.portal.report(released.reportNo)
+    const { token, link } = await actingAs(
+      STAFF.reception,
+    ).reports.createShareLink(released.id, { days: 3 })
+    expect(token).toMatch(/^[A-Za-z0-9_-]{22}$/)
+    expect(link.state).toBe('active')
+    // The token itself is never stored, only its fingerprint.
+    expect(JSON.stringify(getDb())).not.toContain(token)
+
+    const view = await labApi.portal.open(token, { dob })
     expect(view.kind).toBe('laboratory')
-    if (view.kind === 'laboratory') {
-      expect(view.report.reportNo).toBe(released.reportNo)
-      expect('shareLog' in view.report).toBe(false)
-    }
+    expect(view.report.reportNo).toBe(released.reportNo)
+    expect('shareLog' in view.report).toBe(false)
+    expect('shareLinks' in view.report).toBe(false)
+    expect(view.lab.labName).toBe(getDb().settings.labName)
+    const detail = await labApi.reports.get(released.id)
+    expect(detail.shareLinks[0]).toMatchObject({ opened: 1, state: 'active' })
     expect(
       getDb().audit.some(
         (a) => a.action === 'link-created' && a.entityId === released.id,
@@ -118,17 +128,76 @@ describe('share links and the report portal', () => {
     ).toBe(true)
   })
 
-  it('stops showing a withdrawn report even with a link', async () => {
-    const reports = await labApi.reports.list({ date: 'all', q: '' })
-    const released = reports.rows.find((r) => r.status === 'released')!
-    await tech.reports.shareLink(released.id)
+  it('counts wrong dates of birth and locks the link after five', async () => {
+    const { released } = await releasedReport()
+    const { token } = await tech.reports.createShareLink(released.id)
+    await expect(
+      labApi.portal.open('not-a-real-token', { dob: '1990-01-01' }),
+    ).rejects.toMatchObject({ code: 'link-not-found' })
+    for (let left = 4; left >= 1; left--)
+      await expect(
+        labApi.portal.open(token, { dob: '1900-01-01' }),
+      ).rejects.toMatchObject({ code: 'dob-mismatch', params: { left } })
+    await expect(
+      labApi.portal.open(token, { dob: '1900-01-01' }),
+    ).rejects.toMatchObject({ code: 'link-locked' })
+    const detail = await labApi.reports.get(released.id)
+    expect(detail.shareLinks[0]!.state).toBe('locked')
+    expect(
+      detail.shareLinks[0]!.access.filter((a) => a.outcome === 'dob-mismatch'),
+    ).toHaveLength(5)
+  })
+
+  it('stops a link when it expires, is revoked, or the report changes', async () => {
+    const { released, dob } = await releasedReport()
+    const expiring = await tech.reports.createShareLink(released.id)
+    getDb().shareLinks[expiring.link.id]!.expiresAt = Date.now() - 1
+    await expect(
+      labApi.portal.open(expiring.token, { dob }),
+    ).rejects.toMatchObject({ code: 'link-expired' })
+
+    const revoked = await tech.reports.createShareLink(released.id)
+    await tech.reports.revokeShareLink(revoked.link.id)
+    await expect(
+      labApi.portal.open(revoked.token, { dob }),
+    ).rejects.toMatchObject({ code: 'link-revoked' })
+
+    const live = await tech.reports.createShareLink(released.id)
     await pathologist.reports.withdraw(
       released.id,
       'Issued for the wrong visit',
     )
-    await expect(labApi.portal.report(released.reportNo)).rejects.toMatchObject(
-      { code: 'not-found' },
+    await expect(labApi.portal.open(live.token, { dob })).rejects.toMatchObject(
+      { code: 'link-revoked' },
     )
+    const links = (await labApi.reports.get(released.id)).shareLinks
+    expect(links.find((l) => l.id === live.link.id)?.revokeReason).toBe(
+      'withdrawn',
+    )
+  })
+
+  it('seals each issued version and verifies it without patient data', async () => {
+    const { reports } = await releasedReport()
+    const amended = reports.rows.find((r) => r.status === 'corrected')!
+    const current = await labApi.reports.get(amended.id)
+    const first = await labApi.reports.get(amended.id, { version: 1 })
+    expect(current.seal?.digest).toMatch(/^[0-9a-f]{64}$/)
+    expect(first.seal?.digest).not.toBe(current.seal?.digest)
+
+    const now = await labApi.portal.verify(current.seal!.verifyToken)
+    expect(now).toMatchObject({
+      reportNo: amended.reportNo,
+      version: current.version,
+      status: 'current',
+      digest: current.seal!.digest,
+    })
+    const then = await labApi.portal.verify(first.seal!.verifyToken)
+    expect(then.status).toBe('superseded')
+    const patient = getDb().patients[getDb().reports[amended.id]!.patientId]!
+    expect(JSON.stringify(now)).not.toContain(patient.name)
+    await expect(labApi.portal.verify('nonsense')).rejects.toMatchObject({
+      code: 'link-not-found',
+    })
   })
 
   it('shows an earlier version as it was issued', async () => {
@@ -197,13 +266,16 @@ describe('diagnostic imaging and the patient report history', () => {
     const [study] = (await labApi.imaging.list({ modality: 'ct' })).filter(
       (s) => s.version > 0,
     )
-    await tech.imaging.shareLink(study!.id)
-    const view = await labApi.portal.report(study!.reportNo!)
+    const { token } = await tech.imaging.createShareLink(study!.id)
+    const dob = getDb().patients[getDb().imaging[study!.id]!.patientId]!.dob
+    const view = await labApi.portal.open(token, { dob })
     expect(view.kind).toBe('imaging')
+    const report = await labApi.imaging.report(study!.id)
+    expect(report.seal?.digest).toMatch(/^[0-9a-f]{64}$/)
     const waiting = (await labApi.imaging.list({ status: 'acquired' }))[0]!
-    await expect(tech.imaging.shareLink(waiting.id)).rejects.toMatchObject({
-      code: 'report-not-released',
-    })
+    await expect(
+      tech.imaging.createShareLink(waiting.id),
+    ).rejects.toMatchObject({ code: 'report-not-released' })
   })
 })
 

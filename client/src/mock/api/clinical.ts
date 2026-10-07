@@ -21,6 +21,7 @@ import type { DbIndex } from './index-cache'
 import { imagingRow } from './imaging'
 import { read, write } from './runtime'
 import type {
+  PatientListResult,
   PatientReportEntry,
   CriticalFilters,
   CriticalRow,
@@ -40,6 +41,13 @@ import {
   sampleRow,
   staffName,
 } from './views'
+import { paginate, type Sorters } from './paging'
+import { mergePatients } from '../engine/patients'
+import {
+  recordConsent,
+  withdrawConsent,
+  type ConsentInput,
+} from '../engine/consent'
 
 export type { DocumentCriticalInput, RegisterPatientInput, UpdatePatientInput }
 
@@ -175,11 +183,19 @@ function patientReportHistory(
   return [...lab, ...imaging].toSorted((a, b) => b.date - a.date)
 }
 
+const PATIENT_SORTERS: Sorters<PatientRow> = {
+  patient: (r) => r.name,
+  flags: (r) => r.openCriticals * 100 + r.abnormalResults,
+  visit: (r) => r.lastVisitAt,
+}
+
 export const patientsApi = {
   list: (filters: PatientFilters = {}) =>
-    read((db, { index, now }) => {
+    read((db, { index, now }): PatientListResult => {
       const rows: PatientRow[] = []
       for (const p of Object.values(db.patients)) {
+        // A merged duplicate is reached through the record that stayed.
+        if (p.mergedInto) continue
         if (filters.encounter && p.encounter.type !== filters.encounter)
           continue
         const orders = (index.ordersByPatient.get(p.id) ?? []).filter(
@@ -253,7 +269,8 @@ export const patientsApi = {
           registeredAt: p.registeredAt,
         })
       }
-      return rows.toSorted((a, b) => b.lastVisitAt - a.lastVisitAt)
+      const recentFirst = rows.toSorted((a, b) => b.lastVisitAt - a.lastVisitAt)
+      return paginate(recentFirst, filters, PATIENT_SORTERS)
     }),
 
   get: (id: string) =>
@@ -461,6 +478,9 @@ export const patientsApi = {
           registeredAt: p.registeredAt,
           notes: p.notes,
           ...(p.email ? { email: p.email } : {}),
+          ...(p.pinCode ? { pinCode: p.pinCode } : {}),
+          ...(p.abha ? { abha: p.abha } : {}),
+          messagingOptOut: p.messagingOptOut ?? {},
           ...(p.encounter.attendingDoctorId &&
           db.doctors[p.encounter.attendingDoctorId]
             ? {
@@ -492,6 +512,19 @@ export const patientsApi = {
           .toSorted((a, b) => b.detectedAt - a.detectedAt),
         timeline: timeline.slice(0, 200),
         reportHistory: patientReportHistory(db, index, id),
+        consents: Object.values(db.consents)
+          .filter((c) => c.patientId === id)
+          .toSorted((x, y) => y.recordedAt - x.recordedAt)
+          .map((c) => ({
+            ...c,
+            recordedByName: staffName(db, c.recordedBy),
+            ...(c.withdrawnBy
+              ? { withdrawnByName: staffName(db, c.withdrawnBy) }
+              : {}),
+            testNames: (c.orderItemIds ?? []).map(
+              (itemId) => db.items[itemId]?.testName ?? itemId,
+            ),
+          })),
         trends,
       }
     }),
@@ -507,4 +540,14 @@ export const patientsApi = {
 
   addNote: (id: string, text: string) =>
     write((db, ctx) => void addClinicalNote(db, id, text, ctx)),
+
+  /** Merges a duplicate registration into the record that stays. */
+  merge: (input: { survivorId: string; duplicateId: string; reason: string }) =>
+    write((db, ctx) => mergePatients(db, input, ctx).id),
+
+  recordConsent: (id: string, input: ConsentInput) =>
+    write((db, ctx) => recordConsent(db, id, input, ctx).id),
+
+  withdrawConsent: (consentId: string, reason: string) =>
+    write((db, ctx) => void withdrawConsent(db, consentId, reason, ctx)),
 }

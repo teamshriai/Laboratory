@@ -7,7 +7,9 @@ import { isItemLive } from '@/domain/workflow'
 import type { LabDb } from '../db/schema'
 import type { DbIndex } from './index-cache'
 import { imagingRows } from './imaging'
-import { read } from './runtime'
+import { write } from './runtime'
+import { getIndex } from './index-cache'
+import { audit, LabApiError } from '../engine/core'
 import { todayView } from './today'
 import type {
   AssistantIntent,
@@ -267,18 +269,29 @@ function answer(
   }
 }
 
+/** Version of the rule set the answers come from (shown with each answer). */
+const ASSISTANT_RULES = 'assistant-rules 1.0'
+
 export const assistantApi = {
   /** The questions offered as one-tap suggestions. */
   suggestions: () => [...ASSISTANT_INTENTS].filter((i) => i !== 'help'),
 
+  /**
+   * Answers from the same read model as the dashboard. Each question is
+   * audited (its intent, never the typed text); the lab can switch the
+   * assistant off in Settings.
+   */
   ask: (question: { intent?: AssistantIntent; text?: string }) =>
-    read((db, { index, now }) =>
-      answer(
-        question.intent ?? matchIntent(question.text ?? ''),
-        db,
-        index,
-        now,
-        todayView(db, index, now),
-      ),
-    ),
+    write((db, ctx): AssistantReply => {
+      if (!db.settings.assistantEnabled) throw new LabApiError('assistant-off')
+      const intent = question.intent ?? matchIntent(question.text ?? '')
+      audit(db, ctx, 'system', 'assistant', 'assistant-asked', {
+        detail: { intent, rules: ASSISTANT_RULES },
+      })
+      const index = getIndex(db)
+      return {
+        ...answer(intent, db, index, ctx.now, todayView(db, index, ctx.now)),
+        source: { readModel: 'today', at: ctx.now, rules: ASSISTANT_RULES },
+      }
+    }),
 }

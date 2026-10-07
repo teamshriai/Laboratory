@@ -13,6 +13,7 @@ export function ConfirmDialog({
   tone = 'primary',
   loading,
   disabled,
+  dirty,
   children,
 }: {
   open: boolean
@@ -24,6 +25,8 @@ export function ConfirmDialog({
   tone?: 'primary' | 'danger'
   loading?: boolean
   disabled?: boolean
+  /** Typed input: Esc, a click outside or the close button ask first. */
+  dirty?: boolean
   children?: ReactNode
 }) {
   const t = useT('common')
@@ -34,6 +37,7 @@ export function ConfirmDialog({
       title={title}
       description={description}
       size="sm"
+      dirty={Boolean(dirty) && !loading}
       footer={
         <>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>

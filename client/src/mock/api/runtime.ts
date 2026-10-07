@@ -91,6 +91,4 @@ export async function write<T>(
   return structuredClone(result)
 }
 
-export function isLabApiError(error: unknown): error is LabApiError {
-  return error instanceof LabApiError
-}
+export { isApiError as isLabApiError } from '@/domain/errors'

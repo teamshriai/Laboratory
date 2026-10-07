@@ -122,4 +122,10 @@ export default {
   activeFilters: 'सक्रिय फ़िल्टर',
   removeFilter: 'फ़िल्टर हटाएँ: {filter}',
   exportCsv: 'CSV निर्यात करें',
+  sessionEndedTitle: 'आपका सत्र समाप्त हो गया है',
+  sessionEndedBody:
+    'जारी रखने के लिए फिर से साइन इन करें। इस पेज पर बिना सहेजे बदलाव खो सकते हैं।',
+  signIn: 'साइन इन करें',
+  signOut: 'साइन आउट करें',
+  sessionChecking: 'आपका सत्र जाँचा जा रहा है',
 } as const

@@ -1,5 +1,6 @@
 // Staff, doctors and patients for the demo hospital.
 
+import { DEPARTMENTS } from '@/domain/types'
 import type {
   BloodGroup,
   ClinicalDepartmentId,
@@ -69,12 +70,24 @@ export const STAFF: Staff[] = [
     name: 'Dr. Kavitha Rao',
     role: 'pathologist',
     qualification: 'MD Pathology',
+    signatory: {
+      registrationNo: 'KMC 68214',
+      council: 'Karnataka Medical Council',
+      departments: [...DEPARTMENTS],
+      active: true,
+    },
   },
   {
     id: 'st_sanjay',
     name: 'Dr. Sanjay Kulkarni',
     role: 'pathologist',
     qualification: 'MD Pathology',
+    signatory: {
+      registrationNo: 'KMC 71903',
+      council: 'Karnataka Medical Council',
+      departments: [...DEPARTMENTS],
+      active: true,
+    },
   },
   {
     id: 'st_meera',
@@ -82,6 +95,12 @@ export const STAFF: Staff[] = [
     role: 'microbiologist',
     department: 'microbiology',
     qualification: 'MD Microbiology',
+    signatory: {
+      registrationNo: 'KMC 74550',
+      council: 'Karnataka Medical Council',
+      departments: ['microbiology'],
+      active: true,
+    },
   },
   {
     id: 'st_ganesh',
@@ -90,6 +109,14 @@ export const STAFF: Staff[] = [
     qualification: 'MSc Medical Laboratory Technology',
   },
   { id: 'st_shruthi', name: 'Shruthi B', role: 'receptionist' },
+  { id: 'st_vasanth', name: 'Vasanth Raman', role: 'owner' },
+  {
+    id: 'st_dr_asha',
+    name: 'Dr. Asha Kiran',
+    role: 'doctor',
+    doctorId: 'dr_asha',
+    qualification: 'MD General Medicine',
+  },
 ]
 
 export const DEFAULT_ACTOR_ID = 'st_anjali'

@@ -41,6 +41,13 @@ export type TestInput = Omit<LabTest, 'id' | 'active' | 'analyteIds'> & {
   analyteIds?: string[]
 }
 
+/** A test's default referral lab must exist and be in use. */
+function checkReferralLab(db: LabDb, labId: string | undefined) {
+  if (labId === undefined || labId === '') return
+  if (!db.referralLabs[labId]?.active)
+    throw new LabApiError('validation-failed', { field: 'sendOutLabId' })
+}
+
 function slug(code: string) {
   return 'tst_' + code.toLowerCase().replace(/[^a-z0-9]+/g, '_')
 }
@@ -53,6 +60,7 @@ export function createTest(
 ): LabTest {
   const why = catalogChange(db, ctx, reason)
   checkLoinc(input.loinc)
+  checkReferralLab(db, input.sendOutLabId)
   const code = input.code.trim().toUpperCase()
   if (Object.values(db.tests).some((t) => t.code.toUpperCase() === code))
     throw new LabApiError('duplicate-code', { code })
@@ -89,6 +97,7 @@ export function updateTest(
 ) {
   const why = catalogChange(db, ctx, reason)
   checkLoinc(patch.loinc)
+  checkReferralLab(db, patch.sendOutLabId)
   const test = must(db.tests, id, 'test')
   if (patch.code) {
     const code = patch.code.trim().toUpperCase()
@@ -105,6 +114,8 @@ export function updateTest(
   )
   const version = test.version ?? 1
   Object.assign(test, patch)
+  // An empty referral lab means the test is done here again.
+  if (!test.sendOutLabId) delete test.sendOutLabId
   if (changed.length) {
     test.version = version + 1
     audit(db, ctx, 'test', test.id, 'updated', {

@@ -99,9 +99,36 @@ function looksLikeDb(value: unknown): value is LabDb {
       'reports',
       'tests',
       'imaging',
-      'reportLinks',
+      'shareLinks',
+      'verifications',
+      'consents',
+      'referralLabs',
+      'invoices',
+      'packages',
+      'accounts',
+      'priceLists',
+      'cashCloses',
+      'centres',
+      'homeVisits',
+      'templates',
+      'eqaRounds',
+      'ncs',
+      'documents',
+      'internalAudits',
+      'risks',
+      'lisVerifications',
+      'qualifications',
+      'coldUnits',
+      'dataRequests',
+      'breaches',
+      'legalHolds',
+      'codeMappings',
+      'sites',
+      'autoVerifyRules',
     ].every((k) => v[k] !== null && typeof v[k] === 'object') &&
     Array.isArray(v.activity) &&
+    Array.isArray(v.interfaceLog) &&
+    Array.isArray(v.insightFeedback) &&
     Array.isArray(v.audit)
   )
 }

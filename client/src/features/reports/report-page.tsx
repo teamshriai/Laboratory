@@ -54,6 +54,7 @@ import { focusWhenScrollable } from '@/lib/scroll-focus'
 import { ShareLinkPanel } from '@/components/lab/share-link-panel'
 import { useSearchParam } from '@/hooks/use-search-param'
 import { cn } from '@/lib/cn'
+import { useRecordView } from '@/hooks/use-record-view'
 
 function Block({
   title,
@@ -87,6 +88,7 @@ function ShareDialog({
   const t = useT('reports')
   const tc = useT('common')
   const e = useEnum()
+  const { data: settings } = useLabSettings()
   const [channel, setChannel] = useState<ShareChannel>('whatsapp')
   const defaults: Record<ShareChannel, string> = {
     sms: report.patient.mobile,
@@ -127,9 +129,10 @@ function ShareDialog({
     >
       <div className="grid gap-4">
         <ShareLinkPanel
-          reportNo={report.reportNo}
-          link={report.shareLink}
-          create={() => labApi.reports.shareLink(report.id)}
+          links={report.shareLinks}
+          defaultDays={settings?.shareLinkDays ?? 7}
+          create={(days) => labApi.reports.createShareLink(report.id, { days })}
+          revoke={(id) => labApi.reports.revokeShareLink(id)}
           disabled={Boolean(report.withdrawn) || !report.reportedAt}
         />
         <Field label={t('channel')}>
@@ -881,6 +884,7 @@ function Panel({
 
 export function Component() {
   const { reportId } = useParams()
+  useRecordView('report', reportId)
   const t = useT('reports')
   const tc = useT('common')
   const now = useNow()

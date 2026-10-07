@@ -11,6 +11,7 @@ import { DEPARTMENT_ICONS } from '@/app/layout/nav-config'
 import type { TatTestRow, TatView } from '@/services/lab-api'
 import { useLabSettings, useTat } from '@/services/queries'
 import { useOpenSample } from '@/features/work-queue/use-open-sample'
+import { InsightList } from '@/components/lab/insight-card'
 import { PriorityMark } from '@/components/lab/status'
 import { TatIndicator } from '@/components/lab/tat'
 import { Card, CardHeader } from '@/components/ui/card'
@@ -168,6 +169,8 @@ function LiveBuckets({
     </Card>
   )
 }
+
+const TAT_INSIGHTS = ['tat-cluster'] as const
 
 export function Component() {
   const t = useT('tat')
@@ -350,6 +353,7 @@ export function Component() {
           <>
             <ExportButton
               filename={t('exportFile')}
+              entity="test"
               disabled={!data?.tests.length}
               rows={() => [
                 [
@@ -434,6 +438,8 @@ export function Component() {
               },
             ]}
           />
+
+          <InsightList kinds={TAT_INSIGHTS} className="mb-5" />
 
           <LiveBuckets
             key={dataUpdatedAt}

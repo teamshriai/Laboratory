@@ -111,4 +111,6 @@ export default {
     'Patient results on this analyte stay on hold until a repeat QC passes.',
   viewEvent: 'Open workflow',
   history: 'Workflow',
+  eventNotFound: 'QC failure not found',
+  eventNotFoundBody: 'The link may be out of date, or the record was removed.',
 } as const

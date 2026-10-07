@@ -4,10 +4,16 @@ import { Link } from 'react-router'
 import { PageHeader } from '@/app/layout/page-header'
 import { AUDIT_ENTITIES, type AuditEntity } from '@/domain/types'
 import { useUrlFilters } from '@/hooks/use-search-param'
+import { useTablePaging } from '@/hooks/use-table-paging'
 import { useEnum, useT } from '@/i18n/context'
 import type { EnumGroup, TKey } from '@/i18n/core'
 import { useFormat } from '@/i18n/format'
-import type { AuditRow, DatePreset } from '@/services/lab-api'
+import {
+  labApi,
+  type AuditFilters,
+  type AuditRow,
+  type DatePreset,
+} from '@/services/lab-api'
 import { useAuditLog, useReference } from '@/services/queries'
 import { FilterBar } from '@/components/lab/filter-bar'
 import { ExportButton } from '@/components/lab/export-button'
@@ -31,12 +37,17 @@ export function Component() {
   )
   const q = useDeferredValue(url.values.q)
   const entity = url.values.entity as AuditEntity | 'all'
-  const { data, isPending, isError, refetch } = useAuditLog({
+  const paging = useTablePaging(50, ['time', 'action', 'user'])
+  const listFilters: AuditFilters = {
     q,
     date: url.values.date as DatePreset,
     ...(entity !== 'all' ? { entity } : {}),
     ...(url.values.by !== 'all' ? { by: url.values.by } : {}),
     ...(url.values.action !== 'all' ? { action: url.values.action } : {}),
+  }
+  const { data, isPending, isError, refetch } = useAuditLog({
+    ...listFilters,
+    ...paging.query,
   })
 
   const actionLabel = (action: string) => {
@@ -72,7 +83,7 @@ export function Component() {
     {
       id: 'time',
       header: t('colTime'),
-      sortValue: (r) => r.at,
+      sortable: true,
       cell: (r) => (
         <span className="text-meta whitespace-nowrap text-fg tabular-nums">
           {f.dateTime(r.at)}
@@ -105,7 +116,7 @@ export function Component() {
     {
       id: 'action',
       header: t('colAction'),
-      sortValue: (r) => r.action,
+      sortable: true,
       cell: (r) => (
         <span className="text-meta font-medium text-fg">
           {actionLabel(r.action)}
@@ -153,7 +164,7 @@ export function Component() {
     {
       id: 'user',
       header: t('colUser'),
-      sortValue: (r) => r.byName,
+      sortable: true,
       cell: (r) => (
         <span className="text-meta whitespace-nowrap text-fg">{r.byName}</span>
       ),
@@ -170,8 +181,9 @@ export function Component() {
         actions={
           <ExportButton
             filename={t('exportFile')}
+            entity="system"
             disabled={!data?.rows.length}
-            rows={() => [
+            rows={async () => [
               [
                 t('colTime'),
                 t('colUser'),
@@ -181,7 +193,8 @@ export function Component() {
                 t('colChange'),
                 t('colReason'),
               ],
-              ...(data?.rows ?? []).map((r) => [
+              // Every matching entry, not just the page on screen.
+              ...(await labApi.admin.audit(listFilters)).rows.map((r) => [
                 f.dateTime(r.at),
                 r.byName,
                 t(`entity.${r.entity}`),
@@ -290,11 +303,11 @@ export function Component() {
             caption={t('auditTitle')}
             columns={columns}
             rows={data?.rows}
+            server={paging.table(data?.page)}
             getRowId={(r) => r.id}
             isLoading={isPending}
             isError={isError}
             onRetry={() => void refetch()}
-            pageSize={50}
             mobile={{ primary: 'action', fields: ['record', 'time', 'user'] }}
             empty={
               <EmptyState

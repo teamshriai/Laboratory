@@ -1,6 +1,12 @@
 import { isItemLive } from '@/domain/workflow'
 import { startOfIstDay } from '@/domain/time'
-import type { HoldReason, Sample, SampleStatus } from '@/domain/types'
+import type {
+  HoldReason,
+  ReceiptTemperature,
+  Sample,
+  SampleStatus,
+  SendOutState,
+} from '@/domain/types'
 import type { LabDb } from '../db/schema'
 import { must } from '../engine/core'
 import {
@@ -11,6 +17,10 @@ import {
   rejectSample,
   resumeSample,
   startProcessing,
+  scheduleCollection,
+  sendOutSample,
+  splitSample,
+  updateSendOut,
   type CollectInput,
   type RejectInput,
   assignSample,
@@ -275,11 +285,36 @@ export const samplesApi = {
   collect: (id: string, input: CollectInput) =>
     write((db, ctx) => collectSample(db, id, input, ctx).accessionNo),
 
-  receive: (ref: string) =>
+  receive: (ref: string, input: { temperature?: ReceiptTemperature } = {}) =>
     write((db, ctx) => {
-      const s = receiveSample(db, ref, ctx)
-      return { id: s.id, accessionNo: s.accessionNo }
+      const s = receiveSample(db, ref, ctx, input)
+      return {
+        id: s.id,
+        accessionNo: s.accessionNo,
+        temperatureDeviation: Boolean(s.temperatureDeviation),
+      }
     }),
+
+  /** Defers a collection to a later time (e.g. post-prandial). */
+  schedule: (id: string, input: { at: number; reason: string }) =>
+    write((db, ctx) => void scheduleCollection(db, id, input, ctx)),
+
+  /** Splits a received specimen into aliquots; `groups` are test item ids. */
+  split: (id: string, groups: string[][]) =>
+    write((db, ctx) =>
+      splitSample(db, id, groups, ctx).map((s) => ({
+        id: s.id,
+        accessionNo: s.accessionNo,
+      })),
+    ),
+
+  sendOut: (id: string, input: { labId: string; courier?: string }) =>
+    write((db, ctx) => void sendOutSample(db, id, input, ctx)),
+
+  updateSendOut: (
+    id: string,
+    input: { state: SendOutState; externalRef?: string },
+  ) => write((db, ctx) => void updateSendOut(db, id, input, ctx)),
 
   start: (id: string, equipmentId?: string) =>
     write(

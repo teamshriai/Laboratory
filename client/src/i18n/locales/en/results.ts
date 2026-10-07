@@ -98,4 +98,37 @@ export default {
   changeReasonPlaceholder: 'For example: transcription error, value re-read',
   changedTo: 'changed to',
   cleared: '(cleared)',
+  calculated: 'Calculated',
+  calculatedFrom: 'From {inputs}',
+  ldlNotCalculated:
+    'Not calculated: triglycerides above {limit} mg/dL. Measure LDL directly.',
+  instrumentFlag: 'Analyzer flag',
+  insertComment: 'Insert comment',
+  commentInserted: 'Comment inserted. It is saved with the results.',
+  undoInsert: 'Undo',
+  commentSavedHint:
+    'Printed under this test when you save. Edit or clear it before saving.',
+  performedBy:
+    'Performed by {lab} ({accreditation}): enter the values from its report.',
+  performedByShort: 'Performed by {lab} ({accreditation})',
+  nablCertificate: 'NABL {cert}',
+  nablAccredited: 'NABL accredited',
+  notNabl: 'not NABL accredited',
+  previewTitle: 'How it will print',
+  previewHint:
+    'Updates as you type. Nothing is saved until you save the results.',
+  previewComment: 'Comment',
+  viewSwitch: 'Entry or print preview',
+  viewEntry: 'Enter',
+  viewPreview: 'How it will print',
+  criticalDialogTitle_one: 'Critical value: call the clinician now',
+  criticalDialogTitle_other: '{count} critical values: call the clinician now',
+  criticalDialogBody:
+    'Patient: {patient}. Communicate each value to the treating clinician within {minutes} minutes and have it read back.',
+  criticalUnderstand:
+    'I understand: I will call the clinician now and record the call with read-back.',
+  criticalUnderstandRequired:
+    'Tick the box above first, or choose "Communicate now".',
+  criticalCallNow: 'I will call now',
+  criticalCommunicate: 'Communicate now',
 } as const

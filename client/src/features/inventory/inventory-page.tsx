@@ -18,6 +18,7 @@ import {
   type StockStatus,
 } from '@/domain/types'
 import { useNow } from '@/hooks/use-now'
+import { useOverlayParam } from '@/hooks/use-search-param'
 import { useEnum, useT } from '@/i18n/context'
 import { useFormat } from '@/i18n/format'
 import { cn } from '@/lib/cn'
@@ -58,6 +59,8 @@ const WINDOWS: ExpiryWindow[] = ['expired', '7d', '30d', '90d']
 const TABS = ['items', 'expiry', 'movements'] as const
 type Tab = (typeof TABS)[number]
 
+const ITEM_KINDS: readonly InventoryKind[] = ['reagent', 'consumable']
+
 export function Component() {
   const t = useT('inventory')
   const tc = useT('common')
@@ -92,11 +95,12 @@ export function Component() {
   const movements = useMovements(120)
   const { data: lots } = useLots({})
 
-  const itemParam = params.get('item')
-  const [openKind, openId] = (itemParam?.split(':') ?? []) as [
-    InventoryKind | undefined,
-    string | undefined,
-  ]
+  const [itemParam, openItem, closeItem] = useOverlayParam('item')
+  // ?item=kind:id; an unknown kind (hand-edited link) is ignored.
+  const sep = itemParam?.indexOf(':') ?? -1
+  const rawKind = itemParam && sep > 0 ? itemParam.slice(0, sep) : undefined
+  const openKind = ITEM_KINDS.find((k) => k === rawKind)
+  const openId = itemParam && sep > 0 ? itemParam.slice(sep + 1) : undefined
   const setParam = (key: string, value: string | null) =>
     setParams((prev) => {
       const next = new URLSearchParams(prev)
@@ -405,7 +409,7 @@ export function Component() {
               rows={items.data}
               getRowId={(r) => `${r.kind}:${r.id}`}
               rowLabel={(r) => r.name}
-              onRowClick={(r) => setParam('item', `${r.kind}:${r.id}`)}
+              onRowClick={(r) => openItem(`${r.kind}:${r.id}`)}
               isLoading={items.isPending}
               isError={items.isError}
               onRetry={() => void items.refetch()}
@@ -474,9 +478,7 @@ export function Component() {
                             <button
                               type="button"
                               className="min-w-48 flex-1 text-left"
-                              onClick={() =>
-                                setParam('item', `${r.kind}:${r.itemId}`)
-                              }
+                              onClick={() => openItem(`${r.kind}:${r.itemId}`)}
                             >
                               <span className="block truncate text-meta font-medium text-fg hover:underline">
                                 {r.name}
@@ -556,11 +558,7 @@ export function Component() {
       </Tabs>
 
       {openKind && openId ? (
-        <InventoryItemDrawer
-          kind={openKind}
-          id={openId}
-          onClose={() => setParam('item', null)}
-        />
+        <InventoryItemDrawer kind={openKind} id={openId} onClose={closeItem} />
       ) : null}
       {receive === 'reagent' ? (
         <ReceiveLotDialog onClose={() => setReceive(null)} />

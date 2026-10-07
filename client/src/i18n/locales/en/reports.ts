@@ -161,4 +161,20 @@ export default {
     'You are viewing version {version}. Version {latest} is the current report.',
   viewCurrentVersion: 'View the current version',
   currentVersion: 'Current',
+  notAccreditedLabel: 'Not NABL accredited',
+  notAccreditedFootnote:
+    "Test outside the scope of the laboratory's NABL accreditation.",
+  performedByNabl: 'Performed by {lab} (NABL {certificate})',
+  performedByAccredited: 'Performed by {lab} (NABL accredited)',
+  performedByNotAccredited: 'Performed by {lab} (not NABL accredited)',
+  patientSummaryTitle: 'Summary for the patient',
+  patientSummaryIntro: 'These results are outside the reference interval:',
+  patientSummaryRow: '{test} {value}: {meaning}',
+  patientSummaryNone:
+    'All the reported results are within their reference intervals.',
+  summaryHigher: 'Higher than the reference interval',
+  summaryLower: 'Lower than the reference interval',
+  summaryAbnormal: 'Abnormal',
+  patientSummaryDisclaimer:
+    'This summary is not a diagnosis. Please discuss your results with your doctor.',
 } as const

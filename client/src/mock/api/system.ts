@@ -2,7 +2,7 @@ import { getDbStats, resetDb } from '../db/store'
 import { audit, requirePermission } from '../engine/core'
 import { updateSettings } from '../engine/settings'
 import { read, write } from './runtime'
-import type { LabSettings, ReferenceData } from './types'
+import type { LabSettings, ReferenceData, SessionInfo } from './types'
 import { doctorRef } from './views'
 
 export const referenceApi = {
@@ -10,7 +10,24 @@ export const referenceApi = {
     read((db): ReferenceData => ({
       staff: Object.values(db.staff),
       doctors: Object.keys(db.doctors).map((id) => doctorRef(db, id)),
+      referralLabs: Object.values(db.referralLabs),
     })),
+}
+
+/**
+ * Who is signed in. The demo has no login: it is whoever the app is
+ * "acting as". A backend answers from its session (401 when there is none).
+ */
+export const sessionApi = {
+  get: () =>
+    read((db, { actor }): SessionInfo => {
+      const staff = db.staff[actor]
+      return {
+        staffId: actor,
+        name: staff?.name ?? '',
+        role: staff?.role ?? 'technician',
+      }
+    }),
 }
 
 export const systemApi = {

@@ -1,4 +1,9 @@
-import { criticalState, isCriticalOverdue } from '@/domain/critical'
+import {
+  criticalState,
+  escalationStep,
+  isCriticalOverdue,
+  isCriticalPending,
+} from '@/domain/critical'
 // Builders that turn database rows into the DTOs screens consume.
 
 import { isAbnormal, isCriticalFlag } from '@/domain/flags'
@@ -35,6 +40,8 @@ import type {
   SampleRow,
   TestChip,
 } from './types'
+import { byOrderOfDraw } from '@/domain/collection'
+import { testsMissingConsent } from '../engine/consent'
 
 export function patientSummary(p: Patient): PatientSummary {
   const s: PatientSummary = {
@@ -49,13 +56,21 @@ export function patientSummary(p: Patient): PatientSummary {
   }
   if (p.nameLocal) s.nameLocal = p.nameLocal
   if (p.bloodGroup) s.bloodGroup = p.bloodGroup
+  if (p.preferredLanguage) s.preferredLanguage = p.preferredLanguage
+  if (p.mergedInto) s.mergedInto = p.mergedInto
   return s
 }
 
 export function doctorRef(db: LabDb, id: string): DoctorRef {
   const d = db.doctors[id]
   return d
-    ? { id: d.id, name: d.name, department: d.department, phone: d.phone }
+    ? {
+        id: d.id,
+        name: d.name,
+        department: d.department,
+        phone: d.phone,
+        ...(d.active === false ? { active: false as const } : {}),
+      }
     : { id, name: id, department: 'general-medicine', phone: '' }
 }
 
@@ -237,6 +252,57 @@ export function sampleRow(
         .filter((i) => i.status !== 'validated')
         .map((i) => itemTat(i, sample, now)),
     ),
+    consentMissing:
+      sample.status === 'pending_collection'
+        ? testsMissingConsent(db, live).map((i) => ({
+            itemId: i.id,
+            testName: i.testName,
+          }))
+        : [],
+    drawOrder:
+      sample.status === 'pending_collection'
+        ? byOrderOfDraw(
+            (index.pendingByPatient.get(sample.patientId) ?? []).filter(
+              (s) =>
+                (s.scheduledFor === undefined || s.scheduledFor <= now) &&
+                (index.itemsBySample.get(s.id) ?? []).some(isItemLive),
+            ),
+            (s) => s.container,
+          ).map((s) => ({
+            id: s.id,
+            container: s.container,
+            accessionNo: s.accessionNo,
+          }))
+        : [],
+    aliquots: (index.aliquotsByParent.get(sample.id) ?? []).map((s) => ({
+      id: s.id,
+      accessionNo: s.accessionNo,
+    })),
+  }
+  if (sample.scheduledFor !== undefined) row.scheduledFor = sample.scheduledFor
+  if (sample.scheduleReason) row.scheduleReason = sample.scheduleReason
+  if (sample.identityCheck)
+    row.identityCheck = {
+      method: sample.identityCheck.method,
+      at: sample.identityCheck.at,
+      byName: staffName(db, sample.identityCheck.by),
+    }
+  if (sample.fastingStatus) row.fastingStatus = sample.fastingStatus
+  if (sample.receiptTemperature)
+    row.receiptTemperature = sample.receiptTemperature
+  if (sample.temperatureDeviation) row.temperatureDeviation = true
+  if (sample.parentId)
+    row.parent = {
+      id: sample.parentId,
+      accessionNo: db.samples[sample.parentId]?.accessionNo ?? null,
+    }
+  if (sample.sendOut) {
+    const lab = db.referralLabs[sample.sendOut.labId]
+    row.sendOut = {
+      ...sample.sendOut,
+      labName: lab?.name ?? sample.sendOut.labId,
+      nablAccredited: lab?.nablAccredited ?? false,
+    }
   }
   if (order.ward) row.ward = order.ward
   if (order.bed) row.bed = order.bed
@@ -285,6 +351,8 @@ export function resultView(db: LabDb, r: Result): ResultView {
   }
   if (r.remarks) v.remarks = r.remarks
   if (r.dilution) v.dilution = r.dilution
+  if (r.instrumentFlags?.length) v.instrumentFlags = r.instrumentFlags
+  if (r.calculated) v.calculated = true
   return v
 }
 
@@ -361,6 +429,19 @@ export function criticalRow(
       .map((h) => ({ ...h, byName: staffName(db, h.by) })),
   }
   if (alert.escalatedBy) row.escalatedByName = staffName(db, alert.escalatedBy)
+  // Still not communicated: who it should have gone to by now.
+  if (isCriticalPending(alert)) {
+    const step = escalationStep(
+      (now - alert.detectedAt) / 60_000,
+      db.settings.criticalEscalation,
+    )
+    if (step)
+      row.escalationDue = {
+        step: step.index + 1,
+        to: step.tier.to,
+        afterMin: step.tier.afterMin,
+      }
+  }
   if (order.ward) row.ward = order.ward
   if (order.bed) row.bed = order.bed
   if (alert.notifiedBy) row.notifiedByName = staffName(db, alert.notifiedBy)

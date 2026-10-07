@@ -9,6 +9,14 @@ import { formatRange } from '@/domain/reference-ranges'
 import type { PublicLabReport as ReportDetail } from '@/services/lab-api'
 import { cn } from '@/lib/cn'
 import {
+  PatientSummary,
+  VerificationBlock,
+} from '@/components/lab/documents/report-blocks'
+import {
+  performedByText,
+  summaryLanguages,
+} from '@/components/lab/documents/report-extras'
+import {
   cssString,
   pageOfContent,
   usePageRules,
@@ -52,7 +60,7 @@ export function ReportSheet({
   lang: Language
   now: number
   lab?:
-    | Pick<
+    | (Pick<
         LabSettings,
         | 'labName'
         | 'reportHeader'
@@ -60,7 +68,8 @@ export function ReportSheet({
         | 'labAddress'
         | 'labRegistration'
         | 'labAccreditation'
-      >
+      > &
+        Partial<Pick<LabSettings, 'patientSummaryOnReport'>>)
     | undefined
 }) {
   const t = (key: string, params?: Record<string, string | number>) =>
@@ -165,6 +174,10 @@ export function ReportSheet({
     ? `${report.order.ward}${report.order.bed ? ` / ${report.order.bed}` : ''}`
     : e('encounter', report.order.encounter)
   const multiSample = report.samples.length > 1
+  // Tests outside the NABL scope carry an asterisk explained under the table.
+  const notAccredited = report.sections.some(
+    (s) => s.notAccredited && (!issued || s.released),
+  )
   const sample = report.samples[0]
   const expectedText = (
     row: ReportDetail['sections'][number]['rows'][number],
@@ -432,9 +445,19 @@ export function ReportSheet({
             <tr>
               <td colSpan={5} className="pt-3 pb-1 font-bold text-[#141a1f]">
                 {section.testName}
+                {section.notAccredited ? (
+                  <sup className="ml-0.5 font-bold">
+                    *<span className="sr-only">{t('notAccreditedLabel')}</span>
+                  </sup>
+                ) : null}
                 {section.method ? (
                   <span className="ml-2 text-[7.5pt] font-normal text-[#5b6670]">
                     {t('method')}: {section.method}
+                  </span>
+                ) : null}
+                {section.performedBy ? (
+                  <span className="block text-[7.5pt] font-normal text-[#4a5560]">
+                    {performedByText(lang, section.performedBy)}
                   </span>
                 ) : null}
               </td>
@@ -507,6 +530,11 @@ export function ReportSheet({
           </tbody>
         ))}
       </table>
+      {notAccredited ? (
+        <p className="mt-1.5 text-[7.5pt] text-[#4a5560]">
+          * {t('notAccreditedFootnote')}
+        </p>
+      ) : null}
 
       {criticals.length ? (
         <section className="print-avoid-break mt-4 rounded-md border border-[#b91c1c]/40 px-3 py-2">
@@ -550,6 +578,15 @@ export function ReportSheet({
         </section>
       ) : null}
 
+      {lab?.patientSummaryOnReport && kind !== 'withdrawn' ? (
+        <PatientSummary
+          report={report}
+          langs={summaryLanguages(p.preferredLanguage, lang)}
+          includeUnreleased={!issued}
+          className="mt-5"
+        />
+      ) : null}
+
       <footer className="print-avoid-break mt-8 flex items-end justify-between gap-6 border-t border-[#c9d2d8] pt-4">
         <div className="min-w-0 flex-1 text-[8pt] text-[#5b6670]">
           <p>{t('generated', { time: f.dateTime(now) })}</p>
@@ -567,9 +604,6 @@ export function ReportSheet({
           {lab?.reportFooter ? (
             <p className="mt-1 max-w-[95mm]">{lab.reportFooter}</p>
           ) : null}
-          <p className="mt-1 font-semibold tracking-[0.2em] uppercase">
-            {t('endOfReport')}
-          </p>
         </div>
         <div className="shrink-0 text-right whitespace-nowrap">
           {report.pathologist ? (
@@ -598,6 +632,17 @@ export function ReportSheet({
           )}
         </div>
       </footer>
+      {report.seal ? (
+        <VerificationBlock
+          seal={report.seal}
+          scanLabel={translate(lang, 'portal', 'scanToVerify')}
+          digestLabel={translate(lang, 'portal', 'digest')}
+          className="mt-4"
+        />
+      ) : null}
+      <p className="mt-3 text-[8pt] font-semibold tracking-[0.2em] text-[#5b6670] uppercase">
+        {t('endOfReport')}
+      </p>
     </article>
   )
 }

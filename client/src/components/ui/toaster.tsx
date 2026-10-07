@@ -13,7 +13,15 @@ export function Toaster() {
     <Sonner
       theme={resolved}
       position="bottom-right"
-      offset={{ bottom: 72, right: 20 }}
+      // Above the AI launcher, and above the bottom bar where it shows (to
+      // 767px; Sonner's phone offset starts only below 600px).
+      offset={{ bottom: 'calc(4.5rem + var(--bottom-nav-h, 0px))', right: 20 }}
+      // Phones: above the bottom navigation bar and the AI launcher.
+      mobileOffset={{
+        bottom: 'calc(8.5rem + env(safe-area-inset-bottom, 0px))',
+        left: 16,
+        right: 16,
+      }}
       gap={10}
       visibleToasts={4}
       icons={{

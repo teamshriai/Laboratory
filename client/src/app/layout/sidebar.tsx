@@ -16,12 +16,16 @@ import { Tooltip } from '@/components/ui/tooltip'
 import {
   DEPARTMENT_ICONS,
   ADMIN_NAV,
+  BUSINESS_NAV,
+  DOCTOR_NAV,
+  QUALITY_NAV,
   IMAGING_NAV,
   INVENTORY_NAV,
   LAB_NAV,
   OPERATIONS_NAV,
   type NavItem,
 } from './nav-config'
+import { useVisibleNav } from './use-visible-nav'
 
 /** The product's mark and name. The mark opens Shri AI's site in a new tab. */
 export function Brand({
@@ -217,8 +221,9 @@ export function SidebarNav({
   const t = useT('nav')
   const e = useEnum()
   const count = useStageCounts()
+  const { doctorOnly, visible } = useVisibleNav()
   const render = (items: NavItem[]) =>
-    items.map((item) => (
+    visible(items).map((item) => (
       <NavEntry
         key={item.key}
         to={item.to}
@@ -232,6 +237,17 @@ export function SidebarNav({
         onNavigate={onNavigate}
       />
     ))
+  const business = render(BUSINESS_NAV)
+  const quality = render(QUALITY_NAV)
+  const admin = render(ADMIN_NAV)
+  if (doctorOnly)
+    return (
+      <nav aria-label={t('mainNavigation')} className="grid gap-1">
+        <Section title={t('sectionPortal')} collapsed={collapsed}>
+          {render(DOCTOR_NAV)}
+        </Section>
+      </nav>
+    )
   return (
     <nav aria-label={t('mainNavigation')} className="grid gap-1">
       <Section title={t('sectionLaboratory')} collapsed={collapsed}>
@@ -253,14 +269,24 @@ export function SidebarNav({
           />
         ))}
       </Section>
+      {business.length > 0 && (
+        <Section title={t('sectionBusiness')} collapsed={collapsed}>
+          {business}
+        </Section>
+      )}
       <Section title={t('sectionInventory')} collapsed={collapsed}>
         {render(INVENTORY_NAV)}
       </Section>
       <Section title={t('sectionOperations')} collapsed={collapsed}>
         {render(OPERATIONS_NAV)}
       </Section>
+      {quality.length > 0 && (
+        <Section title={t('sectionQuality')} collapsed={collapsed}>
+          {quality}
+        </Section>
+      )}
       <Section title={t('sectionAdministration')} collapsed={collapsed}>
-        {render(ADMIN_NAV)}
+        {admin}
       </Section>
     </nav>
   )

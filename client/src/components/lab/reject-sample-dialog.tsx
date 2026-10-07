@@ -29,6 +29,12 @@ export function RejectSampleDialog({
   const t = useT('collection')
   const e = useEnum()
   const [recollect, setRecollect] = useState(true)
+  // Each opening starts from the default (recollection requested).
+  const [wasOpen, setWasOpen] = useState(open)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) setRecollect(true)
+  }
   const pending = sample?.status === 'pending_collection'
   const reasons: Reason[] = pending
     ? [...COLLECTION_FAILURE_REASONS]
@@ -58,10 +64,7 @@ export function RejectSampleDialog({
   return (
     <ReasonDialog
       open={open}
-      onOpenChange={(o) => {
-        onOpenChange(o)
-        if (!o) setRecollect(true)
-      }}
+      onOpenChange={onOpenChange}
       title={
         pending
           ? t('rejectPendingTitle', { patient: sample?.patient.name ?? '' })

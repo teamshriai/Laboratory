@@ -28,6 +28,10 @@ export interface DbIndex {
   itemsByReport: Map<string, OrderItem[]>
   samplesByOrder: Map<string, Sample[]>
   samplesById: Map<string, Sample>
+  /** Aliquots by the specimen they were split from. */
+  aliquotsByParent: Map<string, Sample[]>
+  /** Specimens still to collect, by patient. */
+  pendingByPatient: Map<string, Sample[]>
   resultsByItem: Map<string, Result[]>
   reportsByOrder: Map<string, Report[]>
   ordersByPatient: Map<string, LabOrder[]>
@@ -55,6 +59,8 @@ export function getIndex(db: LabDb): DbIndex {
     itemsByReport: new Map(),
     samplesByOrder: new Map(),
     samplesById: new Map(Object.entries(db.samples)),
+    aliquotsByParent: new Map(),
+    pendingByPatient: new Map(),
     resultsByItem: new Map(),
     reportsByOrder: new Map(),
     ordersByPatient: new Map(),
@@ -68,8 +74,12 @@ export function getIndex(db: LabDb): DbIndex {
     if (item.sampleId) push(index.itemsBySample, item.sampleId, item)
     push(index.itemsByReport, item.reportId, item)
   }
-  for (const s of Object.values(db.samples))
+  for (const s of Object.values(db.samples)) {
     push(index.samplesByOrder, s.orderId, s)
+    if (s.parentId) push(index.aliquotsByParent, s.parentId, s)
+    if (s.status === 'pending_collection')
+      push(index.pendingByPatient, s.patientId, s)
+  }
   for (const r of Object.values(db.results))
     push(index.resultsByItem, r.orderItemId, r)
   for (const r of Object.values(db.reports))

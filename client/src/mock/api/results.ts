@@ -113,6 +113,7 @@ export const resultsApi = {
             department: item.department,
             status: item.status,
             comments: item.comments,
+            commentTemplates: test?.commentTemplates ?? [],
             analytes: item.analyteIds.map((analyteId) => {
               const analyte = db.analytes[analyteId]!
               const result = results.find((r) => r.analyteId === analyteId)
@@ -139,6 +140,7 @@ export const resultsApi = {
             }),
           }
           if (test?.method) entry.method = test.method
+          if (item.performedBy) entry.performedBy = item.performedBy
           if (item.returnedReason) entry.returnedReason = item.returnedReason
           if (item.enteredAt) entry.enteredAt = item.enteredAt
           if (item.enteredBy) entry.enteredBy = staffName(db, item.enteredBy)
@@ -203,6 +205,10 @@ function validationRow(
             : null,
         ...(r.remarks ? { remarks: r.remarks } : {}),
         ...(r.dilution ? { dilution: r.dilution } : {}),
+        ...(r.instrumentFlags?.length
+          ? { instrumentFlags: r.instrumentFlags }
+          : {}),
+        ...(r.calculated ? { calculated: true } : {}),
       }
       // The value before the latest repeat analysis, for comparison.
       const firstRun = r.revisions.findLast((rev) => rev.rerun)
@@ -220,7 +226,20 @@ function validationRow(
     })
     .filter((a) => a !== null)
   const tests = db.tests[item.testId]
+  // Auto-verification outcome (only while the feature is switched on).
+  const autoCheck = db.settings.autoVerifyEnabled
+    ? results.find((r) => r.autoCheck)?.autoCheck
+    : undefined
   const row: ValidationRow = {
+    ...(autoCheck
+      ? {
+          autoCheck: {
+            passed: autoCheck.passed,
+            failed: autoCheck.failed,
+            version: autoCheck.version,
+          },
+        }
+      : {}),
     itemId: item.id,
     testId: item.testId,
     testName: item.testName,

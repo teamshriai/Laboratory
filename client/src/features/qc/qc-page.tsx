@@ -9,6 +9,7 @@ import { PageHeader } from '@/app/layout/page-header'
 import { useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { useNow } from '@/hooks/use-now'
+import { useOverlayParam } from '@/hooks/use-search-param'
 import { useEnum, useT } from '@/i18n/context'
 import { useFormat } from '@/i18n/format'
 import { cn } from '@/lib/cn'
@@ -17,6 +18,7 @@ import type { QcRow } from '@/services/lab-api'
 import { useQc } from '@/services/queries'
 import { QcBadge } from '@/components/lab/status'
 import { GuardedButton } from '@/components/lab/guarded-button'
+import { InsightList } from '@/components/lab/insight-card'
 import { Card, CardHeader } from '@/components/ui/card'
 import { DataTable, type Column } from '@/components/ui/data-table'
 import { MetricStrip } from '@/components/ui/metric-strip'
@@ -26,6 +28,7 @@ import { EmptyState, ErrorState } from '@/components/ui/states'
 import { FilterTabs } from '@/components/ui/toggles'
 import { LeveyJenningsCard } from './levey-jennings'
 import { QcEventDrawer } from './qc-event-drawer'
+import { NotFoundDrawer } from '@/features/shared/not-found-drawer'
 import {
   QC_RESULT_FILTERS,
   defaultSeriesKey,
@@ -37,6 +40,8 @@ import {
 } from './qc-utils'
 import { RecordRunDialog, type RecordTarget } from './record-run-dialog'
 import { SeriesList } from './series-list'
+
+const QC_INSIGHTS = ['qc-shift'] as const
 
 export function Component() {
   const t = useT('qc')
@@ -61,12 +66,14 @@ export function Component() {
       },
       { replace: true },
     )
-  // ?new=1 opens the record-run form directly (the command palette links here).
+  const [eventId, openEvent, closeEvent] = useOverlayParam('event')
+  // ?new=1 opens the record-run form (the button and the command palette).
+  const [newParam, openNew, closeNew] = useOverlayParam('new')
   const recording =
-    recordingState ?? (params.get('new') === '1' ? ('new' as const) : null)
+    recordingState ?? (newParam === '1' ? ('new' as const) : null)
   const closeRecording = () => {
-    setRecording(null)
-    if (params.has('new')) setParam('new', null)
+    if (recordingState !== null) setRecording(null)
+    else closeNew()
   }
 
   if (isError) return <ErrorState onRetry={() => void refetch()} />
@@ -86,7 +93,7 @@ export function Component() {
   const activeKey = params.get('series') ?? defaultSeriesKey(series)
   const active = series.find((s) => seriesKey(s) === activeKey) ?? series[0]
   const openEvents = data.events.filter((ev) => ev.status !== 'resolved')
-  const event = data.events.find((ev) => ev.id === params.get('event'))
+  const event = data.events.find((ev) => ev.id === eventId)
   const lotFor = (key: string) =>
     data.controlLots.find((c) => seriesKey(c) === key)
   const deptOf = new Map(
@@ -236,7 +243,7 @@ export function Component() {
             <GuardedButton
               permission="qc.record"
               variant="primary"
-              onClick={() => setRecording('new')}
+              onClick={() => openNew('1')}
             >
               <PlusIcon strokeWidth={2.5} />
               {t('recordRun')}
@@ -309,7 +316,7 @@ export function Component() {
                 <li key={ev.id}>
                   <button
                     type="button"
-                    onClick={() => setParam('event', ev.id)}
+                    onClick={() => openEvent(ev.id)}
                     className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-surface-2"
                   >
                     <CircleXIcon
@@ -335,6 +342,8 @@ export function Component() {
           )}
         </Card>
       </div>
+
+      <InsightList kinds={QC_INSIGHTS} className="mb-5" />
 
       <div className="mb-5 grid items-start gap-5 xl:grid-cols-[340px_minmax(0,1fr)]">
         <SeriesList
@@ -400,7 +409,7 @@ export function Component() {
           rowLabel={(r) => `${r.analyteName} ${r.level}`}
           onRowClick={(r) => {
             const ev = data.events.find((x) => x.runId === r.id)
-            if (ev) setParam('event', ev.id)
+            if (ev) openEvent(ev.id)
             else setParam('series', seriesKey(r))
           }}
           pageSize={15}
@@ -421,8 +430,15 @@ export function Component() {
       {event ? (
         <QcEventDrawer
           event={event}
-          onClose={() => setParam('event', null)}
+          onClose={closeEvent}
           onRepeat={() => setRecording(repeatTarget ?? 'new')}
+        />
+      ) : eventId ? (
+        <NotFoundDrawer
+          title={t('eventTitle')}
+          heading={t('eventNotFound')}
+          body={t('eventNotFoundBody')}
+          onClose={closeEvent}
         />
       ) : null}
       {recording ? (

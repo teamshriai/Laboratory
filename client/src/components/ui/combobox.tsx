@@ -44,7 +44,9 @@ export function Combobox({
   const selected = options.find((o) => o.value === value)
   const groups = [...new Set(options.map((o) => o.group ?? ''))]
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
+    // Modal: inside a dialog or drawer, the dialog's scroll lock would
+    // otherwise swallow wheel and touch scrolling of the option list.
+    <Popover.Root open={open} onOpenChange={setOpen} modal>
       <Popover.Trigger asChild>
         <button
           type="button"
@@ -81,14 +83,14 @@ export function Combobox({
           align="start"
           sideOffset={6}
           collisionPadding={8}
-          className="z-60 w-[max(var(--radix-popover-trigger-width),18rem)] animate-pop overflow-hidden rounded-xl border border-line bg-surface shadow-card-lg"
+          className="z-60 w-[min(max(var(--radix-popover-trigger-width),18rem),calc(100vw-1rem))] animate-pop overflow-hidden rounded-xl border border-line bg-surface shadow-card-lg"
         >
           <Command className="flex flex-col">
             <Command.Input
               placeholder={searchPlaceholder}
               className="h-11 border-b border-line bg-transparent px-3 text-sm text-fg outline-none placeholder:text-fg-subtle"
             />
-            <Command.List className="max-h-72 scrollbar-thin overflow-y-auto p-1">
+            <Command.List className="max-h-[min(18rem,calc(var(--radix-popover-content-available-height)-3rem))] scrollbar-thin overflow-y-auto overscroll-contain p-1">
               <Command.Empty className="px-3 py-6 text-center text-meta text-fg-muted">
                 {emptyText}
               </Command.Empty>

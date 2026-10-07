@@ -56,8 +56,13 @@ import { SearchInput, Textarea } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState, ErrorState } from '@/components/ui/states'
 import { Checkbox, FilterTabs, Segmented } from '@/components/ui/toggles'
+import {
+  CalculatedTag,
+  InstrumentFlagChips,
+} from '@/features/results/result-marks'
+import { AuthorisePassedButton, AutoCheckMark } from './auto-verify'
 
-type Filter = 'all' | 'critical' | 'abnormal' | 'normal' | 'held'
+type Filter = 'all' | 'critical' | 'abnormal' | 'normal' | 'held' | 'auto'
 
 function RangeBar({
   value,
@@ -119,11 +124,19 @@ function Detail({
   const text = useResultText()
   const navigate = useNavigate()
   const [dialog, setDialog] = useState<'back' | 'hold' | null>(null)
+  // The last kind opened: the title and buttons keep it while closing.
+  const [kind, setKind] = useState<'back' | 'hold'>('back')
   const [rerunOpen, setRerunOpen] = useState(false)
   const rerunReason = row.analytes.find((a) => a.firstRun?.reason)?.firstRun
     ?.reason
   const [reason, setReason] = useState('')
   const [comment, setComment] = useState('')
+  // Every opening starts with an empty reason (never the last test's).
+  const openDialog = (next: 'back' | 'hold') => {
+    setKind(next)
+    setReason('')
+    setDialog(next)
+  }
   const [visibility, setVisibility] = useState<'internal' | 'report'>(
     'internal',
   )
@@ -312,6 +325,11 @@ function Detail({
                 >
                   <td className="py-2.5 pr-3 pl-5">
                     <span className="font-medium text-fg">{a.name}</span>
+                    {a.calculated ? <CalculatedTag className="ml-2" /> : null}
+                    <InstrumentFlagChips
+                      flags={a.instrumentFlags}
+                      className="mt-1"
+                    />
                     {a.remarks ? (
                       <span className="block text-xs text-fg-muted">
                         {t('remarks', { text: a.remarks })}
@@ -495,13 +513,16 @@ function Detail({
         <Button
           variant="ghost"
           className="text-danger-text hover:bg-danger-soft hover:text-danger-text"
-          onClick={() => setDialog('back')}
+          onClick={() => openDialog('back')}
         >
           <Undo2Icon />
           {t('sendBack')}
         </Button>
         {row.status === 'entered' || row.status === 'reviewed' ? (
-          <Button disabled={row.sampleOnHold} onClick={() => setDialog('hold')}>
+          <Button
+            disabled={row.sampleOnHold}
+            onClick={() => openDialog('hold')}
+          >
             <CirclePauseIcon />
             {t('hold')}
           </Button>
@@ -545,27 +566,26 @@ function Detail({
       <Dialog
         open={dialog !== null}
         onOpenChange={(o) => !o && setDialog(null)}
+        dirty={Boolean(reason.trim()) && !back.isPending && !hold.isPending}
         size="sm"
         title={
-          dialog === 'back'
+          kind === 'back'
             ? t('sendBackTitle', { test: row.shortName })
             : t('holdTitle', { test: row.shortName })
         }
-        description={dialog === 'back' ? t('sendBackBody') : t('holdBody')}
+        description={kind === 'back' ? t('sendBackBody') : t('holdBody')}
         footer={
           <>
             <Button variant="ghost" onClick={() => setDialog(null)}>
               {tc('cancel')}
             </Button>
             <Button
-              variant={dialog === 'back' ? 'danger' : 'primary'}
+              variant={kind === 'back' ? 'danger' : 'primary'}
               disabled={!reason.trim()}
               loading={back.isPending || hold.isPending}
-              onClick={() =>
-                dialog === 'back' ? back.mutate() : hold.mutate()
-              }
+              onClick={() => (kind === 'back' ? back.mutate() : hold.mutate())}
             >
-              {dialog === 'back' ? t('sendBack') : t('hold')}
+              {kind === 'back' ? t('sendBack') : t('hold')}
             </Button>
           </>
         }
@@ -591,10 +611,18 @@ function Detail({
 }
 
 const STAGES = ['review', 'authorise'] as const
-const FILTERS = ['all', 'critical', 'abnormal', 'normal', 'held'] as const
+const FILTERS = [
+  'all',
+  'critical',
+  'abnormal',
+  'normal',
+  'held',
+  'auto',
+] as const
 
 export function Component() {
   const t = useT('validation')
+  const ti = useT('insights')
   const tc = useT('common')
   const e = useEnum()
   const navigate = useNavigate()
@@ -628,7 +656,9 @@ export function Component() {
           ? r.abnormalCount === 0 && r.criticalCount === 0
           : filter === 'held'
             ? r.status === 'held'
-            : true,
+            : filter === 'auto'
+              ? r.autoCheck?.passed === true
+              : true,
   )
   const activeId = itemParam || rows[0]?.itemId
   const active = (data ?? []).find((r) => r.itemId === activeId) ?? rows[0]
@@ -676,7 +706,10 @@ export function Component() {
       data?.filter((r) => r.abnormalCount === 0 && r.criticalCount === 0)
         .length ?? 0,
     held: data?.filter((r) => r.status === 'held').length ?? 0,
+    auto: data?.filter((r) => r.autoCheck?.passed).length ?? 0,
   }
+  // Auto-verification marks rows only while the lab has it switched on.
+  const hasAuto = data?.some((r) => r.autoCheck) ?? false
   const changeStage = (next: Stage) => {
     setSelected(new Set())
     setStage(next)
@@ -780,10 +813,19 @@ export function Component() {
                     count: counts.normal,
                   },
                   { value: 'held', label: t('filterHeld'), count: counts.held },
+                  ...(hasAuto || filter === 'auto'
+                    ? [
+                        {
+                          value: 'auto' as const,
+                          label: ti('auto.filter'),
+                          count: counts.auto,
+                        },
+                      ]
+                    : []),
                 ]}
               />
             </div>
-            <div className="flex items-center gap-2 border-b border-line px-4 py-2">
+            <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2">
               <Button
                 size="xs"
                 variant="ghost"
@@ -795,6 +837,9 @@ export function Component() {
                 <CheckIcon />
                 {t('selectAllNormal')}
               </Button>
+              {stage === 'authorise' ? (
+                <AuthorisePassedButton rows={data ?? []} />
+              ) : null}
               {selected.size ? (
                 <Button
                   size="xs"
@@ -815,6 +860,11 @@ export function Component() {
               className="min-h-0 flex-1 scrollbar-thin overflow-y-auto p-2"
               aria-label={t('title')}
             >
+              {filter === 'auto' && rows.length === 0 ? (
+                <li className="px-3 py-6 text-center text-meta text-fg-muted">
+                  {ti('auto.filterEmpty')}
+                </li>
+              ) : null}
               {rows.map((r) => {
                 const isActive = active?.itemId === r.itemId
                 return (
@@ -893,6 +943,9 @@ export function Component() {
                               />
                               {t('qcHoldShort')}
                             </span>
+                          ) : null}
+                          {r.autoCheck ? (
+                            <AutoCheckMark check={r.autoCheck} />
                           ) : null}
                           {r.rerunCount ? (
                             <span className="inline-flex items-center gap-1 font-medium text-info-text">

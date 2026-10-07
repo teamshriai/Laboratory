@@ -39,6 +39,8 @@ describe('laboratory workflow (order to corrected report)', () => {
       await labApi.samples.collect(id, {
         collectedAt: Date.now(),
         site: 'left-antecubital',
+        identity: 'name-dob' as const,
+        fasting: 'fasting' as const,
       })
     expect((await labApi.orders.get(orderId)).status).toBe('collected')
 
@@ -165,6 +167,8 @@ describe('laboratory workflow (order to corrected report)', () => {
     await labApi.samples.collect(sampleId, {
       collectedAt: Date.now(),
       site: 'left-antecubital',
+      identity: 'name-dob' as const,
+      fasting: 'fasting' as const,
     })
     await labApi.samples.receive(sampleId)
     const { recollectionId } = await labApi.samples.reject(sampleId, {
@@ -195,6 +199,8 @@ describe('laboratory workflow (order to corrected report)', () => {
     await labApi.samples.collect(sampleIds[0]!, {
       collectedAt: Date.now(),
       site: 'left-antecubital',
+      identity: 'name-dob' as const,
+      fasting: 'fasting' as const,
     })
     await reception.orders.addTests(orderId, ['crp'])
     let order = await labApi.orders.get(orderId)

@@ -39,6 +39,8 @@ async function receivedOrder(testIds: string[], name = 'Journey Patient') {
   await phlebotomist.samples.collect(sampleId, {
     collectedAt: Date.now(),
     site: 'left-antecubital',
+    identity: 'name-dob' as const,
+    fasting: 'fasting' as const,
   })
   const accession = (await labApi.samples.get(sampleId)).accessionNo!
   await tech.samples.receive(accession)
@@ -211,6 +213,8 @@ describe('audit journeys (§19)', () => {
     await phlebotomist.samples.collect(recollectionId!, {
       collectedAt: Date.now(),
       site: 'left-antecubital',
+      identity: 'name-dob' as const,
+      fasting: 'fasting' as const,
     })
     const fresh = (await labApi.samples.get(recollectionId!)).accessionNo!
     expect(fresh).not.toBe(accession)

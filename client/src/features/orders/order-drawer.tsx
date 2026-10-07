@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
+import { toast } from 'sonner'
 import {
   CANCEL_REASONS,
   type CancelReason,
@@ -20,6 +21,7 @@ import { useFormat } from '@/i18n/format'
 import { labApi, type OrderDetail } from '@/services/lab-api'
 import { useLabMutation } from '@/services/mutations'
 import { useOrder, useOrderableTests } from '@/services/queries'
+import { OrderInvoiceSection } from '@/features/billing/order-invoice'
 import { HistoryTimeline } from '@/components/lab/history'
 import { LabelPrintDialog } from '@/components/lab/labels'
 import { PatientBanner } from '@/components/lab/patient-banner'
@@ -67,6 +69,7 @@ function Section({
 
 function OrderBody({ order }: { order: OrderDetail }) {
   const t = useT('orders')
+  const tb = useT('billing')
   const tc = useT('common')
   const e = useEnum()
   const f = useFormat()
@@ -244,6 +247,10 @@ function OrderBody({ order }: { order: OrderDetail }) {
         </Section>
       ) : null}
 
+      <Section title={tb('invoiceSection')}>
+        <OrderInvoiceSection order={order} />
+      </Section>
+
       <Section title={t('sectionTimeline')}>
         <HistoryTimeline entries={order.history} />
       </Section>
@@ -290,9 +297,15 @@ export default function OrderDrawer({
     {
       success: (_, ids) =>
         t('testsAdded', { count: ids.length, orderNo: order?.orderNo ?? '' }),
-      onSuccess: () => {
+      onSuccess: (needNewSpecimen) => {
         setAdding(false)
         setPicked([])
+        if (needNewSpecimen.length)
+          toast.warning(t('newSpecimenNeededTitle'), {
+            description: t('newSpecimenNeededBody', {
+              tests: needNewSpecimen.join(', '),
+            }),
+          })
       },
     },
   )

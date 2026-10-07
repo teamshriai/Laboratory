@@ -12,6 +12,7 @@ import {
   worstTat,
 } from './tat'
 import { busyLevel } from './lab-day'
+import { randomToken, sha256 } from './sha256'
 import { DAY, HOUR, MINUTE } from './time'
 import type {
   Equipment,
@@ -514,5 +515,25 @@ describe('busy level', () => {
     // Half the day gone, half the usual specimens: a normal day.
     expect(busyLevel(50, 100, 0.5)).toBe('moderate')
     expect(busyLevel(70, 100, 0.5)).toBe('high')
+  })
+})
+
+describe('SHA-256', () => {
+  it('matches the FIPS 180-4 test vectors', () => {
+    expect(sha256('')).toBe(
+      'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+    )
+    expect(sha256('abc')).toBe(
+      'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
+    )
+    expect(
+      sha256('abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq'),
+    ).toBe('248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1')
+  })
+
+  it('makes 128-bit URL-safe tokens that do not repeat', () => {
+    const tokens = new Set(Array.from({ length: 200 }, () => randomToken()))
+    expect(tokens.size).toBe(200)
+    for (const t of tokens) expect(t).toMatch(/^[A-Za-z0-9_-]{22}$/)
   })
 })

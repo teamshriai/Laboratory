@@ -5,21 +5,27 @@ import {
   EyeIcon,
   TestTubeIcon,
   CircleAlertIcon,
+  ThermometerIcon,
+  TriangleAlertIcon,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { useDeferredValue, useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router'
 import {
   PRIORITIES,
+  RECEIPT_TEMPERATURES,
   SAMPLE_STATUSES,
   type Priority,
+  type ReceiptTemperature,
   type SampleStatus,
 } from '@/domain/types'
 import { usePreferences } from '@/app/preferences/context'
 import { useNow } from '@/hooks/use-now'
-import { useSearchParam } from '@/hooks/use-search-param'
+import { usePersistentState } from '@/hooks/use-persistent-state'
+import { useOverlayParam, useSearchParam } from '@/hooks/use-search-param'
 import { useEnum, useLanguage, useT } from '@/i18n/context'
 import { useFormat } from '@/i18n/format'
 import { cn } from '@/lib/cn'
+import { oneOf } from '@/lib/storage'
 import { labApi, type SampleRow } from '@/services/lab-api'
 import { errorMessage, useLabMutation } from '@/services/mutations'
 import { useProcessing } from '@/services/queries'
@@ -45,12 +51,20 @@ import {
 } from '@/components/ui/menu'
 import { Select } from '@/components/ui/select'
 import { EmptyState } from '@/components/ui/states'
-import { FilterTabs } from '@/components/ui/toggles'
+import { FilterTabs, Segmented } from '@/components/ui/toggles'
 import { useSampleActions } from './sample-actions'
 
 type Tab = SampleStatus | 'all'
 const TABS: readonly Tab[] = ['all', ...SAMPLE_STATUSES]
 const PRIORITY_FILTERS: readonly (Priority | 'all')[] = ['all', ...PRIORITIES]
+const isTemperature = oneOf(RECEIPT_TEMPERATURES)
+
+type ScanLog = {
+  id: string
+  tone: 'ok' | 'warn' | 'error'
+  text: string
+  at: number
+}
 
 function RowActions({
   sample,
@@ -100,13 +114,19 @@ function RowActions({
 
 function ReceiveCard() {
   const t = useT('processing')
+  const e = useEnum()
   const f = useFormat()
   const now = useNow()
   const { language } = useLanguage()
   const [value, setValue] = useState('')
-  const [log, setLog] = useState<
-    { id: string; ok: boolean; text: string; at: number }[]
-  >([])
+  // Kept between scans (and visits), so a box of chilled tubes is received
+  // with one choice.
+  const [temperature, setTemperature] = usePersistentState<ReceiptTemperature>(
+    'reception-temperature',
+    'ambient',
+    isTemperature,
+  )
+  const [log, setLog] = useState<ScanLog[]>([])
   const input = useRef<HTMLInputElement>(null)
   // Ready for the barcode scanner on arrival (not on touch screens, where
   // focusing would open the on-screen keyboard).
@@ -114,36 +134,37 @@ function ReceiveCard() {
     if (window.matchMedia('(pointer: fine)').matches)
       input.current?.focus({ preventScroll: true })
   }, [])
-  const receive = useLabMutation((ref: string) => labApi.samples.receive(ref), {
-    success: (r) => t('receivedToast', { accession: r.accessionNo ?? '' }),
-    onSuccess: (r) => {
-      setLog((prev) =>
-        [
-          {
-            id: r.id + Date.now(),
-            ok: true,
-            text: r.accessionNo ?? '',
-            at: Date.now(),
-          },
-          ...prev,
-        ].slice(0, 4),
-      )
-      setValue('')
-      input.current?.focus()
+  const addLog = (entry: Omit<ScanLog, 'id' | 'at'>) =>
+    setLog((prev) =>
+      [
+        { ...entry, id: `${entry.text}-${Date.now()}`, at: Date.now() },
+        ...prev,
+      ].slice(0, 4),
+    )
+  const receive = useLabMutation(
+    (ref: string) => labApi.samples.receive(ref, { temperature }),
+    {
+      success: (r) =>
+        r.temperatureDeviation
+          ? null
+          : t('receivedToast', { accession: r.accessionNo ?? '' }),
+      onSuccess: (r) => {
+        if (r.temperatureDeviation)
+          toast.warning(
+            t('temperatureWarnTitle', { accession: r.accessionNo ?? '' }),
+            { description: t('temperatureWarnBody'), duration: 12_000 },
+          )
+        addLog({
+          tone: r.temperatureDeviation ? 'warn' : 'ok',
+          text: r.accessionNo ?? '',
+        })
+        setValue('')
+        input.current?.focus()
+      },
+      onError: (error) =>
+        addLog({ tone: 'error', text: errorMessage(error, language) }),
     },
-    onError: (error) =>
-      setLog((prev) =>
-        [
-          {
-            id: String(Date.now()),
-            ok: false,
-            text: errorMessage(error, language),
-            at: Date.now(),
-          },
-          ...prev,
-        ].slice(0, 4),
-      ),
-  })
+  )
   return (
     <Card className="mb-5 px-5 py-4">
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
@@ -177,6 +198,32 @@ function ReceiveCard() {
             {t('scanButton')}
           </Button>
         </form>
+        <div
+          role="group"
+          aria-labelledby="receipt-temperature-label"
+          className="flex max-w-full min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5"
+        >
+          <span
+            id="receipt-temperature-label"
+            className="inline-flex items-center gap-1.5 text-meta font-medium text-fg-muted"
+          >
+            <ThermometerIcon className="size-4 text-fg-subtle" aria-hidden />
+            {t('receiptTemperature')}
+          </span>
+          <Segmented
+            size="sm"
+            value={temperature}
+            onValueChange={(next) => {
+              setTemperature(next)
+              input.current?.focus({ preventScroll: true })
+            }}
+            aria-label={t('receiptTemperature')}
+            options={RECEIPT_TEMPERATURES.map((x) => ({
+              value: x,
+              label: e('receiptTemperature', x),
+            }))}
+          />
+        </div>
       </div>
       {log.length ? (
         <ul
@@ -187,20 +234,27 @@ function ReceiveCard() {
             <li
               key={l.id}
               className={cn(
-                'inline-flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs',
-                l.ok
-                  ? 'bg-success-soft text-success-text'
-                  : 'bg-danger-soft text-danger-text',
+                'inline-flex max-w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs',
+                l.tone === 'ok' && 'bg-success-soft text-success-text',
+                l.tone === 'warn' && 'bg-warning-soft text-warning-text',
+                l.tone === 'error' && 'bg-danger-soft text-danger-text',
               )}
             >
-              {l.ok ? (
+              {l.tone === 'ok' ? (
                 <CircleCheckIcon strokeWidth={2.2} className="size-4" />
+              ) : l.tone === 'warn' ? (
+                <TriangleAlertIcon strokeWidth={2.2} className="size-4" />
               ) : (
                 <CircleAlertIcon strokeWidth={2.2} className="size-4" />
               )}
-              <span className={l.ok ? 'font-mono font-semibold' : ''}>
+              <span
+                className={l.tone === 'error' ? '' : 'font-mono font-semibold'}
+              >
                 {l.text}
               </span>
+              {l.tone === 'warn' ? (
+                <span>{t('temperatureMismatch')}</span>
+              ) : null}
               <span className="opacity-70">{f.relative(l.at, now)}</span>
             </li>
           ))}
@@ -216,7 +270,7 @@ export function Component() {
   const e = useEnum()
   const f = useFormat()
   const { department } = usePreferences()
-  const [params, setParams] = useSearchParams()
+  const [sampleId, view] = useOverlayParam('sample')
   // Filters live in the URL so a view can be linked and survives reloads.
   const [status, setStatus] = useSearchParam<Tab>('status', 'received', TABS)
   const [priority, setPriority] = useSearchParam<Priority | 'all'>(
@@ -234,11 +288,6 @@ export function Component() {
   })
 
   const changeTab = (v: Tab) => setStatus(v)
-  const view = (id: string) => {
-    const next = new URLSearchParams(params)
-    next.set('sample', id)
-    setParams(next)
-  }
 
   const columns: Column<SampleRow>[] = [
     {
@@ -246,7 +295,7 @@ export function Component() {
       header: t('colSample'),
       sortValue: (r) => r.accessionNo ?? '',
       cell: (r) => (
-        <div className="grid gap-1">
+        <div className="grid justify-items-start gap-1">
           <RecordLink
             kind="specimen"
             id={r.id}
@@ -407,7 +456,7 @@ export function Component() {
             getRowId={(r) => r.id}
             rowLabel={(r) => r.accessionNo ?? r.patient.name}
             onRowClick={(r) => view(r.id)}
-            activeRowId={params.get('sample')}
+            activeRowId={sampleId}
             isLoading={isPending}
             isError={isError}
             onRetry={() => void refetch()}

@@ -205,4 +205,17 @@ export default {
   labelDob: 'DOB {date}',
   labelCollected: 'Coll. {time}',
   labelCollectedBlank: 'Coll. date/time: ____________ by: ______',
+  // Identifiers and new-specimen warning
+  pinCode: 'PIN code',
+  abhaNumber: 'ABHA number',
+  abhaNumberHint: '14 digits, as printed on the ABHA card',
+  abhaAddress: 'ABHA address',
+  abhaAddressHint: 'For example name@abdm',
+  identifierPrivacy:
+    'Aadhaar is never collected or needed. ABHA is optional: add it only if the patient wants their health records linked.',
+  newSpecimenNeededTitle: 'New specimen needed',
+  newSpecimenNeededBody:
+    'The specimen already drawn is past its stability for {tests}. A new specimen will be collected for these tests.',
+  filterSite: 'Site',
+  anySite: 'Any site',
 } as const

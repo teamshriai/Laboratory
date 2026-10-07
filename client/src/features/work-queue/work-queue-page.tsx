@@ -1,11 +1,18 @@
 import {
   BellRingIcon,
   CirclePlayIcon,
+  KeyboardIcon,
   ListOrderedIcon,
   XIcon,
 } from 'lucide-react'
 import { PageHeader } from '@/app/layout/page-header'
-import { useDeferredValue, useState } from 'react'
+import {
+  useDeferredValue,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+} from 'react'
 import {
   CONTAINERS,
   DEPARTMENTS,
@@ -17,6 +24,7 @@ import {
   type Priority,
 } from '@/domain/types'
 import { useUrlFilters } from '@/hooks/use-search-param'
+import { useTablePaging } from '@/hooks/use-table-paging'
 import { ExportButton } from '@/components/lab/export-button'
 import { FilterBar } from '@/components/lab/filter-bar'
 import { RecordLink } from '@/components/lab/record-link'
@@ -33,6 +41,7 @@ import {
   WORK_BUCKETS,
   type DatePreset,
   type WorkBucket,
+  type WorkQueueFilters,
   type WorkQueueRow,
 } from '@/services/lab-api'
 import { useLabMutation } from '@/services/mutations'
@@ -50,10 +59,15 @@ import { SearchInput } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { EmptyState } from '@/components/ui/states'
 import { FilterTabs } from '@/components/ui/toggles'
+import { IconButton } from '@/components/ui/icon-button'
 import { AssignMenu, QueueActions } from './queue-actions'
+import { ScanToOpen, ShortcutsDialog } from './queue-tools'
+import { SavedViewsMenu } from './saved-views'
+import { isOverlayOpen, isTyping, rowOpenButtons } from './keyboard'
 import { useOpenSample } from './use-open-sample'
 
 const DATES = ['all', 'today', 'yesterday', '7d'] as const
+const INACTIVE = ['completed', 'rejected', 'discarded']
 
 export function Component() {
   const t = useT('workQueue')
@@ -62,35 +76,38 @@ export function Component() {
   const f = useFormat()
   const now = useNow()
   const openSample = useOpenSample()
-  const { department: working } = usePreferences()
-  const filters = useUrlFilters(
-    {
-      bucket: 'all',
-      department: working ?? 'all',
-      priority: 'all',
-      assignee: 'all',
-      date: 'all',
-      container: 'all',
-      doctor: 'all',
-      encounter: 'all',
-      ward: 'all',
-      tat: 'all',
-    },
-    {
-      bucket: WORK_BUCKETS,
-      department: ['all', ...DEPARTMENTS],
-      priority: ['all', ...PRIORITIES],
-      date: DATES,
-      container: ['all', ...CONTAINERS],
-      encounter: ['all', ...ENCOUNTER_TYPES],
-      tat: ['all', 'on-track', 'at-risk', 'overdue'],
-    },
-  )
+  const { department: working, actorId } = usePreferences()
+  const defaults = {
+    bucket: 'all',
+    department: working ?? 'all',
+    priority: 'all',
+    assignee: 'all',
+    date: 'all',
+    container: 'all',
+    doctor: 'all',
+    encounter: 'all',
+    ward: 'all',
+    tat: 'all',
+  }
+  const filters = useUrlFilters(defaults, {
+    bucket: WORK_BUCKETS,
+    department: ['all', ...DEPARTMENTS],
+    priority: ['all', ...PRIORITIES],
+    date: DATES,
+    container: ['all', ...CONTAINERS],
+    encounter: ['all', ...ENCOUNTER_TYPES],
+    tat: ['all', 'on-track', 'at-risk', 'overdue'],
+  })
   const v = filters.values
   const bucket = v.bucket as WorkBucket
   const [query, setQuery] = useState('')
   const q = useDeferredValue(query)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  // The row highlighted from the keyboard (j / k).
+  const [cursor, setCursor] = useState<string | null>(null)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const tableRef = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
   const MORE = [
     'assignee',
     'date',
@@ -101,27 +118,37 @@ export function Component() {
     'tat',
   ] as const
 
+  const paging = useTablePaging(25, [
+    'sample',
+    'patient',
+    'tests',
+    'collected',
+    'status',
+    'assigned',
+  ])
+  const listFilters: WorkQueueFilters = {
+    bucket,
+    q,
+    ...(v.department !== 'all'
+      ? { department: v.department as DepartmentId }
+      : {}),
+    ...(v.priority !== 'all' ? { priority: v.priority as Priority } : {}),
+    ...(v.assignee !== 'all' ? { assignee: v.assignee } : {}),
+    ...(v.container !== 'all' ? { container: v.container as ContainerId } : {}),
+    ...(v.doctor !== 'all' ? { doctorId: v.doctor } : {}),
+    ...(v.encounter !== 'all'
+      ? { encounter: v.encounter as EncounterType }
+      : {}),
+    ...(v.ward !== 'all' ? { ward: v.ward } : {}),
+    ...(v.tat !== 'all'
+      ? { tat: v.tat as 'on-track' | 'at-risk' | 'overdue' }
+      : {}),
+    date: v.date as DatePreset,
+  }
   const { data, isPending, isError, refetch, dataUpdatedAt } = useWorkQueueList(
     {
-      bucket,
-      q,
-      ...(v.department !== 'all'
-        ? { department: v.department as DepartmentId }
-        : {}),
-      ...(v.priority !== 'all' ? { priority: v.priority as Priority } : {}),
-      ...(v.assignee !== 'all' ? { assignee: v.assignee } : {}),
-      ...(v.container !== 'all'
-        ? { container: v.container as ContainerId }
-        : {}),
-      ...(v.doctor !== 'all' ? { doctorId: v.doctor } : {}),
-      ...(v.encounter !== 'all'
-        ? { encounter: v.encounter as EncounterType }
-        : {}),
-      ...(v.ward !== 'all' ? { ward: v.ward } : {}),
-      ...(v.tat !== 'all'
-        ? { tat: v.tat as 'on-track' | 'at-risk' | 'overdue' }
-        : {}),
-      date: v.date as DatePreset,
+      ...listFilters,
+      ...paging.query,
     },
   )
   const startMany = useLabMutation(
@@ -134,6 +161,67 @@ export function Component() {
 
   const rows = data?.rows
   const picked = rows?.filter((r) => selected.has(r.id)) ?? []
+
+  // Keyboard shortcuts while no field, dialog or menu has focus. Moving the
+  // highlight focuses the row's open button, so screen readers announce it.
+  const onShortcut = useEffectEvent((ev: KeyboardEvent) => {
+    if (ev.metaKey || ev.ctrlKey || ev.altKey) return
+    if (isTyping(ev.target) || isOverlayOpen()) return
+    const list = rows ?? []
+    const index = cursor ? list.findIndex((r) => r.id === cursor) : -1
+    const row = index >= 0 ? list[index] : undefined
+    switch (ev.key) {
+      case 'j':
+      case 'k': {
+        if (!list.length) return
+        const next =
+          ev.key === 'j'
+            ? Math.min(index + 1, list.length - 1)
+            : Math.max(index - 1, 0)
+        setCursor(list[next]!.id)
+        const button = tableRef.current
+          ? rowOpenButtons(tableRef.current)[next]
+          : undefined
+        button?.focus({ preventScroll: true })
+        button
+          ?.closest('tr, li')
+          ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+        break
+      }
+      case 'Enter': {
+        // A focused button or link handles Enter itself.
+        const target = ev.target as HTMLElement | null
+        if (target?.closest('button, a, summary, [role="button"]')) return
+        if (!row) return
+        openSample(row.id)
+        break
+      }
+      case 'x': {
+        if (!row || INACTIVE.includes(row.status)) return
+        const nextSet = new Set(selected)
+        if (nextSet.has(row.id)) nextSet.delete(row.id)
+        else nextSet.add(row.id)
+        setSelected(nextSet)
+        break
+      }
+      case '/':
+        searchRef.current?.focus()
+        break
+      case '?':
+        setShortcutsOpen(true)
+        break
+      default:
+        return
+    }
+    ev.preventDefault()
+    // Before the shell's own "/" (the command palette).
+    ev.stopPropagation()
+  })
+  useEffect(() => {
+    const listener = (ev: KeyboardEvent) => onShortcut(ev)
+    window.addEventListener('keydown', listener, true)
+    return () => window.removeEventListener('keydown', listener, true)
+  }, [])
   const startable = picked.filter((r) => r.status === 'received')
   const dateText = (at?: number) =>
     at === undefined ? (
@@ -149,7 +237,7 @@ export function Component() {
     {
       id: 'sample',
       header: t('colSample'),
-      sortValue: (r) => ({ stat: 0, urgent: 1, routine: 2 })[r.priority],
+      sortable: true,
       cell: (r) => (
         <div className="grid gap-1">
           <PriorityMark priority={r.priority} />
@@ -176,7 +264,7 @@ export function Component() {
     {
       id: 'patient',
       header: t('colPatient'),
-      sortValue: (r) => r.patient.name,
+      sortable: true,
       cell: (r) => (
         <PatientCell
           patient={r.patient}
@@ -189,7 +277,7 @@ export function Component() {
     {
       id: 'tests',
       header: t('colTests'),
-      sortValue: (r) => r.department,
+      sortable: true,
       cell: (r) => (
         <div className="grid justify-items-start gap-1">
           <TestChips tests={r.tests} max={3} />
@@ -223,7 +311,7 @@ export function Component() {
       header: t('colTimes'),
       className: 'max-[1439px]:hidden',
       headerClassName: 'max-[1439px]:hidden',
-      sortValue: (r) => r.collectedAt ?? 0,
+      sortable: true,
       cell: (r) => (
         <dl className="grid grid-cols-[auto_1fr] gap-x-2 text-xs">
           <dt className="text-fg-subtle">{t('abbrCollected')}</dt>
@@ -236,7 +324,7 @@ export function Component() {
     {
       id: 'status',
       header: t('colStatusTat'),
-      sortValue: (r) => r.tat?.ratio ?? -1,
+      sortable: true,
       cell: (r) => (
         <div className="grid justify-items-start gap-1.5">
           <div className="flex flex-wrap items-center gap-1.5">
@@ -265,7 +353,7 @@ export function Component() {
       id: 'assigned',
       tabletHidden: true,
       header: t('colAssigned'),
-      sortValue: (r) => r.assignedName ?? '~',
+      sortable: true,
       cell: (r) =>
         data &&
         !['completed', 'rejected', 'pending_collection', 'collected'].includes(
@@ -343,40 +431,64 @@ export function Component() {
           ) : null
         }
         actions={
-          <ExportButton
-            filename={t('exportFile')}
-            disabled={!data?.rows.length}
-            rows={() => [
-              [
-                t('colSample'),
-                t('colPatient'),
-                tc('uhid'),
-                t('colDepartment'),
-                t('colTests'),
-                t('colPriority'),
-                tc('status'),
-                tc('collectedAt'),
-                tc('receivedAt'),
-                tc('tat'),
-                t('colAssigned'),
-              ],
-              ...(data?.rows ?? []).map((r) => [
-                r.accessionNo,
-                r.patient.name,
-                r.patient.uhid,
-                e('department', r.department),
-                r.tests.map((x) => x.shortName).join('; '),
-                e('priority', r.priority),
-                e('sampleStatus', r.status),
-                r.collectedAt ? f.dateTime(r.collectedAt) : '',
-                r.receivedAt ? f.dateTime(r.receivedAt) : '',
-                r.tat ? e('tatState', r.tat.state) : '',
-                r.assignedName ?? '',
-              ]),
-            ]}
-          />
+          <>
+            <ScanToOpen />
+            <SavedViewsMenu
+              key={actorId}
+              actorId={actorId}
+              values={v}
+              defaults={defaults}
+              onApply={(next) => {
+                filters.set(next)
+                setSelected(new Set())
+              }}
+            />
+            <IconButton
+              label={t('shortcutsTitle')}
+              icon={<KeyboardIcon />}
+              variant="secondary"
+              size="icon"
+              className="max-md:hidden"
+              onClick={() => setShortcutsOpen(true)}
+            />
+            <ExportButton
+              filename={t('exportFile')}
+              entity="sample"
+              disabled={!data?.rows.length}
+              rows={async () => [
+                [
+                  t('colSample'),
+                  t('colPatient'),
+                  tc('uhid'),
+                  t('colDepartment'),
+                  t('colTests'),
+                  t('colPriority'),
+                  tc('status'),
+                  tc('collectedAt'),
+                  tc('receivedAt'),
+                  tc('tat'),
+                  t('colAssigned'),
+                ],
+                // Every matching specimen, not just the page on screen.
+                ...(await labApi.workQueue.list(listFilters)).rows.map((r) => [
+                  r.accessionNo,
+                  r.patient.name,
+                  r.patient.uhid,
+                  e('department', r.department),
+                  r.tests.map((x) => x.shortName).join('; '),
+                  e('priority', r.priority),
+                  e('sampleStatus', r.status),
+                  r.collectedAt ? f.dateTime(r.collectedAt) : '',
+                  r.receivedAt ? f.dateTime(r.receivedAt) : '',
+                  r.tat ? e('tatState', r.tat.state) : '',
+                  r.assignedName ?? '',
+                ]),
+              ]}
+            />
+          </>
         }
       />
+      <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
 
       <Card className="overflow-hidden">
         <div className="border-b border-line px-3 pt-2">
@@ -502,6 +614,7 @@ export function Component() {
           }
         >
           <SearchInput
+            ref={searchRef}
             value={query}
             onValueChange={setQuery}
             placeholder={t('search')}
@@ -570,44 +683,49 @@ export function Component() {
           </div>
         ) : null}
 
-        <DataTable
-          caption={t('title')}
-          columns={columns}
-          rows={rows}
-          getRowId={(r) => r.id}
-          rowLabel={(r) => r.accessionNo ?? r.patient.name}
-          onRowClick={(r) => openSample(r.id)}
-          isLoading={isPending}
-          isError={isError}
-          onRetry={() => void refetch()}
-          minWidth={940}
-          mobile={{
-            primary: 'sample',
-            fields: ['patient', 'status'],
-            actions: 'actions',
-          }}
-          pageSize={25}
-          selection={{
-            selected,
-            onChange: setSelected,
-            isSelectable: (r) =>
-              !['completed', 'rejected', 'discarded'].includes(r.status),
-          }}
-          rowClassName={(r) =>
-            cn(
-              r.openCriticals > 0 && 'row-alert',
-              r.priority === 'stat' && 'shadow-[inset_3px_0_0_var(--danger)]',
-            )
-          }
-          empty={
-            <EmptyState
-              icon={<ListOrderedIcon />}
-              tone="indigo"
-              title={t('emptyTitle')}
-              description={emptyBody}
-            />
-          }
-        />
+        <div ref={tableRef}>
+          <DataTable
+            caption={t('title')}
+            columns={columns}
+            rows={rows}
+            getRowId={(r) => r.id}
+            rowLabel={(r) => r.accessionNo ?? r.patient.name}
+            onRowClick={(r) => {
+              setCursor(r.id)
+              openSample(r.id)
+            }}
+            activeRowId={cursor}
+            isLoading={isPending}
+            isError={isError}
+            onRetry={() => void refetch()}
+            minWidth={940}
+            mobile={{
+              primary: 'sample',
+              fields: ['patient', 'status'],
+              actions: 'actions',
+            }}
+            server={paging.table(data?.page)}
+            selection={{
+              selected,
+              onChange: setSelected,
+              isSelectable: (r) => !INACTIVE.includes(r.status),
+            }}
+            rowClassName={(r) =>
+              cn(
+                r.openCriticals > 0 && 'row-alert',
+                r.priority === 'stat' && 'shadow-[inset_3px_0_0_var(--danger)]',
+              )
+            }
+            empty={
+              <EmptyState
+                icon={<ListOrderedIcon />}
+                tone="indigo"
+                title={t('emptyTitle')}
+                description={emptyBody}
+              />
+            }
+          />
+        </div>
       </Card>
     </>
   )

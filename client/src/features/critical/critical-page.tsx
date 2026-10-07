@@ -17,7 +17,7 @@ import {
   type NotifyOutcome,
   type NotifyRole,
 } from '@/domain/types'
-import { useSearchParam } from '@/hooks/use-search-param'
+import { useOverlayParam, useSearchParam } from '@/hooks/use-search-param'
 import { ExportButton } from '@/components/lab/export-button'
 import { RecordLink } from '@/components/lab/record-link'
 import { isFullName } from '@/domain/critical'
@@ -59,6 +59,26 @@ const TABS = [
 ] as const
 type Tab = (typeof TABS)[number]
 type Action = 'document' | 'escalate' | 'void'
+/** What the escalate dialog starts with when opened from a due escalation. */
+interface EscalatePrefill {
+  to: string
+  reason: string
+}
+
+/**
+ * The escalation the lab's policy calls for now, unless someone already
+ * escalated after that tier was reached.
+ */
+function dueEscalation(row: CriticalRow) {
+  const due = row.escalationDue
+  if (!due) return undefined
+  if (
+    row.escalatedAt &&
+    row.escalatedAt >= row.detectedAt + due.afterMin * 60_000
+  )
+    return undefined
+  return due
+}
 
 function Lifecycle({ row }: { row: CriticalRow }) {
   const t = useT('critical')
@@ -340,16 +360,19 @@ function CheckLine({
 function ReasonActionDialog({
   row,
   action,
+  prefill,
   onClose,
 }: {
   row: CriticalRow
   action: 'escalate' | 'void'
+  /** Escalation due under the lab's policy: its target and why. */
+  prefill?: EscalatePrefill | null
   onClose: () => void
 }) {
   const t = useT('critical')
   const tc = useT('common')
-  const [to, setTo] = useState('')
-  const [reason, setReason] = useState('')
+  const [to, setTo] = useState(prefill?.to ?? '')
+  const [reason, setReason] = useState(prefill?.reason ?? '')
   const [tried, setTried] = useState(false)
   const save = useLabMutation(
     () =>
@@ -478,8 +501,9 @@ export function Component() {
   const f = useFormat()
   const now = useNow()
   const [tab, setTab] = useSearchParam<Tab>('status', 'pending', TABS)
-  const [alertId, setAlertId] = useSearchParam<string>('alert', '')
+  const [alertId, openAlert, closeAlert] = useOverlayParam('alert')
   const [action, setAction] = useState<Action>('document')
+  const [prefill, setPrefill] = useState<EscalatePrefill | null>(null)
   const [query, setQuery] = useSearchParam<string>('q', '')
   const q = useDeferredValue(query)
   const { data, isPending, isError, refetch } = useCriticals({ status: tab, q })
@@ -490,10 +514,20 @@ export function Component() {
           r.id === alertId && (r.status === 'open' || r.status === 'notified'),
       )
     : undefined
-  const open = (id: string | null, next: Action = 'document') => {
+  const open = (
+    id: string,
+    next: Action = 'document',
+    fill: EscalatePrefill | null = null,
+  ) => {
     setAction(next)
-    setAlertId(id)
+    setPrefill(fill)
+    openAlert(id)
   }
+  // Escalations the policy calls for now come first (the sort is stable).
+  const rows = (data?.rows ?? []).toSorted(
+    (a, b) =>
+      Number(Boolean(dueEscalation(b))) - Number(Boolean(dueEscalation(a))),
+  )
   const limit = all?.rows[0]?.limitMin ?? 30
   const today =
     all?.rows.filter(
@@ -515,6 +549,7 @@ export function Component() {
         actions={
           <ExportButton
             filename={t('exportFile')}
+            entity="critical"
             disabled={!data?.rows.length}
             rows={() => [
               [
@@ -635,7 +670,7 @@ export function Component() {
               <Skeleton key={i} className="h-28 rounded-xl" />
             ))}
           </div>
-        ) : data.rows.length === 0 ? (
+        ) : rows.length === 0 ? (
           <EmptyState
             icon={<CircleCheckIcon />}
             title={q ? t('emptySearchTitle') : t('emptyTitle')}
@@ -643,11 +678,12 @@ export function Component() {
           />
         ) : (
           <ul className="divide-y divide-line">
-            {data.rows.map((r) => {
+            {rows.map((r) => {
               const minutes = Math.round(
                 ((r.notifiedAt ?? now) - r.detectedAt) / 60_000,
               )
               const live = r.status === 'open' || r.status === 'notified'
+              const due = live ? dueEscalation(r) : undefined
               const lastAttempt = r.attempts.at(-1)
               return (
                 <li
@@ -657,6 +693,8 @@ export function Component() {
                     // actions); four from 1280px.
                     'grid gap-4 px-4 py-4 sm:px-5 md:grid-cols-2 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.6fr)_auto] xl:items-start',
                     live && 'shadow-[inset_3px_0_0_var(--danger)]',
+                    due &&
+                      'bg-danger-soft/35 shadow-[inset_5px_0_0_var(--danger)]',
                   )}
                 >
                   <div className="flex min-w-0 items-center gap-3">
@@ -758,6 +796,39 @@ export function Component() {
                   </div>
                   <div className="flex flex-wrap items-center gap-2 md:justify-end md:self-start xl:flex-col xl:items-end">
                     <CriticalStateBadge state={r.state} />
+                    {due ? (
+                      <GuardedButton
+                        permission="critical.communicate"
+                        size="sm"
+                        variant="danger-soft"
+                        className="h-auto max-w-full py-1.5 text-left whitespace-normal"
+                        onClick={() =>
+                          open(r.id, 'escalate', {
+                            to: e('escalationTarget', due.to),
+                            reason: t('escalationDueReason', {
+                              minutes: due.afterMin,
+                              step: due.step,
+                            }),
+                          })
+                        }
+                      >
+                        <ChevronsUpIcon />
+                        <span className="grid min-w-0">
+                          <span>
+                            {t('escalationDue', {
+                              target: e('escalationTarget', due.to),
+                            })}
+                          </span>
+                          <span className="text-2xs font-medium tabular-nums">
+                            {t('escalationDueSince', {
+                              minutes: Math.round(
+                                (now - r.detectedAt) / 60_000,
+                              ),
+                            })}
+                          </span>
+                        </span>
+                      </GuardedButton>
+                    ) : null}
                     {live ? (
                       <div className="flex min-w-0 items-center gap-1.5">
                         <GuardedButton
@@ -817,15 +888,16 @@ export function Component() {
         <DocumentDialog
           key={dialogRow.id + dialogRow.status}
           row={dialogRow}
-          onClose={() => open(null)}
+          onClose={closeAlert}
         />
       ) : null}
       {dialogRow && action !== 'document' ? (
         <ReasonActionDialog
-          key={dialogRow.id + action}
+          key={dialogRow.id + action + (prefill?.to ?? '')}
           row={dialogRow}
           action={action}
-          onClose={() => open(null)}
+          prefill={action === 'escalate' ? prefill : null}
+          onClose={closeAlert}
         />
       ) : null}
     </>

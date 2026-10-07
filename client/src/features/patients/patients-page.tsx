@@ -5,16 +5,17 @@ import {
   UsersIcon,
 } from 'lucide-react'
 import { PageHeader } from '@/app/layout/page-header'
-import { useDeferredValue, useState } from 'react'
+import { useDeferredValue, useRef } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { ENCOUNTER_TYPES, type EncounterType } from '@/domain/types'
 import { useNow } from '@/hooks/use-now'
-import { useSearchParam, useUrlFilters } from '@/hooks/use-search-param'
+import { useOverlayParam, useUrlFilters } from '@/hooks/use-search-param'
 import { useRecentPatients } from '@/hooks/use-recent-patients'
 import { useEnum, useT } from '@/i18n/context'
 import { useFormat } from '@/i18n/format'
 import type { PatientFilters, PatientRow } from '@/services/lab-api'
 import { usePatients } from '@/services/queries'
+import { useTablePaging } from '@/hooks/use-table-paging'
 import { PatientCell } from '@/components/lab/patient'
 import { OrderStatusBadge } from '@/components/lab/status'
 import { Badge } from '@/components/ui/badge'
@@ -48,26 +49,40 @@ export function Component() {
   const q = useDeferredValue(query)
   const chip = url.values.flag as Chip
   const encounter = url.values.encounter as EncounterType | 'all'
-  // ?new=1 opens registration directly (the command palette links here).
-  const [newParam, setNewParam] = useSearchParam('new', '', ['1'])
-  const [registeringState, setRegisteringState] = useState(false)
-  const registering = registeringState || newParam === '1'
+  // ?new=1 opens registration (the button and the command palette).
+  const [newParam, openNew, closeNew] = useOverlayParam('new')
+  const registering = newParam === '1'
+  // After a registration the page moves to the new patient; closing the
+  // dialog as well would be a second navigation that cancels it.
+  const registeredRef = useRef(false)
   const setRegistering = (open: boolean) => {
-    setRegisteringState(open)
-    if (!open && newParam) setNewParam(null)
+    if (open) {
+      registeredRef.current = false
+      openNew('1')
+    } else if (!registeredRef.current) closeNew()
   }
+  const onRegistered = (p: { id: string }) => {
+    registeredRef.current = true
+    // The new patient's page takes the dialog's history entry, so Back does
+    // not reopen the registration form.
+    void navigate(`/patients/${p.id}`, { replace: true })
+  }
+  const paging = useTablePaging(25, ['patient', 'flags', 'visit'])
   const filters: PatientFilters = {
     q,
     ...(chip !== 'all' ? { flag: chip } : {}),
     ...(encounter !== 'all' ? { encounter } : {}),
   }
-  const { data, isPending, isError, refetch } = usePatients(filters)
+  const { data, isPending, isError, refetch } = usePatients({
+    ...filters,
+    ...paging.query,
+  })
 
   const columns: Column<PatientRow>[] = [
     {
       id: 'patient',
       header: t('colPatient'),
-      sortValue: (r) => r.name,
+      sortable: true,
       cell: (r) => <PatientCell patient={r} />,
     },
     {
@@ -111,7 +126,7 @@ export function Component() {
     {
       id: 'flags',
       header: t('colFlags'),
-      sortValue: (r) => r.openCriticals * 100 + r.abnormalResults,
+      sortable: true,
       cell: (r) => (
         <div className="flex flex-wrap gap-1">
           {r.openCriticals ? (
@@ -137,7 +152,7 @@ export function Component() {
       id: 'visit',
       tabletHidden: true,
       header: t('colLastVisit'),
-      sortValue: (r) => r.lastVisitAt,
+      sortable: true,
       cell: (r) => (
         <span className="text-meta whitespace-nowrap text-fg-muted">
           {f.relative(r.lastVisitAt, now)}
@@ -157,7 +172,9 @@ export function Component() {
     <>
       <PageHeader
         title={t('title')}
-        meta={<>{data ? <Badge tone="neutral">{data.length}</Badge> : null}</>}
+        meta={
+          <>{data ? <Badge tone="neutral">{data.page.total}</Badge> : null}</>
+        }
         actions={
           <>
             <GuardedButton
@@ -225,7 +242,8 @@ export function Component() {
           <DataTable
             caption={t('title')}
             columns={columns}
-            rows={data}
+            rows={data?.rows}
+            server={paging.table(data?.page)}
             getRowId={(r) => r.id}
             rowLabel={(r) => r.name}
             onRowClick={(r) => void navigate(`/patients/${r.id}`)}
@@ -257,7 +275,7 @@ export function Component() {
         open={registering}
         onOpenChange={setRegistering}
         initialName={query}
-        onRegistered={(p) => void navigate(`/patients/${p.id}`)}
+        onRegistered={onRegistered}
       />
     </>
   )

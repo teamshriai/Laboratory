@@ -1,8 +1,7 @@
-import { useSearchParam } from '@/hooks/use-search-param'
+import { useOverlayParam, useSearchParam } from '@/hooks/use-search-param'
 import { LibraryIcon, InfoIcon, PlusIcon } from 'lucide-react'
 import { PageHeader } from '@/app/layout/page-header'
 import { useDeferredValue, useState } from 'react'
-import { useSearchParams } from 'react-router'
 import {
   DEPARTMENTS,
   SPECIMENS,
@@ -37,7 +36,6 @@ export function Component() {
   const tc = useT('common')
   const e = useEnum()
   const f = useFormat()
-  const [params, setParams] = useSearchParams()
   const [query, setQuery] = useState('')
   const q = useDeferredValue(query)
   const [status, setStatus] = useState<Status>('active')
@@ -55,14 +53,7 @@ export function Component() {
     ...(department !== 'all' ? { department } : {}),
     ...(specimen !== 'all' ? { specimen } : {}),
   })
-  const openId = params.get('test')
-  const setOpen = (id: string | null) =>
-    setParams((prev) => {
-      const next = new URLSearchParams(prev)
-      if (id) next.set('test', id)
-      else next.delete('test')
-      return next
-    })
+  const [openId, setOpen, closeOpen] = useOverlayParam('test')
 
   const tests = all.data ?? []
   const columns: Column<CatalogTest>[] = [
@@ -274,7 +265,7 @@ export function Component() {
         {t('newOrdersOnlyBody')}
       </p>
 
-      {openId ? <TestDrawer id={openId} onClose={() => setOpen(null)} /> : null}
+      {openId ? <TestDrawer id={openId} onClose={closeOpen} /> : null}
       {creating ? (
         <TestFormDialog
           onClose={() => setCreating(false)}

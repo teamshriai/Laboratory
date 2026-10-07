@@ -2,10 +2,65 @@
 // shapes, not on the database tables, so the mock can later be replaced by the
 // Node backend without touching the UI.
 
+import type { InvoiceTotals } from '@/domain/billing'
 import type { DeltaCheck } from '@/domain/flags'
 import type { OrderProgress, PipelineStage } from '@/domain/workflow'
 import type { TatInfo } from '@/domain/tat'
+import type { Uncertainty } from '@/domain/quality'
 import type {
+  AutoVerifyCheck,
+  AutoVerifyRule,
+  QcResult,
+  WestgardRule,
+  Breach,
+  CodeMapping,
+  ColdUnit,
+  ControlledDocument,
+  DataRequest,
+  DocumentVersion,
+  EqaRound,
+  EquipmentQualification,
+  InsightFeedbackKind,
+  InterfaceMessage,
+  InternalAudit,
+  LabProfile,
+  LegalHold,
+  LisVerification,
+  NonConformance,
+  RetentionRule,
+  Risk,
+  Site,
+  TemperatureReading,
+  OutboundMessage,
+  MessageChannel,
+  MessageTemplate,
+  HomeVisitState,
+  HomeVisit,
+  CollectionCentre,
+  Doctor,
+  PriceList,
+  CreditAccount,
+  TestPackage,
+  CashClose,
+  PaymentMethod,
+  Refund,
+  Payment,
+  InvoiceDiscount,
+  InvoiceLine,
+  InvoiceStatus,
+  ConsentRecord,
+  OrderItem,
+  InstrumentFlag,
+  EscalationTarget,
+  ReferralLab,
+  Language,
+  IdentityMethod,
+  FastingStatus,
+  ReceiptTemperature,
+  SendOut,
+  ShareLinkOutcome,
+  ShareRevokeReason,
+  StaffRole,
   ActivityEvent,
   Analyte,
   ImagingReportVersion,
@@ -85,6 +140,9 @@ export interface PatientSummary {
   bloodGroup?: BloodGroup
   allergies: string[]
   encounter: Encounter
+  preferredLanguage?: Language
+  /** Merged into this patient (a duplicate registration). */
+  mergedInto?: string
 }
 
 export interface DoctorRef {
@@ -92,6 +150,8 @@ export interface DoctorRef {
   name: string
   department: ClinicalDepartmentId
   phone: string
+  /** Present (false) only for a doctor who takes no new orders. */
+  active?: false
 }
 
 export interface StaffRef {
@@ -117,7 +177,25 @@ export interface TestChip {
 
 export type DatePreset = 'today' | 'yesterday' | '7d' | '30d' | 'all'
 
-export interface OrderFilters {
+// ---------- Paging ----------
+
+/** Asked of every long list; `sort` is a column key, `-key` for descending. */
+export interface PageQuery {
+  /** Zero-based. */
+  page?: number
+  pageSize?: number
+  sort?: string
+}
+
+export interface PageInfo {
+  /** Rows matching the filters, across all pages. */
+  total: number
+  /** The page returned (clamped to the last page). */
+  page: number
+  pageSize: number
+}
+
+export interface OrderFilters extends PageQuery {
   status?: OrderStatus | 'all'
   q?: string
   date?: DatePreset
@@ -127,6 +205,8 @@ export interface OrderFilters {
   testId?: string
   encounter?: EncounterType
   patientId?: string
+  /** The registering site (sites master). */
+  siteId?: string
 }
 
 export interface OrderRow {
@@ -153,6 +233,7 @@ export interface OrderRow {
 
 export interface OrderListResult {
   rows: OrderRow[]
+  page: PageInfo
   counts: Record<OrderStatus | 'all', number>
 }
 
@@ -232,6 +313,27 @@ export interface SampleRow {
   labelPrintCount: number
   allEntered: boolean
   tat: TatInfo | null
+  /** Tests on this specimen that need consent and do not have it yet. */
+  consentMissing: { itemId: string; testName: string }[]
+  /**
+   * The patient's tubes still to collect now, in order of draw (CLSI GP41),
+   * this one included: the phlebotomist fills them in this order.
+   */
+  drawOrder: {
+    id: string
+    container: ContainerId
+    accessionNo: string | null
+  }[]
+  scheduledFor?: number
+  scheduleReason?: string
+  identityCheck?: { method: IdentityMethod; at: number; byName: string }
+  fastingStatus?: FastingStatus
+  receiptTemperature?: ReceiptTemperature
+  temperatureDeviation?: boolean
+  /** An aliquot: the specimen it was split from. */
+  parent?: { id: string; accessionNo: string | null }
+  aliquots: { id: string; accessionNo: string | null }[]
+  sendOut?: SendOut & { labName: string; nablAccredited: boolean }
   assignedTo?: string
   assignedName?: string
 }
@@ -296,6 +398,8 @@ export interface ResultView {
   /** Dilution factor of a repeat analysis (10 = 1:10). */
   dilution?: number
   revisions: ResultRevision[]
+  instrumentFlags?: InstrumentFlag[]
+  calculated?: boolean
 }
 
 export interface PreviousResult {
@@ -326,6 +430,10 @@ export interface EntryItem {
   enteredBy?: string
   comments: ItemComment[]
   analytes: EntryAnalyte[]
+  /** Report comments the lab uses for this test. */
+  commentTemplates: string[]
+  /** Performed by a referral lab (results transcribed from its report). */
+  performedBy?: OrderItem['performedBy']
 }
 
 export interface ResultEntryView {
@@ -351,6 +459,8 @@ export interface ValidationAnalyte {
   remarks?: string
   /** Dilution factor of this (repeat) measurement. */
   dilution?: number
+  instrumentFlags?: InstrumentFlag[]
+  calculated?: boolean
   /** The value before the latest repeat analysis. */
   firstRun?: {
     value: string
@@ -379,6 +489,11 @@ export interface ValidationRow {
   qcHold?: { equipment: string; analyte: string }
   /** How many times the test has been repeated. */
   rerunCount?: number
+  /**
+   * The auto-verification rule's checks (only while switched on). Passing
+   * results may be authorised together; a person still signs.
+   */
+  autoCheck?: { passed: boolean; failed: AutoVerifyCheck[]; version: number }
   heldReason?: string
   comments: ItemComment[]
   sampleId: string
@@ -397,7 +512,7 @@ export interface ValidationRow {
 
 // ---------- Reports ----------
 
-export interface ReportFilters {
+export interface ReportFilters extends PageQuery {
   status?: ReportStatus | 'all'
   department?: DepartmentId
   q?: string
@@ -424,6 +539,7 @@ export interface ReportRow {
 }
 
 export interface ReportListResult {
+  page: PageInfo
   rows: ReportRow[]
   counts: Record<ReportStatus | 'all', number>
 }
@@ -457,6 +573,10 @@ export interface ReportSection {
   released?: boolean
   rows: ReportResultRow[]
   comments: string[]
+  /** Outside the lab's NABL scope when ordered (marked on the report). */
+  notAccredited?: boolean
+  /** Performed by a referral lab, named on the report. */
+  performedBy?: OrderItem['performedBy']
 }
 
 export interface ReportDetail {
@@ -539,13 +659,49 @@ export interface ReportDetail {
   /** Set when this is an earlier version: the version that replaced it. */
   supersededBy?: number
   /** The demo share link, once one has been made. */
-  shareLink?: ShareLinkInfo
+  shareLinks: ShareLinkRow[]
+  /** The viewed version's digest and verification token. */
+  seal?: VersionSeal
 }
 
-export interface ShareLinkInfo {
+/** A share link as staff see it (never the token itself). */
+export interface ShareLinkRow {
+  id: string
   createdAt: number
   createdByName: string
   version: number
+  expiresAt: number
+  state: 'active' | 'expired' | 'revoked' | 'locked'
+  revokeReason?: ShareRevokeReason
+  /** Successful openings. */
+  opened: number
+  /** Newest first, at most 20. */
+  access: { at: number; outcome: ShareLinkOutcome }[]
+}
+
+/** A new link: the token is shown once, to build the URL. */
+export interface CreatedShareLink {
+  token: string
+  link: ShareLinkRow
+}
+
+/** The issued version's seal: printed digest and QR verification token. */
+export interface VersionSeal {
+  digest: string
+  verifyToken: string
+}
+
+/** What the public verification page (QR code) shows: no patient data. */
+export interface VerificationView {
+  kind: 'laboratory' | 'imaging'
+  reportNo: string
+  version: number
+  issuedAt: number
+  digest: string
+  /** current: the latest version; superseded: an amendment exists. */
+  status: 'current' | 'superseded' | 'withdrawn'
+  labName: string
+  labAccreditation: string
 }
 
 export interface CorrectionOption {
@@ -587,16 +743,26 @@ export interface CriticalRow extends CriticalAlert {
   overdue: boolean
   /** Minutes the lab allows before a critical value must be communicated. */
   limitMin: number
+  /**
+   * Not yet communicated and past an escalation tier (Settings): the step
+   * reached and who it goes to now.
+   */
+  escalationDue?: { step: number; to: EscalationTarget; afterMin: number }
   attempts: (NotifyAttempt & { byName: string })[]
   history: (HistoryEntry & { byName: string })[]
 }
 
 // ---------- Patients ----------
 
-export interface PatientFilters {
+export interface PatientFilters extends PageQuery {
   q?: string
   encounter?: EncounterType
   flag?: 'critical' | 'abnormal' | 'active'
+}
+
+export interface PatientListResult {
+  rows: PatientRow[]
+  page: PageInfo
 }
 
 export interface PatientRow extends PatientSummary {
@@ -640,6 +806,13 @@ export interface TrendSeries {
   points: { at: number; value: number; flag: Flag | null }[]
 }
 
+export interface ConsentRow extends ConsentRecord {
+  recordedByName: string
+  withdrawnByName?: string
+  /** Names of the tests a test-procedure consent covers. */
+  testNames: string[]
+}
+
 export interface PatientDetail {
   patient: PatientSummary & {
     email?: string
@@ -648,7 +821,13 @@ export interface PatientDetail {
     registeredAt: number
     notes: ClinicalNote[]
     attendingDoctor?: string
+    pinCode?: string
+    abha?: { number?: string; address?: string }
+    /** Channels the patient asked not to be messaged on. */
+    messagingOptOut: Partial<Record<MessageChannel, boolean>>
   }
+  /** Consents on record, newest first (withdrawals included). */
+  consents: ConsentRow[]
   orders: OrderRow[]
   samples: SampleRow[]
   results: PatientResultRow[]
@@ -740,6 +919,7 @@ export interface DashboardView {
     delayedPct: number[]
     rejected: number[]
     completed: number[]
+    /** Only for roles that may see revenue (empty otherwise). */
     revenue: number[]
   }
   tatByDepartment: {
@@ -748,7 +928,8 @@ export interface DashboardView {
     completed: number
   }[]
   encounterMix: Record<EncounterType, number>
-  revenue: { today: number; yesterday: number | null }
+  /** Only for roles that may see revenue. */
+  revenue?: { today: number; yesterday: number | null }
   workload: {
     department: DepartmentId
     pending: number
@@ -1117,6 +1298,7 @@ export interface DepartmentDetail extends DepartmentSummary {
 export interface ReferenceData {
   staff: Staff[]
   doctors: DoctorRef[]
+  referralLabs: ReferralLab[]
 }
 
 export interface CorrectionRequest {
@@ -1151,7 +1333,7 @@ export const WORK_BUCKETS = [
 ] as const
 export type WorkBucket = (typeof WORK_BUCKETS)[number]
 
-export interface WorkQueueFilters {
+export interface WorkQueueFilters extends PageQuery {
   bucket?: WorkBucket
   q?: string
   department?: DepartmentId
@@ -1175,6 +1357,7 @@ export interface WorkQueueRow extends SampleRow {
 }
 
 export interface WorkQueueList {
+  page: PageInfo
   rows: WorkQueueRow[]
   counts: Record<WorkBucket, number>
   technicians: { id: string; name: string; department?: DepartmentId }[]
@@ -1314,7 +1497,8 @@ export interface AnalyticsReport {
     rejectionRate: number
     criticals: number
     criticalsAcknowledged: number
-    revenue: number
+    /** Null for roles that may not see revenue (the server leaves it out). */
+    revenue: number | null
     tatAvgMin: number | null
     delayedPct: number | null
   }
@@ -1348,7 +1532,7 @@ export type { LabSettings }
 
 // ---------- Administration ----------
 
-export interface AuditFilters {
+export interface AuditFilters extends PageQuery {
   entity?: AuditEntity
   action?: string
   by?: string
@@ -1364,6 +1548,7 @@ export interface AuditRow extends AuditEntry {
 
 export interface AuditList {
   rows: AuditRow[]
+  page: PageInfo
   /** Entries kept in this browser (the log is capped by storage). */
   total: number
   entities: AuditEntity[]
@@ -1433,7 +1618,9 @@ export interface ImagingReportDetail extends ImagingRow {
   versions: ImagingVersionSummary[]
   /** Set when an earlier version is shown. */
   supersededBy?: number
-  shareLink?: ShareLinkInfo
+  shareLinks: ShareLinkRow[]
+  /** The viewed version's digest and verification token. */
+  seal?: VersionSeal
 }
 
 // ---------- Report history and the patient-facing portal ----------
@@ -1464,11 +1651,26 @@ export type PublicLabReport = Omit<
   | 'previousReports'
   | 'printCount'
   | 'renotifyPending'
+  | 'shareLinks'
+>
+
+export type PublicImagingReport = Omit<ImagingReportDetail, 'shareLinks'>
+
+/** What a public page may know about the laboratory (no settings). */
+export type PublicLab = Pick<
+  LabSettings,
+  | 'labName'
+  | 'labAddress'
+  | 'labRegistration'
+  | 'labAccreditation'
+  | 'reportHeader'
+  | 'reportFooter'
+  | 'patientSummaryOnReport'
 >
 
 export type PublicReport =
-  | { kind: 'laboratory'; report: PublicLabReport }
-  | { kind: 'imaging'; report: ImagingReportDetail }
+  | { kind: 'laboratory'; report: PublicLabReport; lab: PublicLab }
+  | { kind: 'imaging'; report: PublicImagingReport; lab: PublicLab }
 
 // ---------- Today's work (dashboard panel and assistant) ----------
 
@@ -1603,4 +1805,469 @@ export interface AssistantReply {
   lines: AssistantLine[]
   bullets: AssistantLine[]
   links: { key: string; to: string }[]
+  /** Where the answer came from ("Show query"): the read model and rules. */
+  source?: { readModel: 'today'; at: number; rules: string }
+}
+
+// ---------- Session ----------
+
+export interface SessionInfo {
+  staffId: string
+  name: string
+  role: StaffRole
+}
+
+// ---------- Billing ----------
+
+export interface InvoiceFilters extends PageQuery {
+  status?: InvoiceStatus | 'all'
+  q?: string
+  date?: DatePreset
+  accountId?: string
+}
+
+export interface InvoiceRow {
+  id: string
+  invoiceNo: string
+  patient: PatientSummary
+  orderId?: string
+  orderNo?: string | null
+  accountName?: string
+  issuedAt: number
+  status: InvoiceStatus
+  total: number
+  paid: number
+  balance: number
+  /** A discount above the limit waits for approval. */
+  discountPending: boolean
+}
+
+export interface InvoiceListResult {
+  rows: InvoiceRow[]
+  page: PageInfo
+  counts: Record<InvoiceStatus | 'all', number>
+  /** Over every invoice matching the filters (all statuses). */
+  totals: {
+    /** Still to be paid: unpaid, part-paid and on account (rupees). */
+    outstanding: number
+    discountsPending: number
+  }
+}
+
+export interface InvoiceDetail extends InvoiceRow {
+  lines: (InvoiceLine & { amount: number })[]
+  totals: InvoiceTotals
+  discount?: InvoiceDiscount & {
+    requestedByName: string
+    approvedByName?: string
+  }
+  payments: (Payment & { byName: string })[]
+  refunds: (Refund & { byName: string })[]
+  issuedByName: string
+  cancelled?: { at: number; byName: string; reason: string }
+  sellerGstin?: string
+  buyerGstin?: string
+  lab: Pick<LabSettings, 'labName' | 'labAddress' | 'labRegistration'>
+}
+
+export interface DayBook {
+  day: string
+  expected: Record<'cash' | 'card' | 'upi', number>
+  entries: {
+    invoiceId: string
+    invoiceNo: string
+    patientName: string
+    kind: 'payment' | 'refund'
+    method: PaymentMethod
+    amount: number
+    at: number
+    byName: string
+  }[]
+  close?: CashClose & { byName: string }
+}
+
+export interface BillingMasters {
+  packages: TestPackage[]
+  accounts: (CreditAccount & { owed: number })[]
+  priceLists: PriceList[]
+}
+
+// ---------- Referring doctor ----------
+
+export interface DoctorPatientRow {
+  patient: PatientSummary
+  reportCount: number
+  abnormalCount: number
+  criticalCount: number
+  latestReportAt?: number
+  latestReportId?: string
+}
+
+export interface DoctorPatientList {
+  doctorName: string
+  rows: DoctorPatientRow[]
+  page: PageInfo
+}
+
+export interface DoctorPatientDetail {
+  patient: PatientSummary
+  /** Released, not withdrawn, from this doctor's orders; newest first. */
+  reports: ReportRow[]
+  /** Numeric results over time, abnormal analytes first. */
+  trends: TrendSeries[]
+  /** Analytes with a critical value on record. */
+  criticalAnalytes: string[]
+}
+
+// ---------- Network: doctors, centres, home collection, messaging ----------
+
+export interface NetworkMasters {
+  doctors: (Doctor & { orders30d: number })[]
+  centres: (CollectionCentre & { accountName?: string })[]
+}
+
+export interface HomeVisitRow extends Omit<HomeVisit, 'history'> {
+  patient: PatientSummary
+  orderNo?: string | null
+  phlebotomistName?: string
+  createdByName: string
+  history: (HistoryEntry & { byName: string })[]
+}
+
+export interface HomeVisitFilters {
+  /** IST day (YYYY-MM-DD); today by default. */
+  day?: string
+  state?: HomeVisitState | 'all'
+  phlebotomistId?: string
+}
+
+export interface HomeVisitList {
+  day: string
+  rows: HomeVisitRow[]
+  counts: Record<HomeVisitState | 'all', number>
+  /** Each phlebotomist's route for the day, by slot. */
+  routes: { staffId: string; name: string; visits: string[] }[]
+}
+
+export interface MessagingView {
+  templates: MessageTemplate[]
+  outbox: (OutboundMessage & {
+    byName: string
+    patientName?: string
+    /** The report number when the message is about a report. */
+    relatedLabel?: string
+  })[]
+}
+
+// ---------- Quality management ----------
+
+export const QUALITY_INDICATORS = [
+  'rejection',
+  'tat-within',
+  'critical-on-time',
+  'amended',
+  'eqa-acceptable',
+  'iqc-failure',
+] as const
+export type QualityIndicatorKey = (typeof QUALITY_INDICATORS)[number]
+
+export interface QualityIndicator {
+  key: QualityIndicatorKey
+  /** Percent over the last 30 days; null without data. */
+  value: number | null
+  target: number
+  /** Whether a higher value is better (TAT within target) or worse. */
+  higherIsBetter: boolean
+  status: 'met' | 'missed' | 'no-data'
+  /** Weekly values, oldest first (up to 5 weeks). */
+  trend: number[]
+  numerator: number
+  denominator: number
+}
+
+export interface QualityOverview {
+  from: number
+  to: number
+  indicators: QualityIndicator[]
+  counts: {
+    ncOpen: number
+    ncOverdue: number
+    documentsInReview: number
+    documentsReviewDue: number
+    auditsPlanned: number
+    risksHigh: number
+    eqaPending: number
+    coldExcursions7d: number
+  }
+  lisVerification: { lastAt: number | null; nextDueAt: number | null }
+  registration: {
+    validTo: number
+    state: 'valid' | 'renew-now' | 'expired' | 'unknown'
+    nablValidTo?: number
+  }
+}
+
+export interface EqaRow extends EqaRound {
+  analyteName: string
+  unit: string
+  equipmentName?: string
+  submittedByName?: string
+  evaluatedByName?: string
+  ncNo?: string
+  /** Not yet submitted and the due date has passed. */
+  overdue: boolean
+}
+
+export interface NcRow extends Omit<NonConformance, 'history'> {
+  raisedByName: string
+  ownerName?: string
+  overdue: boolean
+  history: (HistoryEntry & { byName: string })[]
+  effectivenessByName?: string
+}
+
+export interface DocumentRow extends ControlledDocument {
+  current?: DocumentVersion
+  /** The newest version when it is a draft or in review. */
+  pending?: DocumentVersion
+  reviewDueAt: number | null
+  reviewOverdue: boolean
+  names: Record<string, string>
+}
+
+export interface InternalAuditRow extends InternalAudit {
+  auditorName: string
+  ncNos: Record<string, string>
+}
+
+export interface RiskRow extends Omit<Risk, 'history'> {
+  score: number
+  level: 'low' | 'medium' | 'high' | 'extreme'
+  residualScore: number
+  residualLevel: 'low' | 'medium' | 'high' | 'extreme'
+  ownerName: string
+  reviewOverdue: boolean
+}
+
+export interface LisVerificationRow extends LisVerification {
+  performedByName: string
+  reviewedByName?: string
+}
+
+export interface UncertaintyRow {
+  analyteId: string
+  analyteName: string
+  unit: string
+  equipmentId: string
+  equipmentName: string
+  level: QcLevel
+  /** Null with fewer than 20 IQC results in the window. */
+  uncertainty: Uncertainty | null
+  n: number
+  /** Bias from the latest evaluated EQA round, percent, if any. */
+  eqaBiasPct: number | null
+}
+
+export interface QualificationRow extends EquipmentQualification {
+  equipmentName: string
+  byName: string
+}
+
+export interface ColdUnitRow extends Omit<ColdUnit, 'readings'> {
+  latest?: TemperatureReading & { byName: string }
+  /** Last 14 days, oldest first. */
+  readings: (TemperatureReading & { byName: string })[]
+  excursions7d: number
+  /** No reading for over 14 hours. */
+  readingOverdue: boolean
+}
+
+// ---------- Registers ----------
+
+/** One line of the Tamil Nadu Form III register (14 columns). */
+export interface FormIIIRow {
+  serialNo: number
+  date: number
+  labNo: string
+  sampleId?: string
+  patientName: string
+  age: number
+  sex: Sex
+  address: string
+  referredBy: string
+  provisionalDiagnosis: string
+  investigation: string
+  specimen: SpecimenId
+  methodEquipment: string
+  result: string
+  /** Initials of the medical officer who authorised it. */
+  initials: string
+  reportId?: string
+  patientId: string
+}
+
+export interface RegisterResult<T> {
+  rows: T[]
+  page: PageInfo
+  /** The register's period (YYYY-MM or YYYY-MM-DD). */
+  period: string
+}
+
+export interface DailyResultRow {
+  at: number
+  labNo: string
+  sampleId?: string
+  patientId: string
+  patientName: string
+  investigation: string
+  result: string
+  abnormal: boolean
+  authorisedBy: string
+}
+
+export interface IqcRegisterRow {
+  at: number
+  equipmentName: string
+  analyteName: string
+  level: QcLevel
+  controlLot: string
+  value: number
+  mean: number
+  sd: number
+  result: QcResult
+  rule?: WestgardRule
+  byName: string
+  correctiveAction?: string
+}
+
+export interface CollectionRegisterRow {
+  at: number
+  labNo: string
+  sampleId: string
+  patientId: string
+  patientName: string
+  specimen: SpecimenId
+  container: ContainerId
+  collectedBy: string
+  location: string
+  rejected: boolean
+}
+
+// ---------- Privacy ----------
+
+export interface DataRequestRow extends Omit<DataRequest, 'history'> {
+  patientName?: string
+  overdue: boolean
+  /** An active legal hold on the patient. */
+  onHold: boolean
+  history: (HistoryEntry & { byName: string })[]
+}
+
+export interface BreachRow extends Omit<Breach, 'history'> {
+  detectedByName: string
+  certInDueAt: number
+  boardDueAt: number
+  certInLate: boolean
+  boardLate: boolean
+  history: (HistoryEntry & { byName: string })[]
+}
+
+export interface LegalHoldRow extends LegalHold {
+  label: string
+  link: string
+  placedByName: string
+  releasedByName?: string
+}
+
+export interface PrivacyOverview {
+  requests: DataRequestRow[]
+  breaches: BreachRow[]
+  holds: LegalHoldRow[]
+  retention: RetentionRule[]
+  dataRequestDays: number
+  grievanceOfficer: LabProfile['grievanceOfficer']
+}
+
+// ---------- Interfaces and coding ----------
+
+export interface InterfaceRow {
+  equipmentId: string
+  name: string
+  department: DepartmentId
+  connection: 'online' | 'offline'
+  protocol: 'ASTM' | 'HL7'
+  messagesToday: number
+  errors: number
+  lastMessageAt: number | null
+  mapped: number
+  unmapped: string[]
+}
+
+export interface InterfaceMessageRow extends InterfaceMessage {
+  equipmentName: string
+  /** The specimen the accession number belongs to, when it exists. */
+  sampleId?: string
+}
+
+export interface CodeMappingRow extends CodeMapping {
+  analyteName: string
+  updatedByName: string
+}
+
+export interface CodingRow {
+  analyteId: string
+  name: string
+  unit: string
+  testNames: string[]
+  loinc: string | null
+  ucum: string | null
+}
+
+export interface InterfaceOverview {
+  interfaces: InterfaceRow[]
+  messages: InterfaceMessageRow[]
+  mappings: CodeMappingRow[]
+  coding: CodingRow[]
+  coverage: { analytes: number; loinc: number; ucum: number }
+}
+
+// ---------- Auto-verification and insights ----------
+
+export interface AutoVerifyRuleRow extends AutoVerifyRule {
+  testName: string
+  createdByName: string
+  approvedByName?: string
+  /** Approved over a year ago: due its annual review. */
+  reviewDue: boolean
+}
+
+export const INSIGHT_KINDS = [
+  'rejection-rise',
+  'qc-shift',
+  'tat-cluster',
+  'cold-excursion',
+] as const
+export type InsightKind = (typeof INSIGHT_KINDS)[number]
+
+/**
+ * A rule-based suggestion, shown with its evidence: what it says, how sure
+ * the rule is, why, the data window and sources, and the rule version.
+ * Never a diagnosis; a person decides.
+ */
+export interface Insight {
+  key: string
+  kind: InsightKind
+  params: Record<string, string | number>
+  confidence: 'low' | 'medium' | 'high'
+  why: { kind: string; params: Record<string, string | number> }[]
+  window: { from: number; to: number }
+  sources: { label: string; link: string }[]
+  ruleVersion: string
+  generatedAt: number
+  /** The acting user's latest feedback on it, if any. */
+  feedback?: InsightFeedbackKind
+}
+
+export interface SiteRow extends Site {
+  orders30d: number
 }

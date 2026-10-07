@@ -1,4 +1,15 @@
 import activity from './activity'
+import quality from './quality'
+import qualityRecords from './qualityRecords'
+import coldStorage from './coldStorage'
+import registers from './registers'
+import privacy from './privacy'
+import interfaces from './interfaces'
+import insights from './insights'
+import billing from './billing'
+import homeCollection from './homeCollection'
+import network from './network'
+import doctorPortal from './doctorPortal'
 import admin from './admin'
 import analytics from './analytics'
 import assistant from './assistant'
@@ -34,6 +45,17 @@ import workQueue from './workQueue'
 
 export const en = {
   activity,
+  quality,
+  qualityRecords,
+  coldStorage,
+  registers,
+  privacy,
+  interfaces,
+  insights,
+  billing,
+  homeCollection,
+  network,
+  doctorPortal,
   admin,
   analytics,
   assistant,

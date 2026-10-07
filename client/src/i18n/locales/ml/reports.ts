@@ -163,4 +163,20 @@ export default {
     'നിങ്ങൾ പതിപ്പ് {version} ആണ് കാണുന്നത്. പതിപ്പ് {latest} ആണ് നിലവിലെ റിപ്പോർട്ട്.',
   viewCurrentVersion: 'നിലവിലെ പതിപ്പ് കാണുക',
   currentVersion: 'നിലവിലെ',
+  notAccreditedLabel: 'NABL അക്രെഡിറ്റേഷൻ ഇല്ല',
+  notAccreditedFootnote:
+    'ഈ ടെസ്റ്റ് ലബോറട്ടറിയുടെ NABL അക്രെഡിറ്റേഷൻ പരിധിക്ക് പുറത്താണ്.',
+  performedByNabl: '{lab} നടത്തിയത് (NABL {certificate})',
+  performedByAccredited: '{lab} നടത്തിയത് (NABL അക്രെഡിറ്റഡ്)',
+  performedByNotAccredited: '{lab} നടത്തിയത് (NABL അക്രെഡിറ്റേഷൻ ഇല്ല)',
+  patientSummaryTitle: 'രോഗിക്കുള്ള സംഗ്രഹം',
+  patientSummaryIntro: 'ഈ ഫലങ്ങൾ റഫറൻസ് ഇടവേളയ്ക്ക് പുറത്താണ്:',
+  patientSummaryRow: '{test} {value}: {meaning}',
+  patientSummaryNone:
+    'റിപ്പോർട്ട് ചെയ്ത എല്ലാ ഫലങ്ങളും അവയുടെ റഫറൻസ് ഇടവേളയ്ക്കുള്ളിലാണ്.',
+  summaryHigher: 'റഫറൻസ് ഇടവേളയേക്കാൾ കൂടുതൽ',
+  summaryLower: 'റഫറൻസ് ഇടവേളയേക്കാൾ കുറവ്',
+  summaryAbnormal: 'അസാധാരണം',
+  patientSummaryDisclaimer:
+    'ഈ സംഗ്രഹം ഒരു രോഗനിർണയമല്ല. നിങ്ങളുടെ ഫലങ്ങളെക്കുറിച്ച് ഡോക്ടറുമായി ചർച്ച ചെയ്യുക.',
 } as const

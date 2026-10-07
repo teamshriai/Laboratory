@@ -43,6 +43,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ErrorState } from '@/components/ui/states'
 import { Tabs, TabsContent, TabsList } from '@/components/ui/tabs'
 import { EquipmentDialogs, type EquipmentDialogKind } from './equipment-dialogs'
+import { QualificationSection } from './qualification-section'
 
 function Fact({
   label,
@@ -287,8 +288,8 @@ function Body({
       </TabsContent>
 
       <TabsContent value="calibration" className="grid gap-4 p-5">
-        <div className="flex items-center justify-between rounded-xl border border-line p-4">
-          <div>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line p-4">
+          <div className="min-w-0">
             <p className="text-xs text-fg-muted">{t('calibrationStatus')}</p>
             <p
               className={cn(
@@ -319,47 +320,56 @@ function Body({
         {eq.calibrations.length === 0 ? (
           <p className="text-meta text-fg-muted">{t('noCalibrations')}</p>
         ) : (
-          <table className="w-full text-meta">
-            <thead>
-              <tr className="border-b border-line text-left text-xs text-fg-muted">
-                <th className="py-2 font-medium">{t('performedAt')}</th>
-                <th className="py-2 font-medium">{t('certificate')}</th>
-                <th className="py-2 font-medium">{t('result')}</th>
-                <th className="py-2 font-medium">{t('performedBy')}</th>
-                <th className="py-2 font-medium">{t('nextDueDate')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {eq.calibrations.map((c) => (
-                <tr key={c.id} className="border-b border-line/70">
-                  <td className="py-2.5 whitespace-nowrap">
-                    {f.dateShort(c.at)}
-                  </td>
-                  <td className="py-2.5 font-mono text-xs">
-                    {c.certificateNo}
-                  </td>
-                  <td className="py-2.5">
-                    {c.result === 'pass' ? (
-                      <span className="inline-flex items-center gap-1 text-success-text">
-                        <CircleCheckIcon strokeWidth={2.2} />
-                        {t('calPass')}
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-danger-text">
-                        <CircleXIcon strokeWidth={2.2} />
-                        {t('calFail')}
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-2.5 text-fg-muted">{c.byName}</td>
-                  <td className="py-2.5 whitespace-nowrap text-fg-muted">
-                    {c.result === 'pass' ? f.dateShort(c.nextDueAt) : '-'}
-                  </td>
+          // Narrow drawers scroll the history sideways inside its own box.
+          <div
+            tabIndex={0}
+            role="region"
+            aria-label={t('tabCalibration')}
+            className="focus-ring -mx-1 overflow-x-auto rounded-md px-1"
+          >
+            <table className="w-full min-w-[30rem] text-meta">
+              <thead>
+                <tr className="border-b border-line text-left text-xs text-fg-muted">
+                  <th className="py-2 font-medium">{t('performedAt')}</th>
+                  <th className="py-2 font-medium">{t('certificate')}</th>
+                  <th className="py-2 font-medium">{t('result')}</th>
+                  <th className="py-2 font-medium">{t('performedBy')}</th>
+                  <th className="py-2 font-medium">{t('nextDueDate')}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {eq.calibrations.map((c) => (
+                  <tr key={c.id} className="border-b border-line/70">
+                    <td className="py-2.5 whitespace-nowrap">
+                      {f.dateShort(c.at)}
+                    </td>
+                    <td className="py-2.5 font-mono text-xs">
+                      {c.certificateNo}
+                    </td>
+                    <td className="py-2.5">
+                      {c.result === 'pass' ? (
+                        <span className="inline-flex items-center gap-1 text-success-text">
+                          <CircleCheckIcon strokeWidth={2.2} />
+                          {t('calPass')}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-danger-text">
+                          <CircleXIcon strokeWidth={2.2} />
+                          {t('calFail')}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2.5 text-fg-muted">{c.byName}</td>
+                    <td className="py-2.5 whitespace-nowrap text-fg-muted">
+                      {c.result === 'pass' ? f.dateShort(c.nextDueAt) : '-'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
+        <QualificationSection equipmentId={eq.id} equipmentName={eq.name} />
       </TabsContent>
 
       <TabsContent value="qc" className="grid gap-3 p-5">

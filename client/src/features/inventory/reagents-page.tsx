@@ -1,4 +1,4 @@
-import { useSearchParam } from '@/hooks/use-search-param'
+import { useOverlayParam, useSearchParam } from '@/hooks/use-search-param'
 import { FlaskConicalIcon, PackageIcon } from 'lucide-react'
 import { PageHeader } from '@/app/layout/page-header'
 import { useDeferredValue, useState } from 'react'
@@ -57,7 +57,7 @@ export function Component() {
   const e = useEnum()
   const f = useFormat()
   const now = useNow()
-  const [params, setParams] = useSearchParams()
+  const [params] = useSearchParams()
   const [query, setQuery] = useState('')
   const q = useDeferredValue(query)
   const [filter, setFilter] = useState<Filter>('all')
@@ -71,23 +71,24 @@ export function Component() {
   const reagents = useReagents()
   const lots = useLots({ q, ...(department !== 'all' ? { department } : {}) })
   const focusLot = params.get('lot')
-  const openReagent = params.get('reagent')
-  const setParam = (key: string, value: string | null) =>
-    setParams((prev) => {
-      const next = new URLSearchParams(prev)
-      if (value === null) next.delete(key)
-      else next.set(key, value)
-      return next
-    })
-  // ?new=1 opens the receive form directly (the command palette links here).
-  const receiving = receivingState ?? (params.get('new') === '1' ? '' : null)
+  const [openReagent, setOpenReagent, closeReagent] = useOverlayParam('reagent')
+  // ?new=1 opens the receive form (the button and the command palette).
+  const [newParam, openNew, closeNew] = useOverlayParam('new')
+  const receiving = receivingState ?? (newParam === '1' ? '' : null)
   const closeReceiving = () => {
-    setReceiving(null)
-    if (params.has('new')) setParam('new', null)
+    if (receivingState !== null) setReceiving(null)
+    else closeNew()
   }
 
   if (reagents.isError || lots.isError)
-    return <ErrorState onRetry={() => void lots.refetch()} />
+    return (
+      <ErrorState
+        onRetry={() => {
+          if (reagents.isError) void reagents.refetch()
+          if (lots.isError) void lots.refetch()
+        }}
+      />
+    )
   const allLots = lots.data ?? []
   const counts = Object.fromEntries(
     FILTERS.map((x) => [x, allLots.filter((l) => lotMatches(l, x)).length]),
@@ -120,7 +121,7 @@ export function Component() {
         }
         actions={
           <>
-            <Button variant="primary" onClick={() => setReceiving('')}>
+            <Button variant="primary" onClick={() => openNew('1')}>
               <PackageIcon />
               {t('receiveLotTitle')}
             </Button>
@@ -198,7 +199,7 @@ export function Component() {
               <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-line bg-surface-2/40 px-5 py-3">
                 <button
                   type="button"
-                  onClick={() => setParam('reagent', reagent.id)}
+                  onClick={() => setOpenReagent(reagent.id)}
                   className="min-w-0 flex-1 text-left"
                 >
                   <p className="truncate text-sm font-semibold text-fg hover:text-accent-text">
@@ -343,7 +344,7 @@ export function Component() {
         <InventoryItemDrawer
           kind="reagent"
           id={openReagent}
-          onClose={() => setParam('reagent', null)}
+          onClose={closeReagent}
         />
       ) : null}
       {receiving !== null ? (

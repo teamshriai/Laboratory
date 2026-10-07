@@ -37,6 +37,7 @@ import type {
 } from '@/services/lab-api'
 import { useToday, useWorkQueueList } from '@/services/queries'
 import { AgeSex } from '@/components/lab/patient'
+import { InsightList } from '@/components/lab/insight-card'
 import { PriorityMark } from '@/components/lab/status'
 import { Avatar } from '@/components/ui/misc'
 import { CalendarCard } from './calendar-card'
@@ -102,7 +103,6 @@ function StatTile({
   return (
     <Link
       to={to}
-      aria-label={`${label}: ${f.number(value)}. ${sub}`}
       className={cn(
         'focus-ring card-hover flex min-w-0 flex-col items-start gap-2 rounded-2xl p-3 @lg:flex-row @lg:items-center @lg:gap-3',
         look.wash,
@@ -789,6 +789,7 @@ export function DashboardHome({ dashboard }: { dashboard: DashboardView }) {
         <div className="@4xl:col-span-2 @7xl:col-span-3">
           <NeedsAction today={today} />
         </div>
+        <InsightList className="rounded-2xl border-border/70 @4xl:col-span-2 @7xl:col-span-3" />
       </div>
     </div>
   )

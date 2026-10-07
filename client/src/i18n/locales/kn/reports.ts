@@ -161,4 +161,20 @@ export default {
     'ನೀವು ಆವೃತ್ತಿ {version} ನೋಡುತ್ತಿದ್ದೀರಿ. ಆವೃತ್ತಿ {latest} ಪ್ರಸ್ತುತ ವರದಿ.',
   viewCurrentVersion: 'ಪ್ರಸ್ತುತ ಆವೃತ್ತಿ ನೋಡಿ',
   currentVersion: 'ಪ್ರಸ್ತುತ',
+  notAccreditedLabel: 'NABL ಮಾನ್ಯತೆ ಇಲ್ಲ',
+  notAccreditedFootnote:
+    'ಈ ಪರೀಕ್ಷೆ ಪ್ರಯೋಗಾಲಯದ NABL ಮಾನ್ಯತೆಯ ವ್ಯಾಪ್ತಿಯ ಹೊರಗಿದೆ.',
+  performedByNabl: '{lab} ನಡೆಸಿದೆ (NABL {certificate})',
+  performedByAccredited: '{lab} ನಡೆಸಿದೆ (NABL ಮಾನ್ಯತೆ ಪಡೆದಿದೆ)',
+  performedByNotAccredited: '{lab} ನಡೆಸಿದೆ (NABL ಮಾನ್ಯತೆ ಇಲ್ಲ)',
+  patientSummaryTitle: 'ರೋಗಿಗಾಗಿ ಸಾರಾಂಶ',
+  patientSummaryIntro: 'ಈ ಫಲಿತಾಂಶಗಳು ಉಲ್ಲೇಖ ಮಧ್ಯಂತರದ ಹೊರಗಿವೆ:',
+  patientSummaryRow: '{test} {value}: {meaning}',
+  patientSummaryNone:
+    'ವರದಿ ಮಾಡಿದ ಎಲ್ಲಾ ಫಲಿತಾಂಶಗಳು ಅವುಗಳ ಉಲ್ಲೇಖ ಮಧ್ಯಂತರದೊಳಗಿವೆ.',
+  summaryHigher: 'ಉಲ್ಲೇಖ ಮಧ್ಯಂತರಕ್ಕಿಂತ ಹೆಚ್ಚು',
+  summaryLower: 'ಉಲ್ಲೇಖ ಮಧ್ಯಂತರಕ್ಕಿಂತ ಕಡಿಮೆ',
+  summaryAbnormal: 'ಅಸಹಜ',
+  patientSummaryDisclaimer:
+    'ಈ ಸಾರಾಂಶ ರೋಗನಿರ್ಣಯವಲ್ಲ. ದಯವಿಟ್ಟು ನಿಮ್ಮ ಫಲಿತಾಂಶಗಳನ್ನು ನಿಮ್ಮ ವೈದ್ಯರೊಂದಿಗೆ ಚರ್ಚಿಸಿ.',
 } as const

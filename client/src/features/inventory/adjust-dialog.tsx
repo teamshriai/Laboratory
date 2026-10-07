@@ -128,7 +128,7 @@ export function AdjustStockDialog({
     <Dialog
       open
       onOpenChange={(o) => !o && onClose()}
-      dirty={formState.isDirty && !formState.isSubmitSuccessful}
+      dirty={formState.isDirty}
       title={t('adjustTitle')}
       description={target.name}
       footer={

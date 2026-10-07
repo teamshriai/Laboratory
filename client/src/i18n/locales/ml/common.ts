@@ -123,4 +123,10 @@ export default {
   activeFilters: 'സജീവ ഫിൽട്ടറുകൾ',
   removeFilter: 'ഫിൽട്ടർ നീക്കം ചെയ്യുക: {filter}',
   exportCsv: 'CSV എക്സ്പോർട്ട് ചെയ്യുക',
+  sessionEndedTitle: 'നിങ്ങളുടെ സെഷൻ അവസാനിച്ചു',
+  sessionEndedBody:
+    'തുടരാൻ വീണ്ടും സൈൻ ഇൻ ചെയ്യുക. ഈ പേജിലെ സേവ് ചെയ്യാത്ത മാറ്റങ്ങൾ നഷ്ടപ്പെട്ടേക്കാം.',
+  signIn: 'സൈൻ ഇൻ ചെയ്യുക',
+  signOut: 'സൈൻ ഔട്ട് ചെയ്യുക',
+  sessionChecking: 'നിങ്ങളുടെ സെഷൻ പരിശോധിക്കുന്നു',
 } as const

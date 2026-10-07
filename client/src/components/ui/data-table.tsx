@@ -20,6 +20,11 @@ export interface Column<T> {
   cell: (row: T) => ReactNode
   /** Enables sorting on this column. */
   sortValue?: (row: T) => string | number | null | undefined
+  /**
+   * With server paging: the server can sort by this column's id (the
+   * table cannot, it only holds one page).
+   */
+  sortable?: boolean
   align?: 'left' | 'right' | 'center'
   className?: string
   headerClassName?: string
@@ -47,6 +52,25 @@ export interface MobileLayout {
   primary: string
   fields?: string[]
   actions?: string
+}
+
+export interface TableSort {
+  id: string
+  desc?: boolean
+}
+
+/**
+ * The server pages and sorts: the table shows `rows` as one page of
+ * `total`, and asks for other pages or another order.
+ */
+export interface ServerPaging {
+  total: number
+  /** Zero-based. */
+  page: number
+  pageSize: number
+  onPageChange: (page: number) => void
+  sort: TableSort | null
+  onSortChange: (sort: TableSort | null) => void
 }
 
 interface DataTableProps<T> {
@@ -79,6 +103,8 @@ interface DataTableProps<T> {
    * accession number. Used with `onRowClick`.
    */
   rowLabel?: (row: T) => string
+  /** Server-side paging and sorting (long lists). */
+  server?: ServerPaging
 }
 
 /**
@@ -142,6 +168,7 @@ export function DataTable<T>({
   activeRowId,
   mobile,
   rowLabel,
+  server,
 }: DataTableProps<T>) {
   const t = useT('common')
   const f = useFormat()
@@ -157,7 +184,9 @@ export function DataTable<T>({
   if (isError && !rows) return <ErrorState onRetry={onRetry} compact />
   if (!rows || rows.length === 0) return <>{empty}</>
 
-  const sortColumn = sort ? columns.find((c) => c.id === sort.id) : undefined
+  const activeSort = server ? server.sort : sort
+  const sortColumn =
+    !server && sort ? columns.find((c) => c.id === sort.id) : undefined
   const sorted = sortColumn?.sortValue
     ? rows.toSorted((a, b) => {
         const va = sortColumn.sortValue!(a)
@@ -173,12 +202,16 @@ export function DataTable<T>({
       })
     : rows
 
-  const pages = Math.max(1, Math.ceil(sorted.length / pageSize))
-  const current = Math.min(page, pages - 1)
-  const visible = sorted.slice(
-    current * pageSize,
-    current * pageSize + pageSize,
-  )
+  const total = server ? server.total : sorted.length
+  const size = server ? server.pageSize : pageSize
+  const pages = Math.max(1, Math.ceil(total / size))
+  const current = server ? server.page : Math.min(page, pages - 1)
+  const visible = server
+    ? rows
+    : sorted.slice(current * pageSize, current * pageSize + pageSize)
+  const goTo = (p: number) => (server ? server.onPageChange(p) : setPage(p))
+  const canSort = (col: Column<T>) =>
+    server ? !!(col.sortable || col.sortValue) : !!col.sortValue
 
   const selectable = selection
     ? visible.filter((r) => selection.isSelectable?.(r) ?? true)
@@ -191,14 +224,15 @@ export function DataTable<T>({
     selection && selectable.some((r) => selection.selected.has(getRowId(r)))
 
   const toggleSort = (col: Column<T>) => {
-    if (!col.sortValue) return
-    setSort((prev) =>
-      prev?.id === col.id
-        ? prev.desc
+    if (!canSort(col)) return
+    const next =
+      activeSort?.id === col.id
+        ? activeSort.desc
           ? null
           : { id: col.id, desc: true }
-        : { id: col.id },
-    )
+        : { id: col.id }
+    if (server) server.onSortChange(next)
+    else setSort(next)
   }
 
   // A clickable row opens with the mouse anywhere on it; for the keyboard and
@@ -388,8 +422,8 @@ export function DataTable<T>({
                   key={col.id}
                   scope="col"
                   aria-sort={
-                    sort?.id === col.id
-                      ? sort.desc
+                    activeSort?.id === col.id
+                      ? activeSort.desc
                         ? 'descending'
                         : 'ascending'
                       : undefined
@@ -406,7 +440,7 @@ export function DataTable<T>({
                     col.headerClassName,
                   )}
                 >
-                  {col.sortValue ? (
+                  {canSort(col) ? (
                     <button
                       type="button"
                       onClick={() => toggleSort(col)}
@@ -420,8 +454,8 @@ export function DataTable<T>({
                       })}
                     >
                       {col.header}
-                      {sort?.id === col.id ? (
-                        sort.desc ? (
+                      {activeSort?.id === col.id ? (
+                        activeSort.desc ? (
                           <ChevronDownIcon
                             className="size-3"
                             strokeWidth={2.5}
@@ -516,13 +550,13 @@ export function DataTable<T>({
           </tbody>
         </table>
       </div>
-      {sorted.length > pageSize ? (
+      {total > size ? (
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-5 py-2 text-xs text-fg-subtle">
           <span>
             {t('showing', {
-              from: f.number(current * pageSize + 1),
-              to: f.number(Math.min(sorted.length, (current + 1) * pageSize)),
-              total: f.number(sorted.length),
+              from: f.number(current * size + 1),
+              to: f.number(Math.min(total, (current + 1) * size)),
+              total: f.number(total),
             })}
           </span>
           <div className="flex items-center gap-1.5">
@@ -534,7 +568,7 @@ export function DataTable<T>({
               variant="secondary"
               aria-label={t('previousPage')}
               disabled={current === 0}
-              onClick={() => setPage(current - 1)}
+              onClick={() => goTo(current - 1)}
             >
               <ChevronLeftIcon />
             </Button>
@@ -543,7 +577,7 @@ export function DataTable<T>({
               variant="secondary"
               aria-label={t('nextPage')}
               disabled={current >= pages - 1}
-              onClick={() => setPage(current + 1)}
+              onClick={() => goTo(current + 1)}
             >
               <ChevronRightIcon />
             </Button>

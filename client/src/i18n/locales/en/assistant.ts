@@ -123,4 +123,14 @@ export default {
   linkRejected: 'Open rejected specimens',
   linkDelayed: 'Open overdue work',
   linkImaging: 'Open diagnostic imaging',
+  // Where an answer came from ("Show query")
+  showQuery: 'Show query',
+  'query.readModel': 'Read model: {model}',
+  'readModel.today': "Today's work",
+  'query.at': 'Read at {time}',
+  'query.rules': 'Rules: {rules}',
+  'query.intent': 'Matched check: {question}',
+  queryNote: "Rule-based answer from the lab's own data; not medical advice.",
+  offReply:
+    'The Lab Assistant is switched off in Settings, so it cannot answer.',
 } as const

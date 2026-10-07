@@ -149,6 +149,18 @@ describe('laboratory operations', () => {
         preset === 'today' || preset === 'yesterday' ? 'hour' : 'day',
       )
     }
+    // A hand-edited custom range is refused, not a RangeError.
+    for (const range of [
+      { from: 'x' },
+      { to: '2026-00-10' },
+      { from: '2026-02-30' },
+    ])
+      await expect(
+        labApi.analytics.report({ preset: 'custom', ...range }),
+      ).rejects.toMatchObject({
+        code: 'validation-failed',
+        params: { field: 'range' },
+      })
     await manager.system.updateSettings({ samplePrefix: 'SHL' })
     expect((await labApi.system.settings()).samplePrefix).toBe('SHL')
     await expect(

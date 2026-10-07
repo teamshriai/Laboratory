@@ -12,6 +12,7 @@ import {
   type WorkQueueRow,
 } from './types'
 import { inDateRange, matchesQuery, sampleRow } from './views'
+import { paginate, type Sorters } from './paging'
 
 const DONE = new Set(['completed', 'rejected'])
 const PRIORITY_RANK = { stat: 0, urgent: 1, routine: 2 } as const
@@ -94,6 +95,15 @@ function queueRow(
 }
 
 /** The bench work queue with its bucket counts (also read by Today's Work). */
+const WORK_QUEUE_SORTERS: Sorters<WorkQueueRow> = {
+  sample: (r) => ({ stat: 0, urgent: 1, routine: 2 })[r.priority],
+  patient: (r) => r.patient.name,
+  tests: (r) => r.department,
+  collected: (r) => r.collectedAt ?? 0,
+  status: (r) => r.tat?.ratio ?? -1,
+  assigned: (r) => r.assignedName ?? '~',
+}
+
 export function workQueueList(
   db: LabDb,
   index: DbIndex,
@@ -187,7 +197,13 @@ export function workQueueList(
       recent.map((r) => [r.doctorId, { id: r.doctorId, name: r.doctorName }]),
     ).values(),
   ].toSorted((a, b) => a.name.localeCompare(b.name))
-  return { rows, counts, technicians, wards, doctors }
+  return {
+    ...paginate(rows, filters, WORK_QUEUE_SORTERS),
+    counts,
+    technicians,
+    wards,
+    doctors,
+  }
 }
 
 export const workQueueListApi = {

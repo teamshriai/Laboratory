@@ -3,6 +3,7 @@ import { Dialog as D } from 'radix-ui'
 import { useEffect, useRef, useState } from 'react'
 import { XIcon } from 'lucide-react'
 import { Outlet, useLocation } from 'react-router'
+import { ModuleGate } from './module-gate'
 import {
   DESKTOP_QUERY,
   RAIL_QUERY,
@@ -26,6 +27,9 @@ import {
 } from './sidebar'
 import { LabAssistant } from './assistant/lab-assistant'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
+import { BottomNav } from './bottom-nav'
+import { useRoleHome } from './use-role-home'
+import { demo } from '@/services/lab-api'
 
 function isTyping(target: EventTarget | null) {
   const el = target as HTMLElement | null
@@ -73,13 +77,15 @@ function MobileNav({
         <D.Content
           onCloseAutoFocus={focus.onCloseAutoFocus}
           onOpenAutoFocus={(e) => {
-            // Start on the current page's link rather than the close button.
-            const current = (
-              e.currentTarget as HTMLElement
-            ).querySelector<HTMLElement>('[aria-current="page"]')
-            if (current) {
+            // Start on the current page's link (else the first link), never
+            // on the close button: its tooltip would take the first Escape.
+            const panel = e.currentTarget as HTMLElement
+            const start =
+              panel.querySelector<HTMLElement>('[aria-current="page"]') ??
+              panel.querySelector<HTMLElement>('nav a[href]')
+            if (start) {
               e.preventDefault()
-              current.focus()
+              start.focus()
             }
           }}
           className="fixed inset-y-0 left-0 z-50 flex w-[86vw] max-w-[300px] animate-drawer-left flex-col border-r border-line bg-surface shadow-card-lg outline-none md:hidden"
@@ -101,9 +107,9 @@ function MobileNav({
           <div className="flex-1 scrollbar-thin overflow-y-auto px-3 pb-4">
             <SidebarNav onNavigate={close} />
           </div>
-          <div className="shrink-0 border-t border-line p-3">
+          <div className="shrink-0 border-t border-line px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <SettingsEntry onNavigate={close} />
-            <ActingAs />
+            {demo.enabled ? <ActingAs /> : null}
           </div>
         </D.Content>
       </D.Portal>
@@ -120,9 +126,18 @@ export function AppShell() {
   const mainRef = useRef<HTMLElement>(null)
   const announcer = useRef<HTMLParagraphElement>(null)
   const lastPath = useRef(location.pathname)
+  useRoleHome()
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // A dialog, drawer or menu is open: its own keys come first.
+      if (
+        e.defaultPrevented ||
+        document.querySelector(
+          '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [role="menu"][data-state="open"]',
+        )
+      )
+        return
       const combo = e.key.toLowerCase() === 'k' && (e.metaKey || e.ctrlKey)
       if (combo || (e.key === '/' && !isTyping(e.target))) {
         e.preventDefault()
@@ -190,10 +205,16 @@ export function AppShell() {
               key={location.pathname}
               className="mx-auto w-full max-w-[2560px]"
             >
-              <Outlet />
+              <ModuleGate>
+                <Outlet />
+              </ModuleGate>
             </div>
           </main>
         </div>
+        <BottomNav
+          onOpenSearch={() => setSearchOpen(true)}
+          onOpenNav={() => setNavOpen(true)}
+        />
         <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
         <DrawerHost />
         <ErrorBoundary fallback={() => null}>

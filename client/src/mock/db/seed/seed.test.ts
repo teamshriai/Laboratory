@@ -14,7 +14,10 @@ describe('seedDatabase', () => {
 
   it('stays well inside the localStorage budget', () => {
     const bytes = new Blob([JSON.stringify(db)]).size
-    expect(bytes).toBeLessThan(2.5 * 1024 * 1024)
+    // Browsers give an origin about 5 MB of localStorage. The seed plus the
+    // capped feeds and audit log (MAX_AUDIT_ENTRIES, about 1.2 MB when
+    // full) stays well inside it; a full quota falls back to memory.
+    expect(bytes).toBeLessThan(3 * 1024 * 1024)
   })
 
   it('never creates timestamps in the future', () => {
@@ -33,6 +36,8 @@ describe('seedDatabase', () => {
               'calibrationDueAt',
               'dueAt',
               'nextDueAt',
+              // Planned reviews (risks, documents) fall due later.
+              'reviewDueAt',
               // An imaging study booked for later today.
               'scheduledAt',
             ].includes(k) &&

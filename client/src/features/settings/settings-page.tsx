@@ -5,7 +5,11 @@ import {
   MonitorIcon,
   InfoIcon,
   AccessibilityIcon,
+  BadgeCheckIcon,
+  BotIcon,
+  MapPinIcon,
   MoonIcon,
+  BlocksIcon,
   PaletteIcon,
   SunIcon,
   LanguagesIcon,
@@ -34,9 +38,8 @@ import { cn } from '@/lib/cn'
 import { useTheme, type ThemePreference } from '@/app/theme/context'
 import { usePreferences } from '@/app/preferences/context'
 import {
-  getDemoSettings,
+  demo as demoControls,
   labApi,
-  setDemoSettings,
   type DemoSettings,
 } from '@/services/lab-api'
 import { useLabMutation } from '@/services/mutations'
@@ -52,11 +55,27 @@ import { Select } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ErrorState } from '@/components/ui/states'
 import { Segmented, Switch } from '@/components/ui/toggles'
+import { escalationErrors } from './escalation'
+import { EscalationEditor } from './escalation-editor'
+import { AssistantSection } from './assistant-section'
+import { ModulesSection } from './modules-section'
+import { ProfileSection } from './profile-section'
+import { UnsavedSettingsGuard } from './section-parts'
+import {
+  createDirtyStore,
+  SettingsDirtyContext,
+  useReportDirty,
+} from './settings-dirty'
+import { SitesSection } from './sites-section'
 
 const SECTIONS = [
   'appearance',
   'language',
   'laboratory',
+  'profile',
+  'sites',
+  'modules',
+  'assistant',
   'notifications',
   'display',
   'accessibility',
@@ -70,6 +89,10 @@ const SECTION_TONES: Record<Section, IconTone> = {
   appearance: 'violet',
   language: 'teal',
   laboratory: 'blue',
+  profile: 'orange',
+  sites: 'green',
+  modules: 'violet',
+  assistant: 'sky',
   notifications: 'amber',
   display: 'indigo',
   accessibility: 'rose',
@@ -140,6 +163,7 @@ function LaboratoryForm({ initial }: { initial: LabSettings }) {
   const now = useNow()
   const [v, setV] = useState(initial)
   const [touched, setTouched] = useState(false)
+  useReportDirty('laboratory', JSON.stringify(v) !== JSON.stringify(initial))
   const set = <K extends keyof LabSettings>(k: K, value: LabSettings[K]) =>
     setV((p) => ({ ...p, [k]: value }))
   const save = useLabMutation(() => labApi.system.updateSettings(v), {
@@ -150,6 +174,15 @@ function LaboratoryForm({ initial }: { initial: LabSettings }) {
     reportHeader: !v.reportHeader.trim() ? tf('required') : undefined,
     reportFooter: !v.reportFooter.trim() ? tf('required') : undefined,
     samplePrefix: !/^[A-Z]{2,5}$/.test(v.samplePrefix)
+      ? tf('invalid')
+      : undefined,
+    shareLinkDays:
+      !Number.isInteger(v.shareLinkDays) ||
+      v.shareLinkDays < 1 ||
+      v.shareLinkDays > 30
+        ? t('shareLinkDaysRange')
+        : undefined,
+    criticalEscalation: escalationErrors(v.criticalEscalation).some(Boolean)
       ? tf('invalid')
       : undefined,
   }
@@ -275,6 +308,12 @@ function LaboratoryForm({ initial }: { initial: LabSettings }) {
             }))}
           />
         </Field>
+        <EscalationEditor
+          tiers={v.criticalEscalation}
+          onChange={(x) => set('criticalEscalation', x)}
+          showErrors={touched}
+          className="sm:col-span-2"
+        />
         <Field label={t('tatWarn')} hint={t('tatWarnHint')}>
           <Select
             value={String(v.tatWarnPct)}
@@ -335,6 +374,44 @@ function LaboratoryForm({ initial }: { initial: LabSettings }) {
             }))}
           />
         </Field>
+        <h3 className="mt-2 text-sm font-semibold text-fg sm:col-span-2">
+          {t('reportsGroup')}
+        </h3>
+        <Field
+          label={t('shareLinkDays')}
+          hint={t('shareLinkDaysHint')}
+          error={touched ? errors.shareLinkDays : undefined}
+        >
+          <Input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={30}
+            step={1}
+            value={
+              Number.isFinite(v.shareLinkDays) ? String(v.shareLinkDays) : ''
+            }
+            onChange={(ev) =>
+              set(
+                'shareLinkDays',
+                ev.target.value === '' ? Number.NaN : Number(ev.target.value),
+              )
+            }
+          />
+        </Field>
+        <div className="sm:col-span-2">
+          <Row
+            title={t('patientSummary')}
+            hint={t('patientSummaryHint')}
+            control={
+              <Switch
+                checked={v.patientSummaryOnReport}
+                onCheckedChange={(x) => set('patientSummaryOnReport', x)}
+                label={t('patientSummary')}
+              />
+            }
+          />
+        </div>
         <div className="flex items-end justify-end sm:col-span-2">
           <GuardedButton
             permission="settings.edit"
@@ -400,11 +477,17 @@ export function Component() {
     setHighContrast,
   } = usePreferences()
   const { prefs, set: setPref } = useNotificationPrefs()
-  const [demo, setDemo] = useState<DemoSettings>(() => getDemoSettings())
+  const [demo, setDemo] = useState<DemoSettings>(() =>
+    demoControls.getSettings(),
+  )
+  // Storage and reset belong to the in-browser demo only.
+  const sections = demoControls.enabled
+    ? SECTIONS
+    : SECTIONS.filter((s) => s !== 'data')
   const [active, setActive] = useSearchParam<Section>(
     'section',
     'appearance',
-    SECTIONS,
+    sections,
   )
   // A shared link (?section=) opens at that section; later changes scroll
   // from the click itself.
@@ -419,7 +502,8 @@ export function Component() {
   const stats = useDbStats()
   const { data: reference } = useReference()
   const queryClient = useQueryClient()
-  const reset = useLabMutation(() => labApi.system.reset(), {
+  const [dirtyStore] = useState(createDirtyStore)
+  const reset = useLabMutation(() => demoControls.reset(), {
     success: () => t('resetDone'),
     onSuccess: () => {
       setResetOpen(false)
@@ -428,13 +512,17 @@ export function Component() {
     },
   })
   const updateDemo = (next: DemoSettings) => {
-    setDemoSettings(next)
+    demoControls.setSettings(next)
     setDemo(next)
   }
   const label: Record<Section, string> = {
     appearance: t('sectionAppearance'),
     language: t('sectionLanguage'),
     laboratory: t('sectionLaboratory'),
+    profile: t('sectionProfile'),
+    sites: t('sectionSites'),
+    modules: t('sectionModules'),
+    assistant: t('sectionAssistant'),
     notifications: t('sectionNotifications'),
     display: t('sectionDisplay'),
     accessibility: t('sectionAccessibility'),
@@ -445,6 +533,10 @@ export function Component() {
     appearance: <PaletteIcon />,
     language: <LanguagesIcon />,
     laboratory: <Building2Icon />,
+    profile: <BadgeCheckIcon />,
+    sites: <MapPinIcon />,
+    modules: <BlocksIcon />,
+    assistant: <BotIcon />,
     notifications: <BellIcon />,
     display: <MonitorIcon />,
     accessibility: <AccessibilityIcon />,
@@ -483,12 +575,15 @@ export function Component() {
   )
 
   return (
-    <>
+    <SettingsDirtyContext.Provider value={dirtyStore}>
       <PageHeader title={t('title')} />
       <div className="grid items-start gap-8 lg:grid-cols-[13rem_minmax(0,1fr)]">
-        <nav aria-label={t('title')} className="lg:sticky lg:top-20">
+        <nav
+          aria-label={t('title')}
+          className="lg:sticky lg:top-[calc(var(--header-h,4rem)+1rem)]"
+        >
           <ul className="flex gap-1 overflow-x-auto lg:grid">
-            {SECTIONS.map((s) => (
+            {sections.map((s) => (
               <li key={s}>
                 <a
                   href={`?section=${s}`}
@@ -613,6 +708,22 @@ export function Component() {
             )}
           </Panel>
 
+          <Panel id="profile" title={label.profile}>
+            <ProfileSection />
+          </Panel>
+
+          <Panel id="sites" title={label.sites}>
+            <SitesSection />
+          </Panel>
+
+          <Panel id="modules" title={label.modules}>
+            <ModulesSection />
+          </Panel>
+
+          <Panel id="assistant" title={label.assistant}>
+            <AssistantSection />
+          </Panel>
+
           <Panel id="notifications" title={label.notifications}>
             <p className="mb-3 text-meta text-fg-muted">
               {t('notificationsHint')}
@@ -645,43 +756,52 @@ export function Component() {
                 />
               }
             />
-            <Row
-              title={t('actingAs')}
-              hint={t('actingAsHint')}
-              control={
-                <Select
-                  className="w-60"
-                  aria-label={t('actingAs')}
-                  value={actorId}
-                  onValueChange={setActorId}
-                  options={staff.map((s) => ({ value: s.id, label: s.name }))}
-                />
-              }
-            />
-            <Row
-              title={t('demoLatency')}
-              hint={t('demoLatencyHint')}
-              control={
-                <Switch
-                  checked={demo.latency}
-                  onCheckedChange={(on) => updateDemo({ ...demo, latency: on })}
-                  label={t('demoLatency')}
-                />
-              }
-            />
-            <Row
-              title={t('demoFailures')}
-              hint={t('demoFailuresHint')}
-              control={
-                <Switch
-                  checked={demo.failures}
-                  onCheckedChange={(on) =>
-                    updateDemo({ ...demo, failures: on })
+            {demoControls.enabled ? (
+              <>
+                <Row
+                  title={t('actingAs')}
+                  hint={t('actingAsHint')}
+                  control={
+                    <Select
+                      className="w-60"
+                      aria-label={t('actingAs')}
+                      value={actorId}
+                      onValueChange={setActorId}
+                      options={staff.map((s) => ({
+                        value: s.id,
+                        label: s.name,
+                      }))}
+                    />
                   }
-                  label={t('demoFailures')}
                 />
-              }
-            />
+                <Row
+                  title={t('demoLatency')}
+                  hint={t('demoLatencyHint')}
+                  control={
+                    <Switch
+                      checked={demo.latency}
+                      onCheckedChange={(on) =>
+                        updateDemo({ ...demo, latency: on })
+                      }
+                      label={t('demoLatency')}
+                    />
+                  }
+                />
+                <Row
+                  title={t('demoFailures')}
+                  hint={t('demoFailuresHint')}
+                  control={
+                    <Switch
+                      checked={demo.failures}
+                      onCheckedChange={(on) =>
+                        updateDemo({ ...demo, failures: on })
+                      }
+                      label={t('demoFailures')}
+                    />
+                  }
+                />
+              </>
+            ) : null}
           </Panel>
 
           <Panel id="accessibility" title={label.accessibility}>
@@ -736,46 +856,50 @@ export function Component() {
             />
           </Panel>
 
-          <Panel id="data" title={label.data}>
-            <Row
-              title={t('storageUsed')}
-              hint={
-                stats.data
-                  ? `${t('seededOn', { time: f.dateTime(stats.data.seededAt) })} · ${stats.data.dirty ? t('modified') : t('unmodified')}`
-                  : undefined
-              }
-              control={
-                <span className="text-sm font-semibold text-fg tabular-nums">
-                  {stats.data
-                    ? `${f.decimal(stats.data.bytes / 1024 / 1024)} MB`
-                    : '-'}
-                </span>
-              }
-            />
-            <div className="mt-4 rounded-xl border border-danger/30 bg-danger-soft/30 p-4">
-              <div className="flex items-start gap-3">
-                <TriangleAlertIcon
-                  strokeWidth={2.2}
-                  className="mt-0.5 size-5 shrink-0 text-danger"
+          {demoControls.enabled ? (
+            <>
+              <Panel id="data" title={label.data}>
+                <Row
+                  title={t('storageUsed')}
+                  hint={
+                    stats.data
+                      ? `${t('seededOn', { time: f.dateTime(stats.data.seededAt) })} · ${stats.data.dirty ? t('modified') : t('unmodified')}`
+                      : undefined
+                  }
+                  control={
+                    <span className="text-sm font-semibold text-fg tabular-nums">
+                      {stats.data
+                        ? `${f.decimal(stats.data.bytes / 1024 / 1024)} MB`
+                        : '-'}
+                    </span>
+                  }
                 />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-fg">
-                    {t('resetTitle')}
-                  </p>
-                  <p className="mt-0.5 text-meta text-fg-muted">
-                    {t('resetBody')}
-                  </p>
+                <div className="mt-4 rounded-xl border border-danger/30 bg-danger-soft/30 p-4">
+                  <div className="flex items-start gap-3">
+                    <TriangleAlertIcon
+                      strokeWidth={2.2}
+                      className="mt-0.5 size-5 shrink-0 text-danger"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-fg">
+                        {t('resetTitle')}
+                      </p>
+                      <p className="mt-0.5 text-meta text-fg-muted">
+                        {t('resetBody')}
+                      </p>
+                    </div>
+                    <GuardedButton
+                      permission="data.reset"
+                      variant="danger"
+                      onClick={() => setResetOpen(true)}
+                    >
+                      {t('resetButton')}
+                    </GuardedButton>
+                  </div>
                 </div>
-                <GuardedButton
-                  permission="data.reset"
-                  variant="danger"
-                  onClick={() => setResetOpen(true)}
-                >
-                  {t('resetButton')}
-                </GuardedButton>
-              </div>
-            </div>
-          </Panel>
+              </Panel>
+            </>
+          ) : null}
 
           <Panel id="about" title={label.about}>
             <p className="mb-4 text-meta text-fg-muted">{t('aboutBody')}</p>
@@ -829,6 +953,7 @@ export function Component() {
           />
         </Field>
       </ConfirmDialog>
-    </>
+      <UnsavedSettingsGuard store={dirtyStore} />
+    </SettingsDirtyContext.Provider>
   )
 }

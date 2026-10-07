@@ -1,5 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
+  CalendarClockIcon,
   CheckIcon,
   DropletIcon,
   IdCardIcon,
@@ -10,12 +11,17 @@ import { useState } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from '@/features/shared/zod'
-import { COLLECTION_SITES, type StaffRole } from '@/domain/types'
+import {
+  COLLECTION_SITES,
+  FASTING_STATUSES,
+  IDENTITY_METHODS,
+  type StaffRole,
+} from '@/domain/types'
 import { usePreferences } from '@/app/preferences/context'
 import { useNow } from '@/hooks/use-now'
 import { useEnum, useT } from '@/i18n/context'
 import { useFormat } from '@/i18n/format'
-import { labApi, type SampleRow } from '@/services/lab-api'
+import { LabApiError, labApi, type SampleRow } from '@/services/lab-api'
 import { useLabMutation } from '@/services/mutations'
 import { useReference, useSample } from '@/services/queries'
 import { LabelPrintDialog } from '@/components/lab/labels'
@@ -33,6 +39,12 @@ import { SkeletonText } from '@/components/ui/skeleton'
 import { FormErrorSummary } from '@/components/ui/form-errors'
 import { focusFirstInvalid } from '@/lib/focus'
 import { countFieldErrors, focusInvalid } from '@/lib/form-errors'
+import {
+  ConsentPanel,
+  DeferDialog,
+  DrawOrder,
+  ScheduledNotice,
+} from './collect-extras'
 
 const IST = 330 * 60_000
 const toLocalInput = (ms: number) =>
@@ -42,24 +54,44 @@ const fromLocalInput = (value: string) => Date.parse(`${value}:00Z`) - IST
 /** Matches the engine: a time further back than this needs a reason. */
 const UNEXPLAINED_TIME_MS = 10 * 60_000
 
-const schema = z
-  .object({
-    site: z.enum(COLLECTION_SITES),
-    collectedAt: z
-      .string()
-      .min(1, 'forms.required')
-      .refine((v) => fromLocalInput(v) <= Date.now(), 'forms.futureTime'),
-    timeReason: z.string().max(200, 'forms.tooLong'),
-    remarks: z.string().max(300, 'forms.tooLong'),
-  })
-  .refine(
-    (v) =>
-      Date.now() - fromLocalInput(v.collectedAt) <= UNEXPLAINED_TIME_MS ||
-      v.timeReason.trim().length > 0,
-    { path: ['timeReason'], message: 'forms.timeReasonRequired' },
-  )
-type FormIn = z.input<typeof schema>
-type FormOut = z.output<typeof schema>
+/**
+ * Matches the engine's rules: a backdated time needs a reason, so does
+ * collecting a deferred specimen early; fasting tests need the status.
+ */
+function makeSchema(needsFasting: boolean, scheduledFor: number | undefined) {
+  return z
+    .object({
+      site: z.enum(COLLECTION_SITES),
+      collectedAt: z
+        .string()
+        .min(1, 'forms.required')
+        .refine((v) => fromLocalInput(v) <= Date.now(), 'forms.futureTime'),
+      identity: z.enum(['', ...IDENTITY_METHODS]),
+      fasting: z.enum(['', ...FASTING_STATUSES]),
+      timeReason: z.string().max(200, 'forms.tooLong'),
+      remarks: z.string().max(300, 'forms.tooLong'),
+    })
+    .refine((v) => v.identity !== '', {
+      path: ['identity'],
+      message: 'forms.required',
+    })
+    .refine((v) => !needsFasting || v.fasting !== '', {
+      path: ['fasting'],
+      message: 'forms.required',
+    })
+    .refine(
+      (v) => {
+        const at = fromLocalInput(v.collectedAt)
+        const early = scheduledFor !== undefined && at < scheduledFor
+        const backdated = Date.now() - at > UNEXPLAINED_TIME_MS
+        return (!early && !backdated) || v.timeReason.trim().length > 0
+      },
+      { path: ['timeReason'], message: 'forms.timeReasonRequired' },
+    )
+}
+type Schema = ReturnType<typeof makeSchema>
+type FormIn = z.input<Schema>
+type FormOut = z.output<Schema>
 
 function defaultSite(container: SampleRow['container']): FormIn['site'] {
   if (container === 'urine' || container === 'sterile') return 'midstream-urine'
@@ -87,6 +119,9 @@ function CollectForm({
   const e = useEnum()
   const now = useNow()
   const [openedAt] = useState(now)
+  const [schema] = useState(() =>
+    makeSchema(sample.fasting, sample.scheduledFor),
+  )
   const { control, register, handleSubmit, formState } = useForm<
     FormIn,
     unknown,
@@ -96,22 +131,29 @@ function CollectForm({
     defaultValues: {
       site: defaultSite(sample.container),
       collectedAt: toLocalInput(openedAt),
+      identity: '',
+      fasting: '',
       timeReason: '',
       remarks: '',
     },
   })
   const collectedAt = useWatch({ control, name: 'collectedAt' })
-  const backdated =
-    Boolean(collectedAt) &&
-    now - fromLocalInput(collectedAt) > UNEXPLAINED_TIME_MS
+  const at = collectedAt ? fromLocalInput(collectedAt) : now
+  const backdated = Boolean(collectedAt) && now - at > UNEXPLAINED_TIME_MS
+  const early = sample.scheduledFor !== undefined && at < sample.scheduledFor
   const collect = useLabMutation(
     (v: FormOut) =>
-      labApi.samples.collect(sample.id, {
-        site: v.site,
-        collectedAt: fromLocalInput(v.collectedAt),
-        ...(v.timeReason.trim() ? { timeReason: v.timeReason.trim() } : {}),
-        ...(v.remarks.trim() ? { remarks: v.remarks.trim() } : {}),
-      }),
+      // The schema refuses an empty identity; never assume one.
+      v.identity === ''
+        ? Promise.reject(new LabApiError('identity-not-confirmed'))
+        : labApi.samples.collect(sample.id, {
+            site: v.site,
+            collectedAt: fromLocalInput(v.collectedAt),
+            identity: v.identity,
+            ...(v.fasting ? { fasting: v.fasting } : {}),
+            ...(v.timeReason.trim() ? { timeReason: v.timeReason.trim() } : {}),
+            ...(v.remarks.trim() ? { remarks: v.remarks.trim() } : {}),
+          }),
     {
       success: () => null,
       onSuccess: (accession) => {
@@ -153,6 +195,53 @@ function CollectForm({
         </div>
       </Field>
       <Field
+        label={t('identityLabel')}
+        hint={t('identityHint')}
+        required
+        error={formState.errors.identity?.message}
+        className="sm:col-span-2"
+      >
+        <Controller
+          control={control}
+          name="identity"
+          render={({ field }) => (
+            <Select
+              value={field.value || undefined}
+              onValueChange={field.onChange}
+              placeholder={t('identityPick')}
+              options={IDENTITY_METHODS.map((x) => ({
+                value: x,
+                label: e('identityMethod', x),
+              }))}
+            />
+          )}
+        />
+      </Field>
+      {sample.fasting ? (
+        <Field
+          label={t('fastingLabel')}
+          hint={t('fastingHint')}
+          required
+          error={formState.errors.fasting?.message}
+        >
+          <Controller
+            control={control}
+            name="fasting"
+            render={({ field }) => (
+              <Select
+                value={field.value || undefined}
+                onValueChange={field.onChange}
+                placeholder={t('fastingLabel')}
+                options={FASTING_STATUSES.map((x) => ({
+                  value: x,
+                  label: e('fastingStatus', x),
+                }))}
+              />
+            )}
+          />
+        </Field>
+      ) : null}
+      <Field
         label={t('collectionSite')}
         required
         error={formState.errors.site?.message}
@@ -183,7 +272,7 @@ function CollectForm({
           max={toLocalInput(now)}
         />
       </Field>
-      {backdated ? (
+      {backdated || early ? (
         <Field
           label={t('timeReason')}
           hint={t('timeReasonHint')}
@@ -232,8 +321,10 @@ export function CollectDrawer({
   const { data: sample, isPending } = useSample(sampleId)
   const { data: reference } = useReference()
   const [printing, setPrinting] = useState(false)
+  const [deferring, setDeferring] = useState(false)
   const collector = reference?.staff.find((s) => s.id === actorId)
   const ready = Boolean(sample && reference)
+  const consentPending = (sample?.consentMissing.length ?? 0) > 0
 
   return (
     <Drawer
@@ -258,6 +349,10 @@ export function CollectDrawer({
             <Button variant="ghost" onClick={onClose} className="mr-auto">
               {tc('cancel')}
             </Button>
+            <Button onClick={() => setDeferring(true)}>
+              <CalendarClockIcon />
+              {t('collectLater')}
+            </Button>
             <Button onClick={() => setPrinting(true)}>
               <PrinterIcon />
               {t('printLabel')}
@@ -266,7 +361,8 @@ export function CollectDrawer({
               variant="primary"
               type="submit"
               form="collect-form"
-              disabled={!ready}
+              disabled={!ready || consentPending}
+              title={consentPending ? t('consentBlocking') : undefined}
             >
               <CheckIcon strokeWidth={2.5} />
               {t('markCollected')}
@@ -286,6 +382,8 @@ export function CollectDrawer({
             <IdCardIcon className="mt-0.5 size-4 shrink-0" />
             {t('checkIdentity')}
           </div>
+          <ScheduledNotice sample={sample} />
+          {consentPending ? <ConsentPanel sample={sample} /> : null}
           <section>
             <h3 className="mb-2.5 text-xs font-semibold tracking-wide text-fg-subtle uppercase">
               {t('sectionPatient')}
@@ -362,6 +460,7 @@ export function CollectDrawer({
               ) : null}
             </div>
           </section>
+          <DrawOrder sample={sample} />
           <section>
             <h3 className="mb-2.5 text-xs font-semibold tracking-wide text-fg-subtle uppercase">
               {t('sectionCollection')}
@@ -378,6 +477,13 @@ export function CollectDrawer({
           </section>
         </div>
       )}
+      {sample ? (
+        <DeferDialog
+          sample={sample}
+          open={deferring}
+          onOpenChange={setDeferring}
+        />
+      ) : null}
       {sample ? (
         <LabelPrintDialog
           open={printing}

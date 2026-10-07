@@ -33,15 +33,20 @@ export function PrintProvider({ children }: { children: ReactNode }) {
     if (!job?.fromApp) return
     let cancelled = false
     let frame = 0
-    // Let the portal paint, barcodes render (their encoder loads on first
-    // use) and images such as the logos decode before printing.
+    // Let the portal paint, barcodes and the report's QR code render (their
+    // encoders load on first use) and images such as the logos decode before
+    // printing.
     const images = () =>
       Promise.all(
         [...(target?.querySelectorAll('img') ?? [])].map((img) =>
           img.decode().catch(() => undefined),
         ),
       )
-    void Promise.all([import('jsbarcode'), images()]).then(() => {
+    void Promise.all([
+      import('jsbarcode'),
+      import('qrcode-generator'),
+      images(),
+    ]).then(() => {
       if (cancelled) return
       frame = window.requestAnimationFrame(() => {
         window.setTimeout(() => window.print(), 60)
@@ -78,8 +83,11 @@ export function PrintProvider({ children }: { children: ReactNode }) {
   )
   const setPrintable = useCallback((next: Printable | null) => {
     printable.current = next
-    // Preload the barcode encoder so a browser print can draw it in time.
-    if (next) void import('jsbarcode')
+    // Preload the encoders so a browser print can draw them in time.
+    if (next) {
+      void import('jsbarcode')
+      void import('qrcode-generator')
+    }
   }, [])
   const value = useMemo(() => ({ print, setPrintable }), [print, setPrintable])
 

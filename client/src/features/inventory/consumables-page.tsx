@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { PageHeader } from '@/app/layout/page-header'
 import { useDeferredValue, useState } from 'react'
-import { useSearchParams } from 'react-router'
+import { useOverlayParam } from '@/hooks/use-search-param'
 import { CONSUMABLE_CATEGORIES, type ConsumableCategory } from '@/domain/types'
 import { useNow } from '@/hooks/use-now'
 import { useEnum, useT } from '@/i18n/context'
@@ -43,7 +43,6 @@ export function Component() {
   const e = useEnum()
   const f = useFormat()
   const now = useNow()
-  const [params, setParams] = useSearchParams()
   const [query, setQuery] = useState('')
   const q = useDeferredValue(query)
   const [category, setCategory] = useState<ConsumableCategory | 'all'>('all')
@@ -51,14 +50,7 @@ export function Component() {
   const { data, isPending, isError, refetch, dataUpdatedAt } = useConsumables({
     q,
   })
-  const openItem = params.get('item')
-  const setItem = (id: string | null) =>
-    setParams((prev) => {
-      const next = new URLSearchParams(prev)
-      if (id) next.set('item', id)
-      else next.delete('item')
-      return next
-    })
+  const [openItem, setItem, closeItem] = useOverlayParam('item')
 
   if (isError) return <ErrorState onRetry={() => void refetch()} />
   const rows = data ?? []
@@ -319,7 +311,7 @@ export function Component() {
         <InventoryItemDrawer
           kind="consumable"
           id={openItem}
-          onClose={() => setItem(null)}
+          onClose={closeItem}
         />
       ) : null}
       {dialog?.kind === 'receive-any' ? (

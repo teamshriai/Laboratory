@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, type ReactNode } from 'react'
 import { DEPARTMENTS, type DepartmentId } from '@/domain/types'
 import { oneOf } from '@/lib/storage'
 import { usePersistentState } from '@/hooks/use-persistent-state'
-import { getActor, setActor } from '@/services/lab-api'
+import { demo } from '@/services/lab-api'
+import { useSession } from '@/services/queries'
 import { PreferencesContext } from './context'
 
 const isDepartment = oneOf<DepartmentId | null>([...DEPARTMENTS, null])
@@ -14,9 +15,9 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     null,
     isDepartment,
   )
-  const [actorId, setActorState] = usePersistentState<string>(
+  const [storedActorId, setActorState] = usePersistentState<string>(
     'acting-as',
-    getActor(),
+    demo.getActor(),
   )
   const [sidebarCollapsed, setSidebarCollapsed] = usePersistentState<boolean>(
     'sidebar-collapsed',
@@ -47,9 +48,14 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     root.toggleAttribute('data-large-ui', largeInterface)
   }, [reduceMotion, highContrast, largeInterface])
 
+  // The demo acts as any member of staff; with a backend the signed-in
+  // user is always the actor and cannot be switched here.
+  const session = useSession(!demo.enabled)
+  const actorId = demo.enabled ? storedActorId : (session.data?.staffId ?? '')
   const setActorId = useCallback(
     (id: string) => {
-      setActor(id)
+      if (!demo.enabled) return
+      demo.setActor(id)
       setActorState(id)
     },
     [setActorState],

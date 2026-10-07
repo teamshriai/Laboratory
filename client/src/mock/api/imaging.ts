@@ -7,9 +7,11 @@ import { startOfIstDay } from '@/domain/time'
 import { MODALITIES, type ImagingStudy } from '@/domain/types'
 import type { LabDb } from '../db/schema'
 import { must } from '../engine/core'
-import { createImagingLink } from '../engine/imaging'
+import { createShareLink, revokeShareLink } from '../engine/share'
+import { shareLinkRow, shareLinksOf } from './share'
 import { read, write } from './runtime'
 import type {
+  CreatedShareLink,
   ImagingFilters,
   ImagingOverview,
   ImagingReportDetail,
@@ -50,7 +52,8 @@ export function imagingRow(db: LabDb, study: ImagingStudy): ImagingRow {
 export function imagingDetail(
   db: LabDb,
   id: string,
-  version?: number,
+  version: number | undefined,
+  now: number,
 ): ImagingReportDetail {
   const study = must(db.imaging, id, 'imaging')
   const latest = study.versions.at(-1)
@@ -60,6 +63,7 @@ export function imagingDetail(
       : latest
   const detail: ImagingReportDetail = {
     ...imagingRow(db, study),
+    shareLinks: shareLinksOf(db, 'imaging', study.id, now),
     indication: study.indication,
     doctor: doctorRef(db, study.orderingDoctorId),
     versions: study.versions.map((v) => ({
@@ -71,13 +75,8 @@ export function imagingDetail(
     })),
   }
   if (study.contrast) detail.contrast = study.contrast
-  const link = study.reportNo ? db.reportLinks[study.reportNo] : undefined
-  if (link)
-    detail.shareLink = {
-      createdAt: link.createdAt,
-      createdByName: db.staff[link.createdBy]?.name ?? link.createdBy,
-      version: link.version,
-    }
+  if (viewing?.digest && viewing.verifyToken)
+    detail.seal = { digest: viewing.digest, verifyToken: viewing.verifyToken }
   if (viewing) {
     detail.viewing = viewing
     if (latest && viewing.version !== latest.version) {
@@ -174,8 +173,20 @@ export const imagingApi = {
     ),
 
   report: (id: string, options: { version?: number } = {}) =>
-    read((db) => imagingDetail(db, id, options.version)),
+    read((db, { now }) => imagingDetail(db, id, options.version, now)),
 
-  /** Demo share link (opens in this browser only). */
-  shareLink: (id: string) => write((db, ctx) => createImagingLink(db, id, ctx)),
+  /** A new share link; the token is returned once to build the URL. */
+  createShareLink: (id: string, input: { days?: number } = {}) =>
+    write((db, ctx): CreatedShareLink => {
+      const { link, token } = createShareLink(
+        db,
+        { kind: 'imaging', id },
+        input,
+        ctx,
+      )
+      return { token, link: shareLinkRow(db, link, ctx.now) }
+    }),
+
+  revokeShareLink: (linkId: string) =>
+    write((db, ctx) => void revokeShareLink(db, linkId, ctx)),
 }

@@ -36,8 +36,10 @@ export function useLabMutation<TVars, TData>(
   const { language } = useLanguage()
   return useMutation({
     mutationFn: fn,
-    onSuccess: async (data, vars) => {
-      await queryClient.invalidateQueries({ queryKey: ['lab'] })
+    onSuccess: (data, vars) => {
+      // Refresh in the background: the dialog closes and the toast shows at
+      // once instead of waiting for every query on the page to refetch.
+      void queryClient.invalidateQueries({ queryKey: ['lab'] })
       const message = feedback.success?.(data, vars)
       if (message) {
         if (typeof message === 'string') toast.success(message)

@@ -1,6 +1,7 @@
 import { groupTestsIntoSamples, sampleKey } from '@/domain/grouping'
 import { nextSequence, orderPrefix, reportPrefix, uid } from '@/domain/ids'
 import { tatHoursFor } from '@/domain/tat'
+import { HOUR } from '@/domain/time'
 import {
   CANCEL_REASONS,
   type CancelReason,
@@ -140,6 +141,8 @@ function newItem(
     status: 'pending',
     comments: [],
     reportId,
+    // Scope as ordered: a later catalog change does not rewrite history.
+    accredited: test.accredited !== false,
   }
 }
 
@@ -181,7 +184,10 @@ export function createOrder(
 ): LabOrder {
   requirePermission(db, ctx, 'order.create')
   const patient = must(db.patients, input.patientId, 'patient')
-  must(db.doctors, input.doctorId, 'doctor')
+  const doctor = must(db.doctors, input.doctorId, 'doctor')
+  // An inactive doctor stays on old orders but takes no new ones.
+  if (doctor.active === false)
+    throw new LabApiError('validation-failed', { field: 'doctor' })
   if (input.testIds.length === 0) throw new LabApiError('order-empty')
   const tests = activeTests(db, input.testIds)
 
@@ -425,12 +431,31 @@ export function addTests(
       throw new LabApiError('duplicate-test', { test: test.name })
   }
   const samples = samplesOfOrder(db, orderId)
+  const freshSpecimens: string[] = []
   for (const test of tests) {
     const key = sampleKey(test)
+    // An add-on runs on the specimen already drawn only while that
+    // specimen is still stable for the test; otherwise it needs a new one.
+    const stable = (collectedAt: number | undefined) =>
+      collectedAt === undefined ||
+      test.stabilityHours === undefined ||
+      ctx.now - collectedAt <= test.stabilityHours * HOUR
     let sample = samples.find(
-      (s) => sampleKey(s) === key && ATTACHABLE.includes(s.status),
+      (s) =>
+        sampleKey(s) === key &&
+        ATTACHABLE.includes(s.status) &&
+        stable(s.collectedAt),
     )
     if (!sample) {
+      if (
+        samples.some(
+          (s) =>
+            sampleKey(s) === key &&
+            ATTACHABLE.includes(s.status) &&
+            !stable(s.collectedAt),
+        )
+      )
+        freshSpecimens.push(test.shortName)
       sample = newSample(db, order, { ...test }, ctx)
       samples.push(sample)
     } else {
@@ -455,9 +480,14 @@ export function addTests(
     }),
   )
   audit(db, ctx, 'order', order.id, 'tests-added', {
-    detail: { tests: tests.map((t) => t.shortName).join(', ') },
+    detail: {
+      tests: tests.map((t) => t.shortName).join(', '),
+      ...(freshSpecimens.length
+        ? { newSpecimenBeyondStability: freshSpecimens.join(', ') }
+        : {}),
+    },
   })
-  return order
+  return { order, freshSpecimens }
 }
 
 export function removeItem(

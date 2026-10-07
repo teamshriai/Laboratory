@@ -58,6 +58,16 @@ export const NAV_TONES = {
   imagingMri: 'violet',
   imagingXray: 'amber',
   settings: 'violet',
+  billing: 'green',
+  homeCollection: 'rose',
+  messages: 'sky',
+  referrers: 'teal',
+  myPatients: 'blue',
+  quality: 'amber',
+  coldStorage: 'sky',
+  registers: 'indigo',
+  privacy: 'violet',
+  interfaces: 'teal',
 } as const satisfies Record<string, IconTone>
 
 export const DEPARTMENT_TONES: Record<DepartmentId, IconTone> = {

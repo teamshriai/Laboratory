@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router'
+import { useOverlayParam } from '@/hooks/use-search-param'
 import { useT } from '@/i18n/context'
 import { Drawer } from '@/components/ui/dialog'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
@@ -10,9 +11,9 @@ const SampleDrawer = lazy(() => import('@/features/samples/sample-drawer'))
 
 /** Opens detail drawers from the URL (?order=… / ?sample=…) on any page. */
 export function DrawerHost() {
-  const [params, setParams] = useSearchParams()
-  const orderId = params.get('order')
-  const sampleId = params.get('sample')
+  const [, setParams] = useSearchParams()
+  const [orderId, , closeOrder] = useOverlayParam('order')
+  const [sampleId, , closeSample] = useOverlayParam('sample')
   const open = Boolean(orderId || sampleId)
   const opener = useRef<HTMLElement | null>(null)
   // Drawers load lazily, so remember what opened them and return focus there on close.
@@ -25,32 +26,32 @@ export function DrawerHost() {
     opener.current = null
     if (el && el.isConnected) window.setTimeout(() => el.focus(), 0)
   }, [open])
-  const close = (key: string) => {
-    const next = new URLSearchParams(params)
-    next.delete(key)
-    setParams(next, { replace: true })
-  }
   return (
     <ErrorBoundary
       resetKey={`${orderId ?? ''}|${sampleId ?? ''}`}
       fallback={(reset) => (
         <DrawerError
           onRetry={reset}
-          onClose={() => {
-            const next = new URLSearchParams(params)
-            next.delete('order')
-            next.delete('sample')
-            setParams(next, { replace: true })
-          }}
+          onClose={() =>
+            setParams(
+              (prev) => {
+                const next = new URLSearchParams(prev)
+                next.delete('order')
+                next.delete('sample')
+                return next
+              },
+              { replace: true },
+            )
+          }
         />
       )}
     >
       <Suspense fallback={null}>
         {orderId ? (
-          <OrderDrawer orderId={orderId} onClose={() => close('order')} />
+          <OrderDrawer orderId={orderId} onClose={closeOrder} />
         ) : null}
         {sampleId ? (
-          <SampleDrawer sampleId={sampleId} onClose={() => close('sample')} />
+          <SampleDrawer sampleId={sampleId} onClose={closeSample} />
         ) : null}
       </Suspense>
     </ErrorBoundary>

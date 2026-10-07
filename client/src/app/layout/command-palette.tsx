@@ -44,11 +44,15 @@ import { IconTile } from '@/components/ui/icon-tile'
 import { NAV_TONES, type IconTone } from '@/lib/icon-tones'
 import {
   ADMIN_NAV,
+  BUSINESS_NAV,
+  DOCTOR_NAV,
+  QUALITY_NAV,
   IMAGING_NAV,
   INVENTORY_NAV,
   LAB_NAV,
   OPERATIONS_NAV,
 } from './nav-config'
+import { useVisibleNav } from './use-visible-nav'
 
 function Item({
   value,
@@ -103,13 +107,18 @@ export function CommandPalette({
   const inputRef = useRef<HTMLInputElement>(null)
   // The API is asked once typing pauses (150 ms), not on every key.
   const deferred = useDebouncedValue(query, 150)
-  const destinations = [
-    ...LAB_NAV,
-    ...IMAGING_NAV,
-    ...INVENTORY_NAV,
-    ...OPERATIONS_NAV,
-    ...ADMIN_NAV,
-  ]
+  const { doctorOnly, visible } = useVisibleNav()
+  const destinations = doctorOnly
+    ? DOCTOR_NAV
+    : visible([
+        ...LAB_NAV,
+        ...IMAGING_NAV,
+        ...BUSINESS_NAV,
+        ...INVENTORY_NAV,
+        ...OPERATIONS_NAV,
+        ...QUALITY_NAV,
+        ...ADMIN_NAV,
+      ])
   const needle = deferred.trim().toLowerCase()
   const navMatches = needle
     ? destinations.filter((d) => tn(d.key).toLowerCase().includes(needle))

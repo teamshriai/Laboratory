@@ -124,7 +124,7 @@ export function ReceiveLotDialog({
     <Dialog
       open
       onOpenChange={(o) => !o && onClose()}
-      dirty={formState.isDirty && !formState.isSubmitSuccessful}
+      dirty={formState.isDirty}
       size="lg"
       title={t('receiveLotTitle')}
       description={t('receiveLotDescription')}

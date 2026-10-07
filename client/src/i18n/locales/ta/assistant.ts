@@ -136,4 +136,15 @@ export default {
   linkRejected: 'நிராகரிக்கப்பட்ட மாதிரிகளைத் திற',
   linkDelayed: 'காலதாமதமான பணியைத் திற',
   linkImaging: 'நோயறிதல் படிமவியலைத் திற',
+  // Where an answer came from ("Show query")
+  showQuery: 'வினவலைக் காட்டு',
+  'query.readModel': 'படிப்பு மாதிரி: {model}',
+  'readModel.today': 'இன்றைய பணி',
+  'query.at': '{time} மணிக்குப் படிக்கப்பட்டது',
+  'query.rules': 'விதிகள்: {rules}',
+  'query.intent': 'பொருந்திய சோதனை: {question}',
+  queryNote:
+    'ஆய்வகத்தின் சொந்தத் தரவிலிருந்து விதி அடிப்படையிலான பதில்; மருத்துவ ஆலோசனை அல்ல.',
+  offReply:
+    'ஆய்வக உதவியாளர் அமைப்புகளில் அணைக்கப்பட்டுள்ளது, எனவே பதிலளிக்க முடியாது.',
 } as const

@@ -7,7 +7,7 @@ import {
 import type { ReactNode } from 'react'
 import { formatRange } from '@/domain/reference-ranges'
 import type { LabSettings } from '@/domain/types'
-import { useEnum, useT } from '@/i18n/context'
+import { useEnum, useLanguage, useT } from '@/i18n/context'
 import { useFormat } from '@/i18n/format'
 import { cn } from '@/lib/cn'
 import type { PublicLabReport, ReportResultRow } from '@/services/lab-api'
@@ -15,6 +15,12 @@ import { IndostatesLogo, Logo } from '@/components/ui/logo'
 import { INDOSTATES } from '@/lib/brand'
 import { useAgeText } from '../patient'
 import { useResultText } from '../result'
+import { PatientSummary, VerificationBlock } from './report-blocks'
+import {
+  isAbnormalFlag,
+  performedByText,
+  summaryLanguages,
+} from './report-extras'
 
 type Lab = Pick<
   LabSettings,
@@ -23,7 +29,8 @@ type Lab = Pick<
   | 'labRegistration'
   | 'labAccreditation'
   | 'reportFooter'
->
+> &
+  Partial<Pick<LabSettings, 'patientSummaryOnReport'>>
 
 function Meta({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -37,9 +44,6 @@ function Meta({ label, children }: { label: string; children: ReactNode }) {
     </div>
   )
 }
-
-const isAbnormalFlag = (flag: string | null) =>
-  Boolean(flag && flag !== 'NORMAL' && flag !== 'NEGATIVE')
 
 /**
  * A laboratory report as the patient-facing page shows it: a readable
@@ -57,11 +61,15 @@ export function LabDocument({
   const tr = useT('reports')
   const e = useEnum()
   const f = useFormat()
+  const { language } = useLanguage()
   const age = useAgeText()
   const text = useResultText()
   const p = report.patient
   const sample = report.samples[0]
   const latest = report.versions.at(-1)
+  const notAccredited = report.sections.some(
+    (s) => s.notAccredited && s.released,
+  )
 
   const interval = (row: ReportResultRow) => {
     if (row.resultType === 'numeric')
@@ -174,12 +182,22 @@ export function LabDocument({
         <section key={section.itemId} className="mt-4">
           <h3 className="text-[10.5pt] font-semibold text-[#141a1f]">
             {section.testName}
+            {section.notAccredited ? (
+              <sup className="ml-0.5 font-bold">
+                *<span className="sr-only">{tr('notAccreditedLabel')}</span>
+              </sup>
+            ) : null}
             {section.method ? (
               <span className="ml-2 text-[8pt] font-normal text-[#5b6670]">
                 {tr('method')}: {section.method}
               </span>
             ) : null}
           </h3>
+          {section.performedBy ? (
+            <p className="mt-0.5 text-[8.5pt] text-[#4a5560]">
+              {performedByText(language, section.performedBy)}
+            </p>
+          ) : null}
           {!section.released ? (
             <p className="mt-1 text-[9pt] text-[#5b6670] italic">
               {t('toFollow')}
@@ -297,6 +315,11 @@ export function LabDocument({
           )}
         </section>
       ))}
+      {notAccredited ? (
+        <p className="mt-3 text-[8pt] text-[#4a5560]">
+          * {tr('notAccreditedFootnote')}
+        </p>
+      ) : null}
 
       {report.criticals.length ? (
         <p className="mt-5 flex items-start gap-2 rounded-md border border-[#b91c1c]/40 px-3 py-2 text-[9pt] text-[#141a1f]">
@@ -314,6 +337,14 @@ export function LabDocument({
           </h3>
           <p className="mt-1 text-[10pt]">{report.interpretation}</p>
         </section>
+      ) : null}
+
+      {lab?.patientSummaryOnReport && report.status !== 'withdrawn' ? (
+        <PatientSummary
+          report={report}
+          langs={summaryLanguages(p.preferredLanguage, language)}
+          className="mt-5"
+        />
       ) : null}
 
       <footer className="mt-8 grid gap-4 border-t border-[#c9d2d8] pt-4 text-[9pt] sm:grid-cols-3">
@@ -344,6 +375,14 @@ export function LabDocument({
           </Meta>
         ) : null}
       </footer>
+      {report.seal ? (
+        <VerificationBlock
+          seal={report.seal}
+          scanLabel={t('scanToVerify')}
+          digestLabel={t('digest')}
+          className="mt-5"
+        />
+      ) : null}
       <p className="mt-5 text-[8pt] text-[#5b6670]">
         {lab?.reportFooter ?? t('disclaimer')}
       </p>

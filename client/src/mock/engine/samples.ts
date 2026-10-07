@@ -1,13 +1,22 @@
 import { accessionPrefix, nextSequence, uid } from '@/domain/ids'
 import {
   COLLECTION_FAILURE_REASONS,
+  FASTING_STATUSES,
   HOLD_REASONS,
+  IDENTITY_METHODS,
+  RECEIPT_TEMPERATURES,
   REJECTION_REASONS,
+  SEND_OUT_STATES,
   type CollectionFailureReason,
   type CollectionSite,
+  type FastingStatus,
   type HoldReason,
+  type IdentityMethod,
+  type ReceiptTemperature,
   type RejectionReason,
   type Sample,
+  type SendOutState,
+  type StorageCondition,
 } from '@/domain/types'
 import { canTransitionSample, isItemLive } from '@/domain/workflow'
 import type { LabDb } from '../db/schema'
@@ -15,6 +24,7 @@ import { voidAlert } from './critical'
 import { consumeReagentsFor } from './inventory'
 import { completeSampleIfDone } from './results'
 import { qcHoldFor } from './qc-gate'
+import { testsMissingConsent } from './consent'
 
 export { qcHoldFor }
 import {
@@ -73,6 +83,10 @@ export interface CollectInput {
   remarks?: string
   /** Why the collection time differs from now, when it does. */
   timeReason?: string
+  /** How the patient was identified (two identifiers, NABL 112A 6(h)). */
+  identity: IdentityMethod
+  /** Required when any test on the specimen needs fasting. */
+  fasting?: FastingStatus
 }
 
 export function collectSample(
@@ -94,12 +108,38 @@ export function collectSample(
   const timeReason = input.timeReason?.trim()
   if (ctx.now - input.collectedAt > UNEXPLAINED_TIME_MS && !timeReason)
     throw new LabApiError('collection-time-reason')
+  if (!IDENTITY_METHODS.includes(input.identity))
+    throw new LabApiError('identity-not-confirmed')
+  const items = itemsOfSample(db, sample.id).filter(isItemLive)
+  const needsFasting = items.some((i) => db.tests[i.testId]?.fasting)
+  if (
+    needsFasting &&
+    (!input.fasting || !FASTING_STATUSES.includes(input.fasting))
+  )
+    throw new LabApiError('fasting-status-required')
+  const missing = testsMissingConsent(db, items)
+  if (missing.length)
+    throw new LabApiError('consent-required', {
+      tests: missing.map((i) => i.testName).join(', '),
+    })
+  // A deliberately deferred collection (e.g. post-prandial) taken early
+  // needs a reason.
+  if (
+    sample.scheduledFor !== undefined &&
+    input.collectedAt < sample.scheduledFor &&
+    !timeReason
+  )
+    throw new LabApiError('collection-scheduled', {
+      time: `time:${sample.scheduledFor}`,
+    })
   transition(sample, 'collected')
   ensureAccession(db, sample, ctx)
   consumeContainer(db, sample, ctx)
   sample.collectedAt = input.collectedAt
   sample.collectedBy = ctx.by
   sample.collectionSite = input.site
+  sample.identityCheck = { method: input.identity, at: ctx.now, by: ctx.by }
+  if (input.fasting) sample.fastingStatus = input.fasting
   if (input.remarks) sample.collectionRemarks = input.remarks
   sample.history.push({ ...history(ctx, 'collected'), at: input.collectedAt })
   audit(db, ctx, 'sample', sample.id, 'collected', {
@@ -128,9 +168,14 @@ export function receiveSample(
   db: LabDb,
   ref: string,
   ctx: EngineCtx,
-  input: { note?: string } = {},
+  input: { note?: string; temperature?: ReceiptTemperature } = {},
 ) {
   requirePermission(db, ctx, 'specimen.receive')
+  if (
+    input.temperature !== undefined &&
+    !RECEIPT_TEMPERATURES.includes(input.temperature)
+  )
+    throw new LabApiError('validation-failed', { field: 'temperature' })
   const key = ref.trim().toUpperCase()
   const sample =
     db.samples[ref] ??
@@ -153,11 +198,26 @@ export function receiveSample(
   sample.receivedBy = ctx.by
   sample.receiptCondition = 'acceptable'
   if (input.note?.trim()) sample.receiptNote = input.note.trim()
+  if (input.temperature) {
+    sample.receiptTemperature = input.temperature
+    const storage = itemsOfSample(db, sample.id)
+      .filter(isItemLive)
+      .map((i) => db.tests[i.testId]?.storage)
+      .filter((x): x is StorageCondition => x !== undefined)
+    if (!temperatureFits(input.temperature, storage))
+      sample.temperatureDeviation = true
+  }
   sample.history.push(history(ctx, 'received'))
   audit(db, ctx, 'sample', sample.id, 'received', {
     from: 'collected',
     to: 'received',
-    detail: { accession: sample.accessionNo ?? '' },
+    detail: {
+      accession: sample.accessionNo ?? '',
+      ...(sample.receiptTemperature
+        ? { temperature: sample.receiptTemperature }
+        : {}),
+      ...(sample.temperatureDeviation ? { deviation: 'yes' } : {}),
+    },
   })
   const patient = db.patients[sample.patientId]
   logActivity(
@@ -466,6 +526,210 @@ export function assignSample(
   )
   audit(db, ctx, 'sample', sample.id, 'assigned', {
     to: staffId ? staffName(db, staffId) : '',
+    detail: { accession: sample.accessionNo ?? '' },
+  })
+  return sample
+}
+
+/**
+ * Whether a specimen arrived at a temperature its tests allow: frozen
+ * storage needs frozen transport, refrigerated needs chilled (or colder),
+ * room temperature accepts ambient or chilled.
+ */
+export function temperatureFits(
+  temperature: ReceiptTemperature,
+  storage: StorageCondition[],
+) {
+  if (temperature === 'out-of-range') return false
+  return storage.every((need) =>
+    need === 'frozen'
+      ? temperature === 'frozen'
+      : need === 'refrigerated' || need === 'dark-refrigerated'
+        ? temperature === 'chilled' || temperature === 'frozen'
+        : temperature !== 'frozen',
+  )
+}
+
+/**
+ * Defers a collection to a later time, e.g. a post-prandial sugar two
+ * hours after the meal. Taking it earlier then needs a reason.
+ */
+export function scheduleCollection(
+  db: LabDb,
+  sampleId: string,
+  input: { at: number; reason: string },
+  ctx: EngineCtx,
+) {
+  requirePermission(db, ctx, 'specimen.collect')
+  const sample = must(db.samples, sampleId, 'sample')
+  if (sample.status !== 'pending_collection')
+    throw new LabApiError('invalid-transition', {
+      from: sample.status,
+      to: 'scheduled',
+    })
+  const reason = input.reason.trim()
+  if (!reason) throw new LabApiError('reason-required')
+  if (input.at <= ctx.now)
+    throw new LabApiError('validation-failed', { field: 'time' })
+  sample.scheduledFor = input.at
+  sample.scheduleReason = reason
+  sample.history.push(history(ctx, 'collection-scheduled'))
+  audit(db, ctx, 'sample', sample.id, 'collection-scheduled', {
+    reason,
+    to: `time:${input.at}`,
+  })
+  return sample
+}
+
+/**
+ * Splits a received specimen into aliquots (child specimens with their own
+ * accession numbers, -01, -02, ...), moving the listed tests to each. At
+ * least one test stays on the original. Results not yet started only.
+ */
+export function splitSample(
+  db: LabDb,
+  sampleId: string,
+  groups: string[][],
+  ctx: EngineCtx,
+) {
+  requirePermission(db, ctx, 'specimen.split')
+  const parent = must(db.samples, sampleId, 'sample')
+  if (parent.status !== 'received' && parent.status !== 'processing')
+    throw new LabApiError('cannot-split', { reason: 'status' })
+  if (parent.parentId)
+    throw new LabApiError('cannot-split', { reason: 'aliquot' })
+  const live = itemsOfSample(db, parent.id).filter(isItemLive)
+  const movable = new Set(
+    live
+      .filter((i) => i.status === 'pending' || i.status === 'draft')
+      .map((i) => i.id),
+  )
+  const moving = groups.flat()
+  if (
+    groups.length === 0 ||
+    groups.some((g) => g.length === 0) ||
+    new Set(moving).size !== moving.length ||
+    moving.some((id) => !movable.has(id))
+  )
+    throw new LabApiError('cannot-split', { reason: 'tests' })
+  if (moving.length >= live.length)
+    throw new LabApiError('cannot-split', { reason: 'keep-one' })
+  const existing = Object.values(db.samples).filter(
+    (s) => s.parentId === parent.id,
+  ).length
+  const children = groups.map((group, i) => {
+    const aliquotNo = existing + i + 1
+    const child: Sample = {
+      id: uid('smp'),
+      accessionNo: `${parent.accessionNo}-${String(aliquotNo).padStart(2, '0')}`,
+      orderId: parent.orderId,
+      patientId: parent.patientId,
+      department: db.items[group[0]!]!.department,
+      container: parent.container,
+      specimen: parent.specimen,
+      volumeMl: null,
+      status: 'received',
+      createdAt: ctx.now,
+      labelPrintCount: 0,
+      ...(parent.collectedAt !== undefined
+        ? { collectedAt: parent.collectedAt }
+        : {}),
+      ...(parent.collectedBy ? { collectedBy: parent.collectedBy } : {}),
+      receivedAt: ctx.now,
+      receivedBy: ctx.by,
+      receiptCondition: 'acceptable',
+      parentId: parent.id,
+      aliquotNo,
+      history: [
+        history(ctx, 'aliquoted', { parent: parent.accessionNo ?? '' }),
+      ],
+    }
+    db.samples[child.id] = child
+    for (const id of group) db.items[id]!.sampleId = child.id
+    return child
+  })
+  parent.history.push(
+    history(ctx, 'split', {
+      aliquots: children.map((c) => c.accessionNo).join(', '),
+    }),
+  )
+  audit(db, ctx, 'sample', parent.id, 'split', {
+    detail: {
+      accession: parent.accessionNo ?? '',
+      aliquots: children.map((c) => c.accessionNo).join(', '),
+    },
+  })
+  return children
+}
+
+/**
+ * Refers a received specimen to an outside laboratory. Its tests are then
+ * performed (and reported as performed) by that lab; results come back and
+ * are entered from its report.
+ */
+export function sendOutSample(
+  db: LabDb,
+  sampleId: string,
+  input: { labId: string; courier?: string },
+  ctx: EngineCtx,
+) {
+  requirePermission(db, ctx, 'specimen.send-out')
+  const sample = must(db.samples, sampleId, 'sample')
+  const lab = must(db.referralLabs, input.labId, 'referral-lab')
+  if (!lab.active) throw new LabApiError('send-out-state')
+  if (sample.status !== 'received' || sample.sendOut)
+    throw new LabApiError('send-out-state')
+  transition(sample, 'processing')
+  sample.processingStartedAt = ctx.now
+  sample.processingBy = ctx.by
+  sample.sendOut = {
+    labId: lab.id,
+    state: 'dispatched',
+    dispatchedAt: ctx.now,
+    dispatchedBy: ctx.by,
+    ...(input.courier?.trim() ? { courier: input.courier.trim() } : {}),
+  }
+  for (const item of itemsOfSample(db, sample.id).filter(isItemLive))
+    item.performedBy = {
+      labId: lab.id,
+      name: lab.name,
+      city: lab.city,
+      nablAccredited: lab.nablAccredited,
+      ...(lab.certificateNo ? { certificateNo: lab.certificateNo } : {}),
+    }
+  sample.history.push(history(ctx, 'sent-out', { lab: lab.name }))
+  audit(db, ctx, 'sample', sample.id, 'sent-out', {
+    to: lab.name,
+    detail: { accession: sample.accessionNo ?? '' },
+  })
+  return sample
+}
+
+const SEND_OUT_ORDER: SendOutState[] = [...SEND_OUT_STATES]
+
+/** Tracks a referred specimen forward: at the referral lab, result back. */
+export function updateSendOut(
+  db: LabDb,
+  sampleId: string,
+  input: { state: SendOutState; externalRef?: string },
+  ctx: EngineCtx,
+) {
+  requirePermission(db, ctx, 'specimen.send-out')
+  const sample = must(db.samples, sampleId, 'sample')
+  const sendOut = sample.sendOut
+  if (
+    !sendOut ||
+    SEND_OUT_ORDER.indexOf(input.state) <= SEND_OUT_ORDER.indexOf(sendOut.state)
+  )
+    throw new LabApiError('send-out-state')
+  const from = sendOut.state
+  sendOut.state = input.state
+  if (input.state === 'received') sendOut.receivedAt = ctx.now
+  if (input.state === 'resulted') sendOut.resultedAt = ctx.now
+  if (input.externalRef?.trim()) sendOut.externalRef = input.externalRef.trim()
+  audit(db, ctx, 'sample', sample.id, 'send-out-updated', {
+    from,
+    to: input.state,
     detail: { accession: sample.accessionNo ?? '' },
   })
   return sample

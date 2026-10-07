@@ -1,0 +1,16 @@
+SHRI HEALTH browser tests (quick) against http://127.0.0.1:37445/dev/laboratory
+Started 2026-10-06T11:52:17.658Z, 1m 51s, suites: journeys
+
+Checks run:
+  journeys: steps passed 20, checks passed 1
+
+4 failure(s) in 4 group(s).
+
+* journeys | journey a | specimen to report: check "registering opens the patient page" | expectation not met  (1x)
+    - /patients 1440x900 receptionist: after "Register patient" the URL stays http://127.0.0.1:37445/dev/laboratory/patients [e2e/results/shots/0001-journey-a-1440x900-registering_opens_the_patient_page.png]
+* journeys | journey a | specimen to report: check "the default call time is accepted" | expectation not met  (1x)
+    - /critical-results?alert=crit_muwmdpir0005ze78 1440x900 technician: refused within the same minute: error toast: Something went wrong Some details are missing or not valid. [e2e/results/shots/0003-journey-a-1440x900-the_default_call_time_is_accepted.png]
+* journeys | journey a | specimen to report: check "the default collection time is accepted" | expectation not met  (1x)
+    - /collection?q=LAB-20261006-00198&collect=smp_muwmdap80006m3i0 1440x900 phlebotomist: refused within the same minute: error toast: Something went wrong Collection time cannot be before the order was placed (06 O [e2e/results/shots/0002-journey-a-1440x900-the_default_collection_time_is_accepted.png]
+* journeys | journey a | specimen to report: step "EXPLORE" | step failed  (1x)
+    - /reports/rpt_muwmdap800082hx6 1440x900 pathologist: exploring (accessibility tree: e2e/results/trees/a-1440x900-EXPLORE.yaml) [e2e/results/shots/0004-journey-a-1440x900-EXPLORE.png]
